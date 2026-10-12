@@ -1,0 +1,48 @@
+{
+  "devDependencies": {
+    "@commitlint/cli": "^19.8.1",
+    "@commitlint/config-conventional": "^19.8.1",
+    "@eslint/js": "^9.34.0",
+    "eslint": "^9.34.0",
+    "eslint-config-prettier": "^10.1.8",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.1.6",
+    "prettier": "^3.6.2",
+    "turbo": "^2.5.4",
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.41.0"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,cjs,mjs,json,md}": [
+      "prettier --write"
+    ],
+    "*.{ts,tsx}": [
+      "eslint --fix"
+    ]
+  },
+  "name": "memorize",
+  "packageManager": "npm@10.8.2",
+  "private": true,
+  "scripts": {
+    "build": "turbo build",
+    "dev:web": "turbo dev --filter=@memorize/web",
+    "lint": "eslint packages --max-warnings 0",
+    "lint:fix": "eslint packages --fix",
+    "prepare": "husky",
+    "prettier": "prettier --write .",
+    "prettier:check": "prettier --check .",
+    "test": "turbo test",
+    "turbo": "TURBO_TELEMETRY_DISABLED=1 turbo",
+    "typecheck": "turbo typecheck"
+  },
+  "type": "module",
+  "workspaces": [
+    "packages/types",
+    "packages/core",
+    "packages/web",
+    "packages/app"
+  ]
+}
