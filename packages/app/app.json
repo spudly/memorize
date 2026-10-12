@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "android": { "package": "com.memorize.app" },
+    "extra": { "googleAndroidClientId": "", "googleIosClientId": "" },
+    "ios": { "bundleIdentifier": "com.memorize.app" },
+    "name": "Memorize",
+    "platforms": ["ios", "android", "web"],
+    "scheme": "memorize",
+    "slug": "memorize",
+    "version": "1.0.0"
+  }
+}
