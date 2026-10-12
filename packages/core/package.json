@@ -1,0 +1,31 @@
+{
+  "dependencies": {
+    "@memorize/types": "0.1.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.14",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.4.1"
+  },
+  "exports": {
+    ".": {
+      "default": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/index.js",
+  "name": "@memorize/core",
+  "private": true,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist",
+    "lint": "eslint src tests --max-warnings 0",
+    "test": "jest",
+    "typecheck": "tsc --noEmit -p tsconfig.check.json"
+  },
+  "types": "./dist/index.d.ts",
+  "version": "0.1.0"
+}
