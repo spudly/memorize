@@ -1,3 +1,4 @@
+import { Button, Card, EmptyState, Text } from "@spudly/ui";
 import { dueVerses, type MemorizeStore, type ReviewOutcome } from "@memorize/core";
 
 interface Props {
@@ -13,28 +14,28 @@ export default function ReviewTab({ store }: Props) {
 
   if (due.length === 0) {
     return (
-      <section>
-        <h2>Review</h2>
-        <p className="hint">Nothing due. Nice work.</p>
-      </section>
+      <>
+        <Text variant="subheading">Review</Text>
+        <EmptyState title="Nothing due" body="Nice work." />
+      </>
     );
   }
 
   return (
-    <section>
-      <h2>Review ({due.length} due)</h2>
-      <ul className="verse-list">
-        {due.map((v) => (
-          <li key={v.verse.id}>
-            <strong>{v.verse.reference}</strong>
-            <p>{v.verse.text}</p>
-            <div className="row">
-              <button onClick={() => review(v.verse.id, "remembered")}>I remembered it</button>
-              <button onClick={() => review(v.verse.id, "forgot")}>I forgot it</button>
-            </div>
-          </li>
-        ))}
-      </ul>
-    </section>
+    <>
+      <Text variant="subheading">Review ({due.length} due)</Text>
+      {due.map((v) => (
+        <Card key={v.verse.id}>
+          <Text variant="body">{v.verse.reference}</Text>
+          <Text variant="verse">{v.verse.text}</Text>
+          <Button size="sm" onPress={() => review(v.verse.id, "remembered")}>
+            I remembered it
+          </Button>{" "}
+          <Button size="sm" variant="secondary" onPress={() => review(v.verse.id, "forgot")}>
+            I forgot it
+          </Button>
+        </Card>
+      ))}
+    </>
   );
 }

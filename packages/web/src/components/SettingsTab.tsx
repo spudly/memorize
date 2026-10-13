@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Button, InlineAlert, SectionCard, Spinner, Text, TextField } from "@spudly/ui";
 import {
   DEFAULT_SETTINGS,
   LocalStore,
@@ -101,49 +102,62 @@ export default function SettingsTab({ store }: Props) {
   };
 
   return (
-    <section>
-      <h2>Settings</h2>
+    <>
+      <Text variant="subheading">Settings</Text>
 
-      <h3>Scripture source</h3>
-      <p className="hint">
-        A gospel-engine API key unlocks full-library search. The key stays on this device and is
-        never synced.{" "}
-        <a href="https://engine.ibeco.me/keys" target="_blank" rel="noreferrer">
-          Get a key
-        </a>
-      </p>
-      <div className="row">
-        <input
-          type="password"
+      <SectionCard title="Scripture source">
+        <Text variant="hint">
+          A gospel-engine API key unlocks full-library search. The key stays on this device and is
+          never synced.{" "}
+          <a href="https://engine.ibeco.me/keys" target="_blank" rel="noreferrer">
+            Get a key
+          </a>
+        </Text>
+        <TextField
+          label="API key"
+          secureTextEntry
           value={keyInput}
-          onChange={(e) => setKeyInput(e.target.value)}
+          onChangeText={setKeyInput}
           placeholder="gospel-engine API key"
         />
-        <button onClick={saveKey} disabled={!keyInput.trim()}>
+        <Button size="sm" onPress={saveKey} disabled={!keyInput.trim()}>
           Save
-        </button>
-        {apiKey && <button onClick={clearKey}>Clear</button>}
-      </div>
+        </Button>{" "}
+        {apiKey && (
+          <Button size="sm" variant="secondary" onPress={clearKey}>
+            Clear
+          </Button>
+        )}
+      </SectionCard>
 
-      <h3>Google Drive sync</h3>
-      <p className="hint">
-        Syncs your verse list (never your API key) to <code>memorize-data.json</code> in the “
-        {folderName}” Drive folder. Requires a Google OAuth client ID — see the README.
-      </p>
-      <button onClick={() => void runSync()} disabled={busy}>
-        Sync with Drive
-      </button>
-      {syncMessage && <p className="hint">{syncMessage}</p>}
-      {conflict && (
-        <div className="row">
-          <button onClick={() => void resolveConflict("push")} disabled={busy}>
-            Keep this device
-          </button>
-          <button onClick={() => void resolveConflict("pull")} disabled={busy}>
-            Keep Drive
-          </button>
-        </div>
-      )}
-    </section>
+      <SectionCard title="Google Drive sync">
+        <Text variant="hint">
+          Syncs your verse list (never your API key) to <code>memorize-data.json</code> in the “
+          {folderName}” Drive folder. Requires a Google OAuth client ID — see the README.
+        </Text>
+        <Button onPress={() => void runSync()} disabled={busy}>
+          Sync with Drive
+        </Button>
+        {busy && <Spinner label="Syncing with Drive" />}
+        {syncMessage && (
+          <InlineAlert severity={conflict ? "warning" : "info"}>{syncMessage}</InlineAlert>
+        )}
+        {conflict && (
+          <>
+            <Button size="sm" onPress={() => void resolveConflict("push")} disabled={busy}>
+              Keep this device
+            </Button>{" "}
+            <Button
+              size="sm"
+              variant="secondary"
+              onPress={() => void resolveConflict("pull")}
+              disabled={busy}
+            >
+              Keep Drive
+            </Button>
+          </>
+        )}
+      </SectionCard>
+    </>
   );
 }
