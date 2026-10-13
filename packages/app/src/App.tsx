@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { SafeAreaView } from "react-native";
 import { StatusBar } from "expo-status-bar";
+import { TamaguiProvider } from "tamagui";
+import { ScreenContainer, Spinner, Tabs, Text, tamaguiConfig } from "@spudly/ui";
 import { createMemorizeStore, type MemorizeStore } from "@memorize/core";
 import { appStorage, dataSourceFor } from "./lib";
 import DrillScreen from "./screens/DrillScreen";
@@ -11,11 +13,11 @@ import VersesScreen from "./screens/VersesScreen";
 
 type Tab = "verses" | "search" | "review" | "settings";
 
-const TABS: { id: Tab; label: string }[] = [
-  { id: "verses", label: "Verses" },
-  { id: "search", label: "Search" },
-  { id: "review", label: "Review" },
-  { id: "settings", label: "Settings" },
+const TABS: { value: Tab; label: string }[] = [
+  { value: "verses", label: "Verses" },
+  { value: "search", label: "Search" },
+  { value: "review", label: "Review" },
+  { value: "settings", label: "Settings" },
 ];
 
 export default function App() {
@@ -36,59 +38,43 @@ export default function App() {
 
   if (!ready) {
     return (
-      <SafeAreaView style={styles.container}>
-        <Text>Loading…</Text>
-      </SafeAreaView>
+      <TamaguiProvider config={tamaguiConfig} defaultTheme="light">
+        <SafeAreaView style={{ flex: 1 }}>
+          <ScreenContainer>
+            <Spinner />
+          </ScreenContainer>
+        </SafeAreaView>
+      </TamaguiProvider>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar style="auto" />
-      <Text style={styles.title}>Memorize</Text>
-      <View style={styles.tabBar}>
-        {TABS.map((t) => (
-          <TouchableOpacity
-            key={t.id}
-            style={[styles.tab, tab === t.id && styles.tabActive]}
-            onPress={() => {
-              setTab(t.id);
+    <TamaguiProvider config={tamaguiConfig} defaultTheme="light">
+      <SafeAreaView style={{ flex: 1 }}>
+        <StatusBar style="auto" />
+        <ScreenContainer scrollable={false}>
+          <Text variant="heading">Memorize</Text>
+          <Tabs
+            tabs={TABS}
+            value={tab}
+            onValueChange={(value: string) => {
+              setTab(value as Tab);
               setDrillingId(null);
             }}
-          >
-            <Text style={tab === t.id ? styles.tabLabelActive : styles.tabLabel}>{t.label}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-      <View style={styles.content}>
-        {drillingId ? (
-          <DrillScreen store={store} verseId={drillingId} onBack={() => setDrillingId(null)} />
-        ) : tab === "verses" ? (
-          <VersesScreen store={store} onDrill={setDrillingId} />
-        ) : tab === "search" ? (
-          <SearchScreen store={store} dataSource={dataSource} usingDemo={!apiKey} />
-        ) : tab === "review" ? (
-          <ReviewScreen store={store} />
-        ) : (
-          <SettingsScreen store={store} />
-        )}
-      </View>
-    </SafeAreaView>
+          />
+          {drillingId ? (
+            <DrillScreen store={store} verseId={drillingId} onBack={() => setDrillingId(null)} />
+          ) : tab === "verses" ? (
+            <VersesScreen store={store} onDrill={setDrillingId} />
+          ) : tab === "search" ? (
+            <SearchScreen store={store} dataSource={dataSource} usingDemo={!apiKey} />
+          ) : tab === "review" ? (
+            <ReviewScreen store={store} />
+          ) : (
+            <SettingsScreen store={store} />
+          )}
+        </ScreenContainer>
+      </SafeAreaView>
+    </TamaguiProvider>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fafafa" },
-  title: { fontSize: 24, fontWeight: "bold", paddingHorizontal: 16, paddingTop: 8 },
-  tabBar: { flexDirection: "row", paddingHorizontal: 16, paddingVertical: 8, gap: 8 },
-  tab: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: "#eee",
-  },
-  tabActive: { backgroundColor: "#1a1a1a" },
-  tabLabel: { color: "#1a1a1a" },
-  tabLabelActive: { color: "#fff" },
-  content: { flex: 1 },
-});

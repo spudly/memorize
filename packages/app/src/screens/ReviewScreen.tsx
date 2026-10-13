@@ -1,4 +1,6 @@
-import { Button, FlatList, StyleSheet, Text, View } from "react-native";
+import { FlatList } from "react-native";
+import { XStack } from "tamagui";
+import { Button, Card, EmptyState, Text } from "@spudly/ui";
 import { dueVerses, type MemorizeStore, type ReviewOutcome } from "@memorize/core";
 
 interface Props {
@@ -14,46 +16,35 @@ export default function ReviewScreen({ store }: Props) {
 
   if (due.length === 0) {
     return (
-      <View style={styles.container}>
-        <Text style={styles.heading}>Review</Text>
-        <Text style={styles.hint}>Nothing due. Nice work.</Text>
-      </View>
+      <>
+        <Text variant="heading">Review</Text>
+        <EmptyState title="Nothing due" body="Nice work." />
+      </>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.heading}>Review ({due.length} due)</Text>
+    <>
+      <Text variant="heading">Review ({due.length} due)</Text>
       <FlatList
+        style={{ flex: 1 }}
         data={due}
         keyExtractor={(v) => v.verse.id}
         renderItem={({ item }) => (
-          <View style={styles.card}>
-            <Text style={styles.reference}>{item.verse.reference}</Text>
-            <Text>{item.verse.text}</Text>
-            <View style={styles.row}>
-              <Button title="I remembered it" onPress={() => review(item.verse.id, "remembered")} />
-              <Button title="I forgot it" onPress={() => review(item.verse.id, "forgot")} />
-            </View>
-          </View>
+          <Card marginBottom="$2">
+            <Text variant="subheading">{item.verse.reference}</Text>
+            <Text variant="verse">{item.verse.text}</Text>
+            <XStack gap="$2" marginTop="$2">
+              <Button size="sm" onPress={() => review(item.verse.id, "remembered")}>
+                I remembered it
+              </Button>
+              <Button size="sm" variant="secondary" onPress={() => review(item.verse.id, "forgot")}>
+                I forgot it
+              </Button>
+            </XStack>
+          </Card>
         )}
       />
-    </View>
+    </>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16 },
-  heading: { fontSize: 20, fontWeight: "bold", marginBottom: 8 },
-  hint: { color: "#666", fontSize: 13 },
-  card: {
-    backgroundColor: "#fff",
-    borderWidth: 1,
-    borderColor: "#e5e5e5",
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 8,
-  },
-  reference: { fontWeight: "bold", marginBottom: 4 },
-  row: { flexDirection: "row", gap: 8, marginTop: 8 },
-});
