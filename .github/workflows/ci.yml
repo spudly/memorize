@@ -22,7 +22,7 @@ jobs:
       # until the lockfile is added, then switch back to npm ci.
       - run: npm install
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_READ_TOKEN }}
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run test
