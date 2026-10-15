@@ -71,6 +71,9 @@ export default function DrillView({ store, verseId, onBack }: Props) {
 
   const isLastRound = round + 1 >= BLANK_FRACTIONS.length;
   const progress = ((round + 1) / BLANK_FRACTIONS.length) * 100;
+  // BlankWord's index is the blank's zero-based ordinal among the blanks
+  // (not the word's position in the verse) — mirrors the native DrillScreen.
+  let blankOrdinal = -1;
 
   return (
     <>
@@ -83,22 +86,26 @@ export default function DrillView({ store, verseId, onBack }: Props) {
         Round {round + 1} of {BLANK_FRACTIONS.length} — tap a blank to peek at the word.
       </Text>
       <VerseText>
-        {words.map((word, i) =>
-          blanks.has(i) ? (
-            <BlankWord
-              key={i}
-              word={word}
-              revealed={revealed.has(i)}
-              onReveal={() => peek(i)}
-              index={i}
-              total={blanks.size}
-            />
-          ) : (
+        {words.map((word, i) => {
+          if (blanks.has(i)) {
+            blankOrdinal += 1;
+            return (
+              <BlankWord
+                key={i}
+                word={word}
+                revealed={revealed.has(i)}
+                onReveal={() => peek(i)}
+                index={blankOrdinal}
+                total={blanks.size}
+              />
+            );
+          }
+          return (
             <Text key={i} variant="verse">
               {word}{" "}
             </Text>
-          ),
-        )}
+          );
+        })}
       </VerseText>
       {message && <InlineAlert severity="warning">{message}</InlineAlert>}
       <Button onPress={nextRound}>{isLastRound ? "Finish — mark memorized" : "Next round"}</Button>
