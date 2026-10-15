@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Button, StyleSheet, Text, View } from "react-native";
+import { BlankWord, Button, Card, InlineAlert, StepDots, Text, VerseText } from "@spudly/ui";
 import {
   BLANK_FRACTIONS,
   blankedIndices,
@@ -30,10 +30,10 @@ export default function DrillScreen({ store, verseId, onBack }: Props) {
 
   if (!entry) {
     return (
-      <View style={styles.container}>
+      <>
         <Text>Verse not found.</Text>
-        <Button title="Back" onPress={onBack} />
-      </View>
+        <Button onPress={onBack}>Back</Button>
+      </>
     );
   }
 
@@ -71,45 +71,45 @@ export default function DrillScreen({ store, verseId, onBack }: Props) {
 
   const isLastRound = round + 1 >= BLANK_FRACTIONS.length;
 
+  let blankOrdinal = -1;
+
   return (
-    <View style={styles.container}>
-      <Button title="← Back" onPress={onBack} />
-      <Text style={styles.heading}>{entry.verse.reference}</Text>
-      <Text style={styles.hint}>
+    <>
+      <Button variant="ghost" onPress={onBack}>
+        ← Back
+      </Button>
+      <Text variant="heading">{entry.verse.reference}</Text>
+      <Text variant="hint">
         Round {round + 1} of {BLANK_FRACTIONS.length} — tap a blank to peek at the word.
       </Text>
-      <View style={styles.textBox}>
-        <Text style={styles.text}>
-          {words.map((word, i) =>
-            blanks.has(i) && !revealed.has(i) ? (
-              <Text key={i} onPress={() => peek(i)} style={styles.blank}>
-                {"______ "}
+      <StepDots count={BLANK_FRACTIONS.length} activeIndex={round} />
+      <Card>
+        <VerseText>
+          {words.map((word, i) => {
+            if (blanks.has(i)) {
+              blankOrdinal += 1;
+              return (
+                <Text key={i} variant="verse">
+                  <BlankWord
+                    word={word}
+                    revealed={revealed.has(i)}
+                    onReveal={() => peek(i)}
+                    index={blankOrdinal}
+                    total={blanks.size}
+                  />{" "}
+                </Text>
+              );
+            }
+            return (
+              <Text key={i} variant="verse">
+                {word}{" "}
               </Text>
-            ) : (
-              <Text key={i}>{word} </Text>
-            ),
-          )}
-        </Text>
-      </View>
-      {message && <Text style={styles.error}>{message}</Text>}
-      <Button title={isLastRound ? "Finish — mark memorized" : "Next round"} onPress={nextRound} />
-    </View>
+            );
+          })}
+        </VerseText>
+      </Card>
+      {message && <InlineAlert severity="warning">{message}</InlineAlert>}
+      <Button onPress={nextRound}>{isLastRound ? "Finish — mark memorized" : "Next round"}</Button>
+    </>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16 },
-  heading: { fontSize: 20, fontWeight: "bold", marginVertical: 8 },
-  hint: { color: "#666", fontSize: 13, marginBottom: 8 },
-  textBox: {
-    backgroundColor: "#fff",
-    borderWidth: 1,
-    borderColor: "#e5e5e5",
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 12,
-  },
-  text: { fontSize: 18, lineHeight: 30 },
-  blank: { fontFamily: "monospace", color: "#1a73e8" },
-  error: { color: "#b00020", marginBottom: 8 },
-});

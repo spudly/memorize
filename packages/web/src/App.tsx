@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { TamaguiProvider } from "tamagui";
+import { tamaguiConfig, Tabs, Text, ScreenContainer, Spinner } from "@spudly/ui";
 import { createMemorizeStore, type MemorizeStore } from "@memorize/core";
 import DrillView from "./components/DrillView";
 import ReviewTab from "./components/ReviewTab";
@@ -28,9 +30,11 @@ export default function App() {
 
   if (!ready) {
     return (
-      <div className="app">
-        <p>Loading…</p>
-      </div>
+      <TamaguiProvider config={tamaguiConfig} defaultTheme="light">
+        <ScreenContainer>
+          <Spinner label="Loading Memorize" />
+        </ScreenContainer>
+      </TamaguiProvider>
     );
   }
 
@@ -41,26 +45,20 @@ export default function App() {
     { id: "settings", label: "Settings" },
   ];
 
+  const handleTabChange = (value: string): void => {
+    setTab(value as Tab);
+    setDrillingId(null);
+  };
+
   return (
-    <div className="app">
-      <header>
-        <h1>Memorize</h1>
-        <nav>
-          {tabs.map((t) => (
-            <button
-              key={t.id}
-              className={tab === t.id ? "active" : ""}
-              onClick={() => {
-                setTab(t.id);
-                setDrillingId(null);
-              }}
-            >
-              {t.label}
-            </button>
-          ))}
-        </nav>
-      </header>
-      <main>
+    <TamaguiProvider config={tamaguiConfig} defaultTheme="light">
+      <ScreenContainer>
+        <Text variant="heading">Memorize</Text>
+        <Tabs
+          tabs={tabs.map((t) => ({ value: t.id, label: t.label }))}
+          value={tab}
+          onValueChange={handleTabChange}
+        />
         {drillingId ? (
           <DrillView store={store} verseId={drillingId} onBack={() => setDrillingId(null)} />
         ) : tab === "verses" ? (
@@ -72,7 +70,7 @@ export default function App() {
         ) : (
           <SettingsTab store={store} />
         )}
-      </main>
-    </div>
+      </ScreenContainer>
+    </TamaguiProvider>
   );
 }

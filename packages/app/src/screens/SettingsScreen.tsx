@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Button, StyleSheet, Text, TextInput, View } from "react-native";
+import { XStack } from "tamagui";
+import { Button, InlineAlert, SectionCard, Text, TextField } from "@spudly/ui";
 import {
   DEFAULT_SETTINGS,
   LocalStore,
@@ -101,69 +102,68 @@ export default function SettingsScreen({ store }: Props) {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.heading}>Settings</Text>
+    <>
+      <Text variant="heading">Settings</Text>
 
-      <Text style={styles.subheading}>Scripture source</Text>
-      <Text style={styles.hint}>
-        A gospel-engine API key unlocks full-library search. The key stays on this device and is
-        never synced.
-      </Text>
-      <TextInput
-        style={styles.input}
-        value={keyInput}
-        onChangeText={setKeyInput}
-        placeholder="gospel-engine API key"
-        secureTextEntry
-        autoCapitalize="none"
-      />
-      <View style={styles.row}>
-        <Button title="Save key" onPress={saveKey} disabled={!keyInput.trim()} />
-        {apiKey && <Button title="Clear key" onPress={clearKey} />}
-      </View>
-
-      <Text style={styles.subheading}>Google Drive sync</Text>
-      <Text style={styles.hint}>
-        Syncs your verse list (never your API key) to memorize-data.json in the “{folderName}” Drive
-        folder.
-      </Text>
-      {!driveAuth.accessToken ? (
-        <Button
-          title="Connect Google Drive"
-          onPress={driveAuth.connect}
-          disabled={!driveAuth.ready || busy}
+      <SectionCard title="Scripture source">
+        <Text variant="hint">
+          A gospel-engine API key unlocks full-library search. The key stays on this device and is
+          never synced.
+        </Text>
+        <TextField
+          label="API key"
+          value={keyInput}
+          onChangeText={setKeyInput}
+          placeholder="gospel-engine API key"
+          secureTextEntry
+          autoCapitalize="none"
         />
-      ) : (
-        <Button title="Sync with Drive" onPress={() => void runSync()} disabled={busy} />
-      )}
-      {driveAuth.error && <Text style={styles.error}>{driveAuth.error}</Text>}
-      {syncMessage && <Text style={styles.hint}>{syncMessage}</Text>}
-      {conflict && (
-        <View style={styles.row}>
-          <Button
-            title="Keep this device"
-            onPress={() => void resolveConflict("push")}
-            disabled={busy}
-          />
-          <Button title="Keep Drive" onPress={() => void resolveConflict("pull")} disabled={busy} />
-        </View>
-      )}
-    </View>
+        <XStack gap="$2">
+          <Button size="sm" onPress={saveKey} disabled={!keyInput.trim()}>
+            Save key
+          </Button>
+          {apiKey && (
+            <Button size="sm" variant="secondary" onPress={clearKey}>
+              Clear key
+            </Button>
+          )}
+        </XStack>
+      </SectionCard>
+
+      <SectionCard title="Google Drive sync">
+        <Text variant="hint">
+          Syncs your verse list (never your API key) to memorize-data.json in the “{folderName}”
+          Drive folder.
+        </Text>
+        {!driveAuth.accessToken ? (
+          <Button onPress={driveAuth.connect} disabled={!driveAuth.ready || busy}>
+            Connect Google Drive
+          </Button>
+        ) : (
+          <Button onPress={() => void runSync()} disabled={busy}>
+            Sync with Drive
+          </Button>
+        )}
+        {driveAuth.error && <InlineAlert severity="error">{driveAuth.error}</InlineAlert>}
+        {syncMessage && (
+          <InlineAlert severity={conflict ? "warning" : "info"}>{syncMessage}</InlineAlert>
+        )}
+        {conflict && (
+          <XStack gap="$2">
+            <Button size="sm" onPress={() => void resolveConflict("push")} disabled={busy}>
+              Keep this device
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              onPress={() => void resolveConflict("pull")}
+              disabled={busy}
+            >
+              Keep Drive
+            </Button>
+          </XStack>
+        )}
+      </SectionCard>
+    </>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16 },
-  heading: { fontSize: 20, fontWeight: "bold", marginBottom: 8 },
-  subheading: { fontSize: 16, fontWeight: "bold", marginTop: 16, marginBottom: 4 },
-  hint: { color: "#666", fontSize: 13, marginBottom: 8 },
-  input: {
-    borderWidth: 1,
-    borderColor: "#ccc",
-    borderRadius: 6,
-    padding: 8,
-    marginBottom: 8,
-  },
-  row: { flexDirection: "row", gap: 8, marginBottom: 8 },
-  error: { color: "#b00020", marginBottom: 8 },
-});

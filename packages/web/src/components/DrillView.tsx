@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { BlankWord, Button, InlineAlert, ProgressBar, Text, VerseText } from "@spudly/ui";
 import {
   BLANK_FRACTIONS,
   blankedIndices,
@@ -29,10 +30,10 @@ export default function DrillView({ store, verseId, onBack }: Props) {
 
   if (!entry) {
     return (
-      <section>
-        <p>Verse not found.</p>
-        <button onClick={onBack}>Back</button>
-      </section>
+      <>
+        <Text variant="body">Verse not found.</Text>
+        <Button onPress={onBack}>Back</Button>
+      </>
     );
   }
 
@@ -69,27 +70,45 @@ export default function DrillView({ store, verseId, onBack }: Props) {
   };
 
   const isLastRound = round + 1 >= BLANK_FRACTIONS.length;
+  const progress = ((round + 1) / BLANK_FRACTIONS.length) * 100;
+  // BlankWord's index is the blank's zero-based ordinal among the blanks
+  // (not the word's position in the verse) — mirrors the native DrillScreen.
+  let blankOrdinal = -1;
 
   return (
-    <section>
-      <button onClick={onBack}>← Back</button>
-      <h2>{entry.verse.reference}</h2>
-      <p className="hint">
+    <>
+      <Button variant="ghost" size="sm" onPress={onBack}>
+        ← Back
+      </Button>
+      <Text variant="subheading">{entry.verse.reference}</Text>
+      <ProgressBar value={progress} />
+      <Text variant="hint">
         Round {round + 1} of {BLANK_FRACTIONS.length} — tap a blank to peek at the word.
-      </p>
-      <p className="drill-text">
-        {words.map((word, i) =>
-          blanks.has(i) && !revealed.has(i) ? (
-            <button key={i} className="blank" onClick={() => peek(i)} aria-label="reveal word">
-              ______
-            </button>
-          ) : (
-            <span key={i}>{word} </span>
-          ),
-        )}
-      </p>
-      {message && <p className="error">{message}</p>}
-      <button onClick={nextRound}>{isLastRound ? "Finish — mark memorized" : "Next round"}</button>
-    </section>
+      </Text>
+      <VerseText>
+        {words.map((word, i) => {
+          if (blanks.has(i)) {
+            blankOrdinal += 1;
+            return (
+              <BlankWord
+                key={i}
+                word={word}
+                revealed={revealed.has(i)}
+                onReveal={() => peek(i)}
+                index={blankOrdinal}
+                total={blanks.size}
+              />
+            );
+          }
+          return (
+            <Text key={i} variant="verse">
+              {word}{" "}
+            </Text>
+          );
+        })}
+      </VerseText>
+      {message && <InlineAlert severity="warning">{message}</InlineAlert>}
+      <Button onPress={nextRound}>{isLastRound ? "Finish — mark memorized" : "Next round"}</Button>
+    </>
   );
 }
