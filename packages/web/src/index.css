@@ -10,3 +10,22 @@
 body {
   margin: 0;
 }
+
+/*
+ * App-shell height chain. ScreenContainer renders the page inside a
+ * Tamagui ScrollView whose frame is `flex: 1`, and its content uses
+ * `min-height: 100%` — both only resolve against a definite height.
+ * Without this chain the ScrollView collapses to a short strip and the
+ * page looks blank. The TamaguiProvider wrappers use display:contents,
+ * so the ScrollView frame is #root's flex item directly.
+ */
+html,
+body,
+#root {
+  height: 100%;
+}
+
+#root {
+  display: flex;
+  flex-direction: column;
+}
