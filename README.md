@@ -137,8 +137,21 @@ use.
 
 ### Local development
 
-`npm run dev` uses the direct API, so browser CORS will block real-key search
-locally — use the built-in demo data or the mobile app (React Native does not
-enforce CORS) instead. To exercise the proxy locally, run `npx vercel dev`
-from `packages/web`; put `GOSPEL_ENGINE_API_KEY` in `packages/web/.env` if
-you want the proxy to supply the key there too.
+`npm run dev` serves `/api/*` too: a dev-only Vite plugin runs the same
+shared proxy handler (`packages/web/api/_handler.ts`) that the edge function
+uses in production, so local behavior matches the deployment — without it,
+`/api` requests would fall through to the SPA fallback and return HTML.
+
+To use it, create `packages/web/.env.local` (gitignored):
+
+```sh
+VITE_USE_GOSPEL_PROXY=1
+GOSPEL_ENGINE_API_KEY=<your gospel-engine key>
+```
+
+The first line switches the app to proxy mode (the same flag `vercel.json`
+sets for the Vercel build); the second is the key the dev proxy injects,
+mirroring the Vercel secret. The key line is optional — without it, the key
+from the app's Settings screen is passed through instead. Without the file
+at all, local dev falls back to the direct API, which browser CORS blocks
+for real-key search (demo data and the mobile app are unaffected).
