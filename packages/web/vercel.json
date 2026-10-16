@@ -1,0 +1,9 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "cd ../.. && npx turbo build --filter=@memorize/web",
+  "env": { "VITE_USE_GOSPEL_PROXY": "1" },
+  "framework": "vite",
+  "installCommand": "npm install",
+  "outputDirectory": "dist",
+  "rewrites": [{ "destination": "/index.html", "source": "/((?!api/).*)" }]
+}
