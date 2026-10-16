@@ -13,11 +13,13 @@
  *   through to the SPA index.html.
  *
  * The API key comes from the GOSPEL_ENGINE_API_KEY environment variable (a
- * Vercel secret in production, packages/web/.env.local in development; never
- * shipped to the browser). When it is set, it always wins — any Authorization
- * header the client sent is ignored. When it is not set, the client's own
- * Authorization header is passed through instead. The key is never logged or
- * returned.
+ * Vercel secret in production; never shipped to the browser), or from the
+ * optional serverKey argument — the Vite dev plugin passes the key it
+ * resolved from packages/web/.env.local explicitly, so a stale value can
+ * never linger in process.env across config reloads. When a key is
+ * available, it always wins — any Authorization header the client sent is
+ * ignored. When it is not, the client's own Authorization header is passed
+ * through instead. The key is never logged or returned.
  *
  * This is deliberately not an open proxy: the upstream origin is hardcoded
  * and only the scripture endpoints below may be reached through it.
@@ -34,7 +36,10 @@ function jsonError(status: number, message: string): Response {
   });
 }
 
-export async function handleGospelRequest(request: Request): Promise<Response> {
+export async function handleGospelRequest(
+  request: Request,
+  serverKey: string | undefined = process.env.GOSPEL_ENGINE_API_KEY,
+): Promise<Response> {
   const url = new URL(request.url);
   const segments = url.pathname.split("/").filter(Boolean);
 
@@ -46,7 +51,6 @@ export async function handleGospelRequest(request: Request): Promise<Response> {
   }
 
   const headers = new Headers();
-  const serverKey = process.env.GOSPEL_ENGINE_API_KEY;
   if (serverKey) {
     headers.set("authorization", `Bearer ${serverKey}`);
   } else {

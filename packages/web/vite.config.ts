@@ -9,11 +9,14 @@ import { handleGospelRequest } from "./api/_handler.js";
  * Without it, /api/* falls through to the SPA fallback and returns
  * index.html. It runs the same shared handler (api/_handler.ts) in-process,
  * so local behavior matches production: same endpoint allowlist, same key
- * rules. The key is read from GOSPEL_ENGINE_API_KEY — set it in
- * packages/web/.env.local (gitignored), mirroring the Vercel secret; with
- * no key set, the client's own Authorization header is passed through.
+ * rules. The server key is resolved once per config load (shell env first,
+ * then packages/web/.env.local, mirroring the Vercel secret) and passed to
+ * the handler explicitly — deliberately NOT written into process.env, so
+ * editing .env.local and reloading the config can never leave a stale key
+ * behind. With no key set, the client's own Authorization header is passed
+ * through.
  */
-function gospelApiDevProxy(): Plugin {
+function gospelApiDevProxy(serverKey: string | undefined): Plugin {
   const middleware = (req: IncomingMessage, res: ServerResponse, next: (err?: unknown) => void) => {
     const path = req.url?.split("?")[0] ?? "";
     if (path !== "/api" && !path.startsWith("/api/")) {
@@ -34,12 +37,18 @@ function gospelApiDevProxy(): Plugin {
           method: req.method ?? "GET",
           headers,
         });
-        const response = await handleGospelRequest(request);
+        const response = await handleGospelRequest(request, serverKey);
+        // Buffer the body before sending headers: if reading it failed,
+        // headers would already be sent and the 500 below could not be
+        // written (ERR_HTTP_HEADERS_SENT).
+        const body = new Uint8Array(await response.arrayBuffer());
         res.writeHead(response.status, Object.fromEntries(response.headers.entries()));
-        res.end(new Uint8Array(await response.arrayBuffer()));
+        res.end(body);
       } catch {
-        res.writeHead(500, { "content-type": "application/json; charset=utf-8" });
-        res.end(JSON.stringify({ error: "Dev proxy error" }));
+        if (!res.headersSent) {
+          res.writeHead(500, { "content-type": "application/json; charset=utf-8" });
+          res.end(JSON.stringify({ error: "Dev proxy error" }));
+        }
       }
     })();
   };
@@ -56,15 +65,14 @@ function gospelApiDevProxy(): Plugin {
 }
 
 export default defineConfig(({ mode }) => {
-  // Bridge the key from .env.local into process.env for the shared handler,
-  // the same way the Vercel env provides it in production. A key already in
-  // the shell environment wins.
+  // Resolve the server key fresh on every config load: a key in the shell
+  // environment wins over packages/web/.env.local. The value is handed to
+  // the dev plugin (and from there to the shared handler) without touching
+  // process.env, so reloads always see the current file contents.
   const fileEnv = loadEnv(mode, process.cwd(), "GOSPEL_ENGINE_");
-  if (!process.env.GOSPEL_ENGINE_API_KEY && fileEnv.GOSPEL_ENGINE_API_KEY) {
-    process.env.GOSPEL_ENGINE_API_KEY = fileEnv.GOSPEL_ENGINE_API_KEY;
-  }
+  const gospelServerKey = process.env.GOSPEL_ENGINE_API_KEY ?? fileEnv.GOSPEL_ENGINE_API_KEY;
   return {
-    plugins: [react(), gospelApiDevProxy()],
+    plugins: [react(), gospelApiDevProxy(gospelServerKey)],
     server: { port: 5173 },
     resolve: {
       // Keep workspace symlinks (node_modules/@memorize/* -> packages/*) intact
