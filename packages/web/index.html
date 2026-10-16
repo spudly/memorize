@@ -4,6 +4,14 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Memorize — Scripture Memorization</title>
+    <script>
+      // Tamagui's runtime reads process.env.* (TAMAGUI_* flags, IS_STATIC, …).
+      // Browsers have no Node `process`, and Vite's dev pre-bundling leaves
+      // those reads untouched, which crashed the app with
+      // "ReferenceError: process is not defined". Provide a minimal global
+      // before any module loads so every read returns undefined (the default).
+      window.process = window.process || { env: {} };
+    </script>
   </head>
   <body>
     <div id="root"></div>
