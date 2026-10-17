@@ -155,3 +155,12 @@ mirroring the Vercel secret. The key line is optional — without it, the key
 from the app's Settings screen is passed through instead. Without the file
 at all, local dev falls back to the direct API, which browser CORS blocks
 for real-key search (demo data and the mobile app are unaffected).
+
+One dev-server gotcha is handled automatically: Vite's dep-optimizer cache
+(`node_modules/.vite`) does not notice when a linked workspace package's
+dist changes, so after rebuilding `@memorize/core` / `@memorize/types` (or
+switching branches) the client could keep running the old bundle. A
+`predev` guard (`packages/web/scripts/clear-stale-vite-cache.mjs`)
+fingerprints both dist trees and wipes the cache only when they changed.
+If the client ever does serve stale workspace code, deleting
+`node_modules/.vite` and restarting is the manual equivalent.
