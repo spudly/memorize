@@ -17,6 +17,16 @@ export default tseslint.config(
       },
     },
   },
+  {
+    // Standalone Node tooling scripts (e.g. the web predev cache guard):
+    // everything they use is imported from node:* modules except console.
+    files: ["**/scripts/**/*.mjs"],
+    languageOptions: {
+      globals: {
+        console: "readonly",
+      },
+    },
+  },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   prettierConfig,
