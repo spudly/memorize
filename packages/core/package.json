@@ -3,9 +3,10 @@
     "@memorize/types": "0.1.0"
   },
   "devDependencies": {
+    "@swc/core": "^1.15.47",
+    "@swc/jest": "^0.2.39",
     "@types/jest": "^30.0.0",
-    "jest": "^30.5.2",
-    "ts-jest": "^29.4.15"
+    "jest": "^30.5.2"
   },
   "exports": {
     ".": {
