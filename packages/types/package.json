@@ -16,7 +16,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "clean": "rm -rf dist",
-    "lint": "eslint src --max-warnings 0",
+    "lint": "echo 'lint disabled until typescript-eslint supports TypeScript 7 (TS sources are excluded in the root eslint.config.ts; JS tooling files are linted by the root lint script)'",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "types": "./dist/index.d.ts",

@@ -3,9 +3,10 @@
     "@memorize/types": "0.1.0"
   },
   "devDependencies": {
+    "@swc/core": "^1.15.47",
+    "@swc/jest": "^0.2.39",
     "@types/jest": "^30.0.0",
-    "jest": "^30.5.2",
-    "ts-jest": "^29.4.15"
+    "jest": "^30.5.2"
   },
   "exports": {
     ".": {
@@ -22,7 +23,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "clean": "rm -rf dist",
-    "lint": "eslint src tests --max-warnings 0",
+    "lint": "echo 'lint disabled until typescript-eslint supports TypeScript 7 (TS sources are excluded in the root eslint.config.ts; JS tooling files are linted by the root lint script)'",
     "test": "jest",
     "typecheck": "tsc --noEmit -p tsconfig.check.json"
   },
