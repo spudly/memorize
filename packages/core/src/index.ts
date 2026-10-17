@@ -16,6 +16,7 @@ export {
   DemoDataSource,
   DEMO_VERSES,
   GospelEngineDataSource,
+  mapChapterResponse,
   mapGetResponse,
   mapSearchItem,
   mapVerseDetail,

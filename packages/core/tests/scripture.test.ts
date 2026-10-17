@@ -38,6 +38,27 @@ const SAMPLE_GET_RESPONSE = {
   ],
 };
 
+/**
+ * Chapter-only /api/get envelope, shape verified against upstream
+ * gospel-engine internal/api/server.go getChapter on 2026-10-16:
+ * `{ source_type: "chapters", reference_query, chapter: { id, volume,
+ * book, chapter, title, full_content, file_path } }`. The full_content
+ * text here is a short synthetic stand-in, not a captured chapter.
+ */
+const SAMPLE_CHAPTER_RESPONSE = {
+  reference_query: "Alma 32",
+  source_type: "chapters",
+  chapter: {
+    id: 901,
+    volume: "bofm",
+    book: "alma",
+    chapter: 32,
+    title: "Alma 32",
+    full_content: "Chapter text stand-in for Alma 32.",
+    file_path: "/data/gospel-library/eng/scriptures/bofm/alma/32.md",
+  },
+};
+
 const SAMPLE_SEARCH_RESPONSE = {
   results: [{ reference: "Moroni 7:47", text: "But charity is the pure love of Christ." }],
 };
@@ -102,6 +123,18 @@ describe("mapGetResponse", () => {
     expect(verses[1]?.reference).toBe("Ether 12:28");
   });
 
+  it("maps the chapter-only envelope to one chapter Verse", () => {
+    const verses = mapGetResponse(SAMPLE_CHAPTER_RESPONSE);
+    expect(verses).toHaveLength(1);
+    expect(verses[0]).toMatchObject({
+      id: "alma-32",
+      reference: "Alma 32",
+      book: "alma",
+      chapter: "32",
+      text: "Chapter text stand-in for Alma 32.",
+    });
+  });
+
   it("tolerates a single-object payload", () => {
     const verses = mapGetResponse({ reference: "John 3:16", text: "For God so loved the world." });
     expect(verses).toHaveLength(1);
@@ -127,6 +160,19 @@ describe("GospelEngineDataSource", () => {
     expect(calls).toHaveLength(1);
     expect(calls[0]).toContain("/api/get?ref=Ether%2012%3A27-28");
     expect(results.map((v) => v.reference)).toEqual(["Ether 12:27", "Ether 12:28"]);
+  });
+
+  it("routes chapter-only queries to /api/get and uses the chapter envelope (no search fallback)", async () => {
+    const calls = stubFetch((url) =>
+      url.includes("/api/get")
+        ? { ok: true, status: 200, body: SAMPLE_CHAPTER_RESPONSE }
+        : { ok: true, status: 200, body: SAMPLE_SEARCH_RESPONSE },
+    );
+    const results = await source().search("Alma 32");
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toContain("/api/get?ref=Alma%2032");
+    expect(results).toHaveLength(1);
+    expect(results[0]?.reference).toBe("Alma 32");
   });
 
   it("routes keyword queries to /api/search only", async () => {

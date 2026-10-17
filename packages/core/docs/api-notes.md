@@ -75,6 +75,33 @@ is in the upstream data, not the mapping. `mapGetResponse` maps the
 `verses` array (and tolerates a single-object payload). A 404 is treated
 as "no such reference".
 
+### Chapter-only references (verified 2026-10-16, upstream source)
+
+A chapter-only reference (e.g. `Alma 32`) does NOT return a `verses`
+array. Verified against upstream `internal/api/server.go` (`getChapter`):
+
+```json
+{
+  "reference_query": "Alma 32",
+  "source_type": "chapters",
+  "chapter": {
+    "id": 901,
+    "volume": "bofm",
+    "book": "alma",
+    "chapter": 32,
+    "title": "Alma 32",
+    "full_content": "<the chapter's full text>",
+    "file_path": "/data/gospel-library/eng/scriptures/bofm/alma/32.md"
+  }
+}
+```
+
+`mapChapterResponse` maps this envelope to a single Verse (reference =
+`reference_query`, text = `full_content`, kept whole — its internal
+verse formatting is unverified, so it is not split into per-verse
+entries). Without this mapping a successful chapter lookup mapped to
+`[]` and the search silently fell back to semantic search.
+
 ## MCP endpoint (not used by the app)
 
 The same tools are exposed as streamable HTTP MCP at

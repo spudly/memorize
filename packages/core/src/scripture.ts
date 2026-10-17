@@ -153,15 +153,54 @@ function resultItems(data: unknown): unknown[] | null {
 }
 
 /**
- * Map a /api/get response to verses. The verified shape (2026-10-16) is
+ * Map the chapter-only /api/get envelope to a single Verse holding the
+ * whole chapter. Verified against upstream gospel-engine
+ * `internal/api/server.go` getChapter (2026-10-16): a chapter-only
+ * reference returns `{ source_type: "chapters", reference_query,
+ * chapter: { id, volume, book, chapter, title, full_content, file_path } }`
+ * — no `verses` array. `full_content` is the chapter's full text, whose
+ * internal verse formatting is unverified, so it is kept whole rather
+ * than split into fabricated per-verse entries. Without this, chapter
+ * queries such as "Alma 32" mapped to [] and fell back to semantic
+ * search despite the exact lookup succeeding.
+ */
+export function mapChapterResponse(data: unknown): Verse | null {
+  const obj = asRecord(data);
+  if (!obj) {
+    return null;
+  }
+  const chapter = asRecord(obj["chapter"]);
+  if (!chapter) {
+    return null;
+  }
+  const text = firstString(chapter, ["full_content", "content", "text"]);
+  if (text === undefined) {
+    return null;
+  }
+  const reference =
+    firstString(obj, ["reference_query", "reference", "ref"]) ??
+    firstString(chapter, ["title", "reference", "ref"]);
+  if (reference === undefined) {
+    return null;
+  }
+  return buildVerse(reference, text, chapter);
+}
+
+/**
+ * Map a /api/get response to verses. The verified shapes (2026-10-16) are
  * `{ reference_query, source_type, verses: [...] }` — one item per verse,
- * so a range or chapter yields several. A single-object payload is also
- * tolerated via mapVerseDetail.
+ * so a verse or range yields several — and, for a chapter-only reference,
+ * the `chapters` envelope handled by mapChapterResponse. A single-object
+ * payload is also tolerated via mapVerseDetail.
  */
 export function mapGetResponse(data: unknown): Verse[] {
   const items = resultItems(data);
   if (items) {
     return items.map(mapSearchItem).filter((v): v is Verse => v !== null);
+  }
+  const chapter = mapChapterResponse(data);
+  if (chapter) {
+    return [chapter];
   }
   const single = mapVerseDetail(data);
   return single ? [single] : [];
