@@ -6,11 +6,9 @@ no official Church API; this is a third-party service.
 
 Default base URL: `https://engine.ibeco.me`
 
-> The exact JSON response shapes below are **UNVERIFIED** — the API requires a
-> key, and the field mapping in `src/scripture.ts` (`mapSearchItem` /
-> `mapVerseDetail`) was written defensively against the project's README.
-> Verify with the curl commands below once you have a key, then tighten the
-> mappers and add a regression test.
+> The /api/get shape below is **VERIFIED** (live sample captured 2026-10-16,
+> pinned as a fixture in `tests/scripture.test.ts`). The /api/search shape
+> is still unverified; its mapper stays defensive.
 
 ## Getting a key
 
@@ -25,23 +23,84 @@ curl -H "Authorization: Bearer $GOSPEL_ENGINE_KEY" \
   "https://engine.ibeco.me/api/search?q=charity"
 ```
 
+/api/search is keyword + semantic (vector) + hybrid search over the WHOLE
+library — scriptures, conference talks, manuals, books, study aids — so a
+reference typed into it returns mostly unrelated material. That is why
+`GospelEngineDataSource.search()` routes reference-shaped queries to
+/api/get first (see `parseReference`) and only uses /api/search for
+keywords or as a fallback when the lookup misses.
+
 The mapper accepts either a top-level JSON array or an object with a
 `results` / `items` / `verses` / `data` array. Each item is read with these
 field fallbacks:
 
 - reference: `reference`, `ref`, `citation`, `title`
 - text: `text`, `verse_text`, `content`, `body`, `snippet`
-- optional: `book` / `book_name`, `chapter` / `chapter_number`
+- optional: `book` / `book_name`, `chapter` / `chapter_number` (string or number)
 
-## Get a single verse
+## Get verses by reference (verified 2026-10-16)
 
 ```sh
 curl -H "Authorization: Bearer $GOSPEL_ENGINE_KEY" \
-  "https://engine.ibeco.me/api/get?reference=Ether%2012%3A27"
+  "https://engine.ibeco.me/api/get?ref=Ether%2012%3A27-28"
 ```
 
-The mapper also unwraps one level of nesting under `verse`, `result`,
-`data`, or `item` before applying the same field fallbacks.
+The parameter is **`ref`** (an earlier draft of these notes said
+`reference`; the live API was queried with `ref`). A reference may be a
+verse, a range, or a chapter. Response shape:
+
+```json
+{
+  "reference_query": "Ether 12:27-28",
+  "source_type": "scriptures",
+  "verses": [
+    {
+      "id": 4360,
+      "volume": "bofm",
+      "book": "ether",
+      "chapter": 12,
+      "verse": 27,
+      "reference": "Ether 12:27",
+      "text": "And if men come unto me …",
+      "file_path": "/data/gospel-library/eng/scriptures/bofm/ether/12.md"
+    }
+  ]
+}
+```
+
+One `verses` item per verse; `chapter` is a JSON number and `book` is a
+lowercase slug. Known data quirk: the extracted text can contain
+missing-space artifacts (e.g. "willshow", "showunto" in Ether 12) — that
+is in the upstream data, not the mapping. `mapGetResponse` maps the
+`verses` array (and tolerates a single-object payload). A 404 is treated
+as "no such reference".
+
+### Chapter-only references (verified 2026-10-16, upstream source)
+
+A chapter-only reference (e.g. `Alma 32`) does NOT return a `verses`
+array. Verified against upstream `internal/api/server.go` (`getChapter`):
+
+```json
+{
+  "reference_query": "Alma 32",
+  "source_type": "chapters",
+  "chapter": {
+    "id": 901,
+    "volume": "bofm",
+    "book": "alma",
+    "chapter": 32,
+    "title": "Alma 32",
+    "full_content": "<the chapter's full text>",
+    "file_path": "/data/gospel-library/eng/scriptures/bofm/alma/32.md"
+  }
+}
+```
+
+`mapChapterResponse` maps this envelope to a single Verse (reference =
+`reference_query`, text = `full_content`, kept whole — its internal
+verse formatting is unverified, so it is not split into per-verse
+entries). Without this mapping a successful chapter lookup mapped to
+`[]` and the search silently fell back to semantic search.
 
 ## MCP endpoint (not used by the app)
 
@@ -53,11 +112,12 @@ client runtime.
 
 ## What to verify once you have a key
 
-1. The real field names for reference/text in search results.
-2. Whether `GET /api/get` returns the verse at the top level or nested.
+1. ~~The /api/get response shape and parameter name~~ — done 2026-10-16
+   (see above; fixture in `tests/scripture.test.ts`).
+2. The real field names for reference/text in /api/search results.
 3. Pagination / result limits on search (the app currently takes the first page).
-4. Rate limits (the README mentions per-token buckets; the client surfaces
-   HTTP 429 as a `ScriptureApiError` with `status` set).
+4. Rate limits (600 requests/minute per token per the project README; the
+   client surfaces HTTP 429 as a `ScriptureApiError` with `status` set).
 
 Update `mapSearchItem` / `mapVerseDetail` in `src/scripture.ts` to match, and
 add a test in `tests/` pinning the real shape.

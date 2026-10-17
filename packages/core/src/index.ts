@@ -16,9 +16,12 @@ export {
   DemoDataSource,
   DEMO_VERSES,
   GospelEngineDataSource,
+  mapChapterResponse,
+  mapGetResponse,
   mapSearchItem,
   mapVerseDetail,
   normalizeReference,
+  parseReference,
   ScriptureApiError,
 } from "./scripture";
 

@@ -26,6 +26,47 @@ export function normalizeReference(ref: string): string {
     .replace(/-+$/, "");
 }
 
+const BOOK_ALIASES: Record<string, string> = {
+  "d&c": "Doctrine and Covenants",
+  "doctrine & covenants": "Doctrine and Covenants",
+};
+
+/**
+ * If `query` is shaped like a scripture reference — a book name followed by
+ * a chapter, with an optional verse or verse range ("Ether 12:27",
+ * "1 Nephi 3:7", "Proverbs 3:5-6", "Alma 32", "D&C 18:10") — return the
+ * canonical reference to look up. Otherwise return null: the query is a
+ * keyword/topic search. Detection is structural (trailing chapter[:verse]
+ * numbers after book text), so a miss costs one /api/get round-trip and
+ * the caller falls back to semantic search.
+ */
+export function parseReference(query: string): string | null {
+  const collapsed = query.trim().replace(/\s+/g, " ");
+  const match = /^(.+?)\s+(\d+)(?::(\d+)(?:\s*[-–]\s*(\d+))?)?$/.exec(collapsed);
+  if (!match) {
+    return null;
+  }
+  const [, rawBook, chapter, verse, endVerse] = match;
+  if (rawBook === undefined || chapter === undefined) {
+    return null;
+  }
+  const bookRaw = rawBook.trim();
+  // The book part must contain a letter and no colon — this rejects bare
+  // numbers and times ("12:27") that the regex could otherwise force-fit.
+  if (!/[a-zA-Z]/.test(bookRaw) || bookRaw.includes(":")) {
+    return null;
+  }
+  const book = BOOK_ALIASES[bookRaw.toLowerCase().replace(/\.$/, "")] ?? bookRaw;
+  let reference = `${book} ${chapter}`;
+  if (verse !== undefined) {
+    reference += `:${verse}`;
+    if (endVerse !== undefined) {
+      reference += `-${endVerse}`;
+    }
+  }
+  return reference;
+}
+
 function asRecord(value: unknown): Record<string, unknown> | null {
   return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : null;
 }
@@ -46,9 +87,12 @@ function buildVerse(reference: string, text: string, obj: Record<string, unknown
   if (book !== undefined) {
     verse.book = book;
   }
-  const chapter = firstString(obj, ["chapter", "chapter_number"]);
-  if (chapter !== undefined) {
-    verse.chapter = chapter;
+  // The verified /api/get shape carries chapter as a JSON number.
+  const chapterRaw = obj["chapter"] ?? obj["chapter_number"];
+  if (typeof chapterRaw === "string" && chapterRaw.trim().length > 0) {
+    verse.chapter = chapterRaw.trim();
+  } else if (typeof chapterRaw === "number") {
+    verse.chapter = String(chapterRaw);
   }
   return verse;
 }
@@ -109,6 +153,60 @@ function resultItems(data: unknown): unknown[] | null {
 }
 
 /**
+ * Map the chapter-only /api/get envelope to a single Verse holding the
+ * whole chapter. Verified against upstream gospel-engine
+ * `internal/api/server.go` getChapter (2026-10-16): a chapter-only
+ * reference returns `{ source_type: "chapters", reference_query,
+ * chapter: { id, volume, book, chapter, title, full_content, file_path } }`
+ * — no `verses` array. `full_content` is the chapter's full text, whose
+ * internal verse formatting is unverified, so it is kept whole rather
+ * than split into fabricated per-verse entries. Without this, chapter
+ * queries such as "Alma 32" mapped to [] and fell back to semantic
+ * search despite the exact lookup succeeding.
+ */
+export function mapChapterResponse(data: unknown): Verse | null {
+  const obj = asRecord(data);
+  if (!obj) {
+    return null;
+  }
+  const chapter = asRecord(obj["chapter"]);
+  if (!chapter) {
+    return null;
+  }
+  const text = firstString(chapter, ["full_content", "content", "text"]);
+  if (text === undefined) {
+    return null;
+  }
+  const reference =
+    firstString(obj, ["reference_query", "reference", "ref"]) ??
+    firstString(chapter, ["title", "reference", "ref"]);
+  if (reference === undefined) {
+    return null;
+  }
+  return buildVerse(reference, text, chapter);
+}
+
+/**
+ * Map a /api/get response to verses. The verified shapes (2026-10-16) are
+ * `{ reference_query, source_type, verses: [...] }` — one item per verse,
+ * so a verse or range yields several — and, for a chapter-only reference,
+ * the `chapters` envelope handled by mapChapterResponse. A single-object
+ * payload is also tolerated via mapVerseDetail.
+ */
+export function mapGetResponse(data: unknown): Verse[] {
+  const items = resultItems(data);
+  if (items) {
+    return items.map(mapSearchItem).filter((v): v is Verse => v !== null);
+  }
+  const chapter = mapChapterResponse(data);
+  if (chapter) {
+    return [chapter];
+  }
+  const single = mapVerseDetail(data);
+  return single ? [single] : [];
+}
+
+/**
  * Live data source backed by the community gospel-engine API
  * (https://github.com/cpuchip/gospel-engine).
  *
@@ -132,6 +230,22 @@ export class GospelEngineDataSource implements ScriptureDataSource {
   }
 
   async search(query: string): Promise<Verse[]> {
+    // Reference-shaped queries ("Ether 12:27") go to /api/get first:
+    // /api/search is semantic search over the whole library (talks,
+    // manuals, study aids included) and buries the exact verse in
+    // loosely related results. On any miss — no match, lookup error —
+    // fall back to semantic search so nothing that worked before breaks.
+    const reference = parseReference(query);
+    if (reference !== null) {
+      try {
+        const verses = await this.lookupReference(reference);
+        if (verses.length > 0) {
+          return verses;
+        }
+      } catch {
+        // Fall through to semantic search.
+      }
+    }
     const url = `${this.baseUrl}/api/search?q=${encodeURIComponent(query)}`;
     let res: Response;
     try {
@@ -154,8 +268,15 @@ export class GospelEngineDataSource implements ScriptureDataSource {
     return items.map(mapSearchItem).filter((v): v is Verse => v !== null);
   }
 
-  async getVerse(reference: string): Promise<Verse> {
-    const url = `${this.baseUrl}/api/get?reference=${encodeURIComponent(reference)}`;
+  /**
+   * Exact lookup via /api/get. Returns one Verse per verse in the
+   * reference (a range or chapter returns several). A 404 means "no such
+   * reference" and returns []; other failures throw ScriptureApiError.
+   * Note the parameter is `ref` — verified against the live API
+   * 2026-10-16 (see docs/api-notes.md).
+   */
+  async lookupReference(reference: string): Promise<Verse[]> {
+    const url = `${this.baseUrl}/api/get?ref=${encodeURIComponent(reference)}`;
     let res: Response;
     try {
       res = await fetch(url, { headers: this.authHeaders() });
@@ -164,15 +285,21 @@ export class GospelEngineDataSource implements ScriptureDataSource {
         `Could not reach the scripture service: ${error instanceof Error ? error.message : "unknown error"}`,
       );
     }
+    if (res.status === 404) {
+      return [];
+    }
     if (!res.ok) {
       throw new ScriptureApiError(`Scripture lookup failed with status ${res.status}`, res.status);
     }
     const data: unknown = await res.json();
-    const verse = mapVerseDetail(data);
+    return mapGetResponse(data);
+  }
+
+  async getVerse(reference: string): Promise<Verse> {
+    const verses = await this.lookupReference(reference);
+    const verse = verses[0];
     if (!verse) {
-      throw new ScriptureApiError(
-        "Unexpected verse response shape. See packages/core/docs/api-notes.md to verify the field mapping.",
-      );
+      throw new ScriptureApiError(`Verse not found: ${reference}`, 404);
     }
     return verse;
   }
@@ -227,6 +354,16 @@ export class DemoDataSource implements ScriptureDataSource {
     const q = query.trim().toLowerCase();
     if (q.length === 0) {
       return [];
+    }
+    // Same reference-first behavior as the live source: an exact
+    // reference returns just that verse, not every verse containing
+    // the query as a substring.
+    const reference = parseReference(query);
+    if (reference !== null) {
+      const exact = DEMO_VERSES.find((v) => v.id === normalizeReference(reference));
+      if (exact) {
+        return [exact];
+      }
     }
     return DEMO_VERSES.filter((v) => `${v.reference} ${v.text}`.toLowerCase().includes(q));
   }
