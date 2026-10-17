@@ -11,7 +11,8 @@
  * reach the browser. This bit us for real on 2026-10-16 (the web client
  * kept running pre-fix search code with an up-to-date checkout).
  *
- * The guard fingerprints both dist trees (paths, sizes, mtimes). When the
+ * The guard fingerprints both dist trees (relative paths and file
+ * contents). When the
  * fingerprint differs from the one recorded for the current cache, the
  * cache is wiped so the next optimization is built from the dist as it
  * exists now. When it matches, this is a no-op — ordinary dev restarts
@@ -36,32 +37,42 @@ const CACHE_DIRS = [
 ];
 const STAMP_PATH = join(repoRoot, "node_modules", ".memorize-vite-deps-stamp.json");
 
-function fingerprintDir(dir) {
+function listFiles(dir) {
   if (!existsSync(dir)) {
-    return [`missing:${dir}`];
+    return null;
   }
-  const entries = [];
+  const files = [];
   const walk = (current) => {
     for (const name of readdirSync(current)) {
       const full = join(current, name);
-      const stat = statSync(full);
-      if (stat.isDirectory()) {
+      if (statSync(full).isDirectory()) {
         walk(full);
       } else {
-        entries.push(`${relative(dir, full)}:${stat.size}:${Math.round(stat.mtimeMs)}`);
+        files.push(full);
       }
     }
   };
   walk(dir);
-  return entries.sort();
+  return files.sort();
 }
 
 function currentFingerprint() {
+  // Hash file CONTENTS, not metadata: a timestamp-preserving restore
+  // (Turbo cache, cp -p, tar) can replace dist bytes while keeping size
+  // and mtime identical, and a metadata-only fingerprint would call
+  // that "unchanged" and keep the stale bundle.
   const hash = createHash("sha256");
   for (const dir of DIST_DIRS) {
-    for (const entry of fingerprintDir(dir)) {
-      hash.update(entry);
-      hash.update("\n");
+    const files = listFiles(dir);
+    if (files === null) {
+      hash.update(`missing:${dir}\n`);
+      continue;
+    }
+    for (const full of files) {
+      hash.update(relative(dir, full));
+      hash.update("\0");
+      hash.update(readFileSync(full));
+      hash.update("\0");
     }
   }
   return hash.digest("hex");
