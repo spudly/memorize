@@ -1,8 +1,19 @@
 name: ci
 
 on:
+  # Push runs only on main: a feature-branch push that also has an open PR
+  # otherwise runs CI twice for the same commit (push + pull_request).
+  # PR branches are covered by the pull_request trigger below.
   push:
+    branches: [main]
   pull_request:
+
+# Cancel superseded runs for the same PR/branch so fix-pushes don't burn
+# minutes on already-obsolete work. Keyed by PR number (not branch name)
+# so fork PRs that happen to share a branch name can't cancel each other.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -11,6 +22,7 @@ permissions:
 jobs:
   ci:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
