@@ -9,9 +9,10 @@ on:
   pull_request:
 
 # Cancel superseded runs for the same PR/branch so fix-pushes don't burn
-# minutes on already-obsolete work.
+# minutes on already-obsolete work. Keyed by PR number (not branch name)
+# so fork PRs that happen to share a branch name can't cancel each other.
 concurrency:
-  group: ci-${{ github.head_ref || github.ref }}
+  group: ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 permissions:
