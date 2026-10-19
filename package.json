@@ -30,7 +30,7 @@
     "dev:web": "turbo dev --filter=@memorize/web",
     "lint": "eslint packages --max-warnings 0",
     "lint:fix": "eslint packages --fix",
-    "prepare": "husky",
+    "prepare": "husky || true",
     "prettier": "prettier --write .",
     "prettier:check": "prettier --check .",
     "test": "turbo test",
