@@ -3,9 +3,9 @@
     "@memorize/core": "0.1.0",
     "@memorize/types": "0.1.0",
     "@spudly/ui": "^0.4.1",
-    "react": "19.2.3",
-    "react-dom": "19.2.3",
-    "tamagui": "^3.0.15"
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "tamagui": "^3.0.17"
   },
   "devDependencies": {
     "@types/react": "^19.3.0",
