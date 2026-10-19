@@ -1,12 +1,20 @@
 {
   "expo": {
-    "android": { "package": "com.memorize.app" },
-    "extra": { "googleAndroidClientId": "", "googleIosClientId": "" },
-    "ios": { "bundleIdentifier": "com.memorize.app" },
+    "android": {
+      "package": "com.memorize.app"
+    },
+    "extra": {
+      "googleAndroidClientId": "",
+      "googleIosClientId": ""
+    },
+    "ios": {
+      "bundleIdentifier": "com.memorize.app"
+    },
     "name": "Memorize",
     "platforms": ["ios", "android", "web"],
     "scheme": "memorize",
     "slug": "memorize",
-    "version": "1.0.0"
+    "version": "1.0.0",
+    "plugins": ["expo-status-bar", "expo-web-browser"]
   }
 }
