@@ -43,6 +43,12 @@ jobs:
           CI: true
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # Workspace packages (@memorize/core, @memorize/types) resolve to
+      # dist/ builds that are not committed — build them first or Metro
+      # cannot resolve them when bundling the release JS.
+      - name: Build workspace dependencies of the app
+        run: npx turbo run build --filter=@memorize/app^...
+
       # Generated android/ is throwaway CI output — never committed.
       - name: Generate native project (expo prebuild)
         working-directory: packages/app
