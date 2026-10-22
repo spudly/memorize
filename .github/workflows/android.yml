@@ -1,0 +1,108 @@
+name: android
+
+# Phase 1 of #29: PR CI must build the Android app. The Expo app uses the
+# managed workflow (no committed android/ directory), so this job generates
+# the native project with `expo prebuild` and compiles it with Gradle.
+# Without it, native-side breaks (Expo / RN / AGP upgrades) are invisible
+# until someone builds locally or tries to ship.
+#
+# Phase 2 (emulator use-case tests) is tracked in #29 and not part of this
+# job yet.
+
+on:
+  pull_request:
+    paths:
+      - "packages/app/**"
+      - "packages/core/**"
+      - "packages/types/**"
+      - "package-lock.json"
+      - ".github/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  android-build:
+    name: Build Android release APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          registry-url: https://npm.pkg.github.com
+
+      # @spudly/ui lives on GitHub Packages; the workflow GITHUB_TOKEN has
+      # no read_package grant for it (cold-cache npm ci fails 403), so use
+      # the repo's PACKAGES_READ_TOKEN secret like Eciperay does.
+      - name: Install dependencies
+        run: npm ci
+        env:
+          CI: true
+          NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_READ_TOKEN }}
+
+      # Workspace packages (@memorize/core, @memorize/types) resolve to
+      # dist/ builds that are not committed — build them first or Metro
+      # cannot resolve them when bundling the release JS.
+      - name: Build workspace dependencies of the app
+        run: npx turbo run build --filter=@memorize/app^...
+
+      # Generated android/ is throwaway CI output — never committed.
+      - name: Generate native project (expo prebuild)
+        working-directory: packages/app
+        run: npx expo prebuild --platform android --no-install
+        env:
+          CI: true
+
+      # Same JDK/Android SDK pattern as Eciperay's android-build-setup
+      # composite action (temurin 17; SDK versions match Expo SDK 58's
+      # generated project: compileSdk 36, build-tools 36.0.0, NDK 27).
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Accept Android SDK licenses
+        run: |
+          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
+          yes | sdkmanager --licenses > /dev/null || true
+
+      - name: Install Android SDK packages
+        run: |
+          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
+          sdkmanager --install \
+            "platform-tools" \
+            "platforms;android-36" \
+            "build-tools;36.0.0" \
+            "ndk;27.1.12297006" \
+            "cmake;3.22.1"
+
+      - name: Restore Gradle caches
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('package-lock.json',
+            'packages/app/package.json') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
+
+      # The generated template signs release builds with the debug
+      # keystore, so assembleRelease works in CI without signing secrets.
+      - name: Build release APK
+        working-directory: packages/app/android
+        run: ./gradlew assembleRelease --no-daemon --stacktrace
+
+      - name: Upload APK
+        if: success()
+        uses: actions/upload-artifact@v7
+        with:
+          name: memorize-app-release-apk
+          path: packages/app/android/app/build/outputs/apk/release/*.apk
+          if-no-files-found: warn
