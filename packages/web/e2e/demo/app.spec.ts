@@ -1,0 +1,90 @@
+import { expect, test, type Page } from "@playwright/test";
+
+/** Collect uncaught page errors so a spec can assert there were none. */
+function trackPageErrors(page: Page): string[] {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(String(error)));
+  return errors;
+}
+
+async function searchDemoVerse(page: Page, query: string): Promise<void> {
+  await page.getByRole("tab", { name: "Search" }).click();
+  await expect(page.getByText("Searching the built-in demo set.")).toBeVisible();
+  await page.getByPlaceholder(/Ether 12:27/).fill(query);
+  await page.getByRole("button", { name: "Search", exact: true }).click();
+}
+
+async function addDemoVerse(page: Page, reference: string): Promise<void> {
+  await searchDemoVerse(page, reference);
+  await expect(page.getByText(reference, { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Add to memorize list" }).click();
+  await page.getByRole("tab", { name: "My verses" }).click();
+  await expect(page.getByText(reference, { exact: true })).toBeVisible();
+}
+
+test("app loads and renders the home UI with no uncaught page errors", async ({ page }) => {
+  const errors = trackPageErrors(page);
+  await page.goto("/");
+  await expect(page.getByText("Memorize", { exact: true })).toBeVisible();
+  for (const tab of ["My verses", "Search", "Review", "Settings"]) {
+    await expect(page.getByRole("tab", { name: tab })).toBeVisible();
+  }
+  await expect(page.getByText("No verses yet")).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test("demo mode: searching a demo verse renders its passage", async ({ page }) => {
+  const errors = trackPageErrors(page);
+  await page.goto("/");
+  await searchDemoVerse(page, "Ether 12:27");
+  await expect(page.getByText("Ether 12:27", { exact: true })).toBeVisible();
+  await expect(page.getByText(/make weak things become strong/)).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test("drill renders blanks and tapping a blank reveals its word", async ({ page }) => {
+  const errors = trackPageErrors(page);
+  await page.goto("/");
+  await addDemoVerse(page, "2 Nephi 2:25");
+
+  await page.getByRole("button", { name: "Drill" }).click();
+  await expect(page.getByText(/Round 1 of \d+/)).toBeVisible();
+  // Round 1 blanks nothing (BLANK_FRACTIONS starts at 0); round 2 is the
+  // first round with hidden words.
+  await page.getByRole("button", { name: "Next round" }).click();
+  await expect(page.getByText(/Round 2 of \d+/)).toBeVisible();
+  // In the @spudly/ui version Memorize pins, a hidden blank renders as a
+  // button whose label is underscores (later versions name it "Reveal
+  // blank word N of M").
+  const blanks = page.getByRole("button", { name: /^_+$/ });
+  const blankCount = await blanks.count();
+  expect(blankCount).toBeGreaterThan(0);
+
+  // The web drill's input is tap-to-peek: revealing a blank takes it out
+  // of the set of hidden blanks.
+  await blanks.first().click();
+  await expect(blanks).toHaveCount(blankCount - 1);
+  expect(errors).toEqual([]);
+});
+
+test("progress persists: the verse list and drill round survive a reload", async ({ page }) => {
+  const errors = trackPageErrors(page);
+  await page.goto("/");
+  await addDemoVerse(page, "Alma 37:35");
+
+  // The verse list is persisted to local storage.
+  await page.reload();
+  await expect(page.getByText("Alma 37:35", { exact: true })).toBeVisible();
+
+  // Advance one drill round with no peeks (grades as a pass), then reload:
+  // the in-progress session resumes at the persisted round.
+  await page.getByRole("button", { name: "Drill" }).click();
+  await expect(page.getByText(/Round 1 of \d+/)).toBeVisible();
+  await page.getByRole("button", { name: "Next round" }).click();
+  await expect(page.getByText(/Round 2 of \d+/)).toBeVisible();
+
+  await page.reload();
+  await page.getByRole("button", { name: "Drill" }).click();
+  await expect(page.getByText(/Round 2 of \d+/)).toBeVisible();
+  expect(errors).toEqual([]);
+});
