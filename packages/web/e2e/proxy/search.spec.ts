@@ -40,6 +40,19 @@ const SEARCH_CHARITY = {
   ],
 };
 
+/**
+ * Catch-all for /api/*, registered BEFORE the per-test fixture routes
+ * (Playwright matches routes in reverse registration order, so the
+ * specific fixtures win). Anything unmocked gets a deterministic 404
+ * instead of falling through to the vite preview proxy and the live
+ * engine — e.g. the /api/search fallback a failed /api/get lookup takes.
+ */
+async function mockUnmockedApi(page: Page): Promise<void> {
+  await page.route("**/api/**", async (route) => {
+    await route.fulfill({ status: 404, json: { error: "not mocked in e2e" } });
+  });
+}
+
 async function search(page: Page, query: string): Promise<void> {
   await page.getByRole("tab", { name: "Search" }).click();
   await page.getByPlaceholder(/Ether 12:27/).fill(query);
@@ -49,22 +62,37 @@ async function search(page: Page, query: string): Promise<void> {
 test("reference search renders the passage from the /api/get fixture", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(String(error)));
+  await mockUnmockedApi(page);
+  const getRequests: string[] = [];
   await page.route("**/api/get**", async (route) => {
+    getRequests.push(route.request().url());
     await route.fulfill({ json: GET_ETHER_12_27 });
   });
   await page.goto("/");
   await search(page, "Ether 12:27");
   await expect(page.getByText("Ether 12:27", { exact: true })).toBeVisible();
+  // "willshow" is an upstream typo in the captured fixture text; the
+  // built-in demo verse has "will show". Seeing the typo proves the
+  // rendered text came through the intercepted /api/get mapping, not
+  // from demo data.
+  await expect(page.getByText(/willshow unto them their weakness/)).toBeVisible();
   await expect(page.getByText(/make weak things become strong/)).toBeVisible();
+  expect(getRequests).toHaveLength(1);
+  expect(getRequests[0]).toContain(`ref=${encodeURIComponent("Ether 12:27")}`);
   expect(errors).toEqual([]);
 });
 
 test("keyword search renders results from the /api/search fixture", async ({ page }) => {
+  await mockUnmockedApi(page);
+  const searchRequests: string[] = [];
   await page.route("**/api/search**", async (route) => {
+    searchRequests.push(route.request().url());
     await route.fulfill({ json: SEARCH_CHARITY });
   });
   await page.goto("/");
   await search(page, "charity");
   await expect(page.getByText("Moroni 7:47", { exact: true })).toBeVisible();
   await expect(page.getByText(/pure love of Christ/)).toBeVisible();
+  expect(searchRequests).toHaveLength(1);
+  expect(searchRequests[0]).toContain("q=charity");
 });

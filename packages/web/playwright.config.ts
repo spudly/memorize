@@ -50,7 +50,10 @@ export default defineConfig({
   webServer: [
     {
       command:
-        "npx vite build --outDir dist-e2e-demo && " +
+        // Pin proxy mode OFF for the demo build: a shell env or .env.local
+        // with VITE_USE_GOSPEL_PROXY=1 (the documented local setup) must
+        // not leak into the offline demo project.
+        "VITE_USE_GOSPEL_PROXY=0 npx vite build --outDir dist-e2e-demo && " +
         `npx vite preview --host 127.0.0.1 --port ${DEMO_PORT} --strictPort --outDir dist-e2e-demo`,
       port: DEMO_PORT,
       reuseExistingServer: !process.env.CI,
