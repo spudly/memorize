@@ -1,0 +1,72 @@
+name: e2e
+
+# Playwright web integration tests (issue #30). Unit tests never load the
+# real app in a browser; this job builds the web package and exercises the
+# core flows in Chromium — demo-mode flows offline, and gospel-engine
+# flows against fixture-mocked /api responses (no live engine, no real
+# account). See packages/web/playwright.config.ts.
+
+on:
+  pull_request:
+    paths:
+      - "packages/web/**"
+      - "packages/core/**"
+      - "packages/types/**"
+      - "package-lock.json"
+      - ".github/workflows/e2e.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  e2e:
+    name: Playwright web e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          registry-url: https://npm.pkg.github.com
+
+      # @spudly/ui lives on GitHub Packages; the workflow GITHUB_TOKEN has
+      # no read_package grant for it (cold-cache npm ci fails 403), so use
+      # the repo's PACKAGES_READ_TOKEN secret (same pattern as android.yml).
+      - name: Install dependencies
+        run: npm ci
+        env:
+          CI: true
+          NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_READ_TOKEN }}
+
+      # Workspace packages (@memorize/core, @memorize/types) resolve to
+      # dist/ builds that are not committed — build them before Vite can
+      # bundle the web app.
+      - name: Build workspace dependencies of the web app
+        run: npx turbo run build --filter=@memorize/web^...
+
+      - name: Install Chromium for Playwright
+        working-directory: packages/web
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Playwright tests
+        working-directory: packages/web
+        run: npm run test:e2e
+        env:
+          CI: true
+
+      - name: Upload Playwright traces on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-traces
+          path: packages/web/test-results
+          if-no-files-found: ignore
