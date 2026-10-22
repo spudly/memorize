@@ -12,6 +12,8 @@ export default [
   {
     ignores: [
       "**/dist/**",
+      // Playwright e2e build outputs (packages/web/playwright.config.ts).
+      "**/dist-e2e-*/**",
       "**/node_modules/**",
       "**/.turbo/**",
       "**/.expo/**",
