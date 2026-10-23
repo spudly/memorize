@@ -1,9 +1,22 @@
 import { useState } from "react";
-import { FlatList } from "react-native";
-import { XStack } from "tamagui";
-import { Button, Card, InlineAlert, SearchField, Spinner, Text } from "@spudly/ui";
+import { VerseSearchPage, type VerseSearchPageItem } from "@spudly/ui/pages";
 import type { MemorizeStore, ScriptureDataSource, Verse } from "@memorize/core";
 
+/**
+ * Search tab host (#49): renders the DS VerseSearchPage and keeps
+ * every piece of state and business logic app-side — the query
+ * text, the search against the scripture data source, the error
+ * composition (the caught error's message, or the "Search failed"
+ * fallback), and the store mutation. Results cross the boundary as
+ * {id, reference, text} view-models (the Verse type's book/chapter
+ * fields are not rendered by this screen); the page reports an add
+ * by id and the host resolves it back to the full Verse the store
+ * action takes, exactly the object the old row button passed.
+ *
+ * The page brings its own ScreenContainer shell (scrollable off),
+ * per its DS contract; the app chrome — the "Memorize" title and
+ * the tab bar in App.tsx — stays app-side.
+ */
 interface Props {
   store: MemorizeStore;
   dataSource: ScriptureDataSource;
@@ -28,43 +41,29 @@ export default function SearchScreen({ store, dataSource, usingDemo }: Props) {
     }
   };
 
+  const items: VerseSearchPageItem[] = results.map((verse) => ({
+    id: verse.id,
+    reference: verse.reference,
+    text: verse.text,
+  }));
+
+  const handleAddVerse = (verseId: string): void => {
+    const verse = results.find((v) => v.id === verseId);
+    if (verse) {
+      store.actions.addVerse(verse);
+    }
+  };
+
   return (
-    <>
-      <Text variant="heading">Search verses</Text>
-      {usingDemo && (
-        <InlineAlert severity="info">
-          Searching the built-in demo set. Add a gospel-engine API key in Settings for full-library
-          search.
-        </InlineAlert>
-      )}
-      <XStack gap="$2" alignItems="center">
-        <SearchField
-          value={query}
-          onChangeText={setQuery}
-          placeholder="e.g. Ether 12:27 or “charity”"
-          onSubmitEditing={() => void runSearch()}
-          style={{ flex: 1 }}
-        />
-        <Button onPress={() => void runSearch()} disabled={busy || !query.trim()}>
-          Search
-        </Button>
-      </XStack>
-      {error && <InlineAlert severity="error">{error}</InlineAlert>}
-      {busy && <Spinner />}
-      <FlatList
-        style={{ flex: 1 }}
-        data={results}
-        keyExtractor={(v) => v.id}
-        renderItem={({ item }) => (
-          <Card marginBottom="$2">
-            <Text variant="subheading">{item.reference}</Text>
-            <Text variant="verse">{item.text}</Text>
-            <Button size="sm" onPress={() => store.actions.addVerse(item)}>
-              Add to memorize list
-            </Button>
-          </Card>
-        )}
-      />
-    </>
+    <VerseSearchPage
+      query={query}
+      onQueryChange={setQuery}
+      onSearch={() => void runSearch()}
+      isSearching={busy}
+      usingDemo={usingDemo}
+      errorMessage={error}
+      results={items}
+      onAddVerse={handleAddVerse}
+    />
   );
 }
