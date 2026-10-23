@@ -3,25 +3,16 @@ import { SafeAreaView } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { useFonts } from "expo-font";
 import { TamaguiProvider } from "tamagui";
-import { ScreenContainer, Spinner, Tabs, Text, baseTheme, createTamaguiConfig } from "@spudly/ui";
+import { ScreenContainer, Spinner, Tabs, Text } from "@spudly/ui";
 import { createMemorizeStore, type MemorizeStore } from "@memorize/core";
 import Raleway from "../assets/fonts/Raleway.ttf";
 import { appStorage, dataSourceFor } from "./lib";
+import { appTamaguiConfig } from "./tamaguiConfig";
 import DrillScreen from "./screens/DrillScreen";
 import ReviewScreen from "./screens/ReviewScreen";
 import SearchScreen from "./screens/SearchScreen";
 import SettingsScreen from "./screens/SettingsScreen";
 import VersesScreen from "./screens/VersesScreen";
-
-// @spudly/ui 1.x ships config factories only — the pre-built
-// `tamaguiConfig` export was removed (a module-scope config from
-// the package would silently take over every consumer's
-// rendering). Create the app's config exactly once, here in
-// app-owned module scope. baseTheme is what the removed default
-// config was built from in 0.4.x, so the palette is unchanged;
-// adopting memorizeTheme (Quiet Dawn) stays a deliberate one-line
-// change, not a side effect of this bump.
-const tamaguiConfig = createTamaguiConfig(baseTheme);
 
 type Tab = "verses" | "search" | "review" | "settings";
 
@@ -60,7 +51,7 @@ export default function App() {
   // unregistered.
   if (!ready || (!fontsLoaded && !fontError)) {
     return (
-      <TamaguiProvider config={tamaguiConfig} defaultTheme="light">
+      <TamaguiProvider config={appTamaguiConfig} defaultTheme="light">
         <SafeAreaView style={{ flex: 1 }}>
           <ScreenContainer>
             <Spinner />
@@ -71,7 +62,7 @@ export default function App() {
   }
 
   return (
-    <TamaguiProvider config={tamaguiConfig} defaultTheme="light">
+    <TamaguiProvider config={appTamaguiConfig} defaultTheme="light">
       <SafeAreaView style={{ flex: 1 }}>
         <StatusBar style="auto" />
         <ScreenContainer scrollable={false}>
