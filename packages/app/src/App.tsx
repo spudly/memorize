@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { SafeAreaView } from "react-native";
 import { StatusBar } from "expo-status-bar";
+import { useFonts } from "expo-font";
+import Raleway from "../assets/fonts/Raleway.ttf";
 import { TamaguiProvider } from "tamagui";
-import { ScreenContainer, Spinner, Tabs, Text, tamaguiConfig } from "@spudly/ui";
+import { ScreenContainer, Spinner, Tabs, Text } from "@spudly/ui";
+import { appTamaguiConfig } from "./tamaguiConfig";
 import { createMemorizeStore, type MemorizeStore } from "@memorize/core";
 import { appStorage, dataSourceFor } from "./lib";
 import DrillScreen from "./screens/DrillScreen";
@@ -21,6 +24,11 @@ const TABS: { value: Tab; label: string }[] = [
 ];
 
 export default function App() {
+  // @spudly/ui 1.4.0 names Raleway as the UI font for every theme
+  // (design-system #65); it is not a stock font, so the app bundles
+  // the variable font and registers it under the exact name
+  // "Raleway" — numeric weights resolve against the one family.
+  const [fontsLoaded] = useFonts({ Raleway });
   const store: MemorizeStore = useMemo(() => createMemorizeStore(appStorage), []);
   const [, setTick] = useState(0);
   const [ready, setReady] = useState(false);
@@ -36,9 +44,9 @@ export default function App() {
   const { apiKey } = store.getState();
   const dataSource = useMemo(() => dataSourceFor(apiKey), [apiKey]);
 
-  if (!ready) {
+  if (!ready || !fontsLoaded) {
     return (
-      <TamaguiProvider config={tamaguiConfig} defaultTheme="light">
+      <TamaguiProvider config={appTamaguiConfig} defaultTheme="light">
         <SafeAreaView style={{ flex: 1 }}>
           <ScreenContainer>
             <Spinner />
@@ -49,7 +57,7 @@ export default function App() {
   }
 
   return (
-    <TamaguiProvider config={tamaguiConfig} defaultTheme="light">
+    <TamaguiProvider config={appTamaguiConfig} defaultTheme="light">
       <SafeAreaView style={{ flex: 1 }}>
         <StatusBar style="auto" />
         <ScreenContainer scrollable={false}>
