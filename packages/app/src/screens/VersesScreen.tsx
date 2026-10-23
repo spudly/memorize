@@ -1,57 +1,29 @@
-import { FlatList } from "react-native";
-import { XStack } from "tamagui";
-import { Badge, Button, Card, EmptyState, Text } from "@spudly/ui";
+import { MyVersesPage } from "@spudly/ui/pages";
 import type { MemorizeStore } from "@memorize/core";
+import { toMyVersesPageItems } from "./versesPageModel";
 
 interface Props {
   store: MemorizeStore;
   onDrill(id: string): void;
 }
 
+/**
+ * "My verses" tab — a thin host over the DS MyVersesPage (#49).
+ * All state and business logic stay app-side: the memorize store,
+ * the remove mutation, and drill navigation. The page renders the
+ * heading, the empty state, and the rows from the composed
+ * view-models (see versesPageModel); its row actions come back as
+ * bare intents by verse id. There is no loading state here — App
+ * gates on store readiness before any tab renders.
+ */
 export default function VersesScreen({ store, onDrill }: Props) {
   const { verses } = store.getState().data;
 
-  if (verses.length === 0) {
-    return (
-      <>
-        <Text variant="heading">My verses</Text>
-        <EmptyState title="No verses yet" body="Find one in the Search tab to get started." />
-      </>
-    );
-  }
-
   return (
-    <>
-      <Text variant="heading">My verses</Text>
-      <FlatList
-        style={{ flex: 1 }}
-        data={verses}
-        keyExtractor={(v) => v.verse.id}
-        renderItem={({ item }) => (
-          <Card marginBottom="$2">
-            <Text variant="subheading">{item.verse.reference}</Text>
-            <Badge tone={item.status === "memorized" ? "success" : "info"}>{item.status}</Badge>
-            <Text variant="verse">{item.verse.text}</Text>
-            {item.nextReviewAt && (
-              <Text variant="hint">
-                Next review: {new Date(item.nextReviewAt).toLocaleDateString()}
-              </Text>
-            )}
-            <XStack gap="$2" marginTop="$2">
-              <Button size="sm" onPress={() => onDrill(item.verse.id)}>
-                Drill
-              </Button>
-              <Button
-                size="sm"
-                variant="secondary"
-                onPress={() => store.actions.removeVerse(item.verse.id)}
-              >
-                Remove
-              </Button>
-            </XStack>
-          </Card>
-        )}
-      />
-    </>
+    <MyVersesPage
+      verses={toMyVersesPageItems(verses)}
+      onDrillVerse={onDrill}
+      onRemoveVerse={(id) => store.actions.removeVerse(id)}
+    />
   );
 }
