@@ -1,50 +1,38 @@
-import { FlatList } from "react-native";
-import { XStack } from "tamagui";
-import { Button, Card, EmptyState, Text } from "@spudly/ui";
-import { dueVerses, type MemorizeStore, type ReviewOutcome } from "@memorize/core";
+import { MemorizeReviewPage, type MemorizeReviewPageVerse } from "@spudly/ui/pages";
+import { dueVerses, type MemorizeStore } from "@memorize/core";
 
 interface Props {
   store: MemorizeStore;
 }
 
+/**
+ * Review tab host (#49): the app keeps the spaced-repetition
+ * business logic — computing which verses are due from the store
+ * and recording the review outcomes — and hands the finished due
+ * list to the DS MemorizeReviewPage as view-models. The page
+ * composes the "Review (N due)" heading from the list's length
+ * and renders the app's nothing-due empty state itself; store
+ * readiness is gated in App, above this screen, so there is no
+ * loading state here.
+ */
 export default function ReviewScreen({ store }: Props) {
-  const due = dueVerses(store.getState().data.verses, new Date());
-
-  const review = (id: string, outcome: ReviewOutcome): void => {
-    store.actions.recordReview(id, outcome);
-  };
-
-  if (due.length === 0) {
-    return (
-      <>
-        <Text variant="heading">Review</Text>
-        <EmptyState title="Nothing due" body="Nice work." />
-      </>
-    );
-  }
+  const verses: MemorizeReviewPageVerse[] = dueVerses(store.getState().data.verses, new Date()).map(
+    (item) => ({
+      id: item.verse.id,
+      reference: item.verse.reference,
+      text: item.verse.text,
+    }),
+  );
 
   return (
-    <>
-      <Text variant="heading">Review ({due.length} due)</Text>
-      <FlatList
-        style={{ flex: 1 }}
-        data={due}
-        keyExtractor={(v) => v.verse.id}
-        renderItem={({ item }) => (
-          <Card marginBottom="$2">
-            <Text variant="subheading">{item.verse.reference}</Text>
-            <Text variant="verse">{item.verse.text}</Text>
-            <XStack gap="$2" marginTop="$2">
-              <Button size="sm" onPress={() => review(item.verse.id, "remembered")}>
-                I remembered it
-              </Button>
-              <Button size="sm" variant="secondary" onPress={() => review(item.verse.id, "forgot")}>
-                I forgot it
-              </Button>
-            </XStack>
-          </Card>
-        )}
-      />
-    </>
+    <MemorizeReviewPage
+      verses={verses}
+      onRememberedPress={(verseId) => {
+        store.actions.recordReview(verseId, "remembered");
+      }}
+      onForgotPress={(verseId) => {
+        store.actions.recordReview(verseId, "forgot");
+      }}
+    />
   );
 }
