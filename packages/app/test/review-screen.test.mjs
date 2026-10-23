@@ -49,7 +49,11 @@ test("the screen renders no list, cards, or empty state of its own anymore", () 
 });
 
 test("App registers the bundled Raleway variable font under the DS family name", () => {
-  assert.match(appCode, /useFonts\(\{ Raleway: /);
+  // The registration shape pinned here is the one that landed on main
+  // via the session rewire (spudly/memorize#34): the ttf import is
+  // bound to the name Raleway and handed to useFonts under that exact
+  // family name, and first render gates on the load.
+  assert.match(appCode, /useFonts\(\{ Raleway \}\)/);
   assert.match(appCode, /assets\/fonts\/Raleway\.ttf/);
-  assert.match(appCode, /!fontsLoaded && !fontError/);
+  assert.match(appCode, /!ready \|\| !fontsLoaded/);
 });
