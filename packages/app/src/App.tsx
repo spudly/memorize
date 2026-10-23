@@ -1,8 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { SafeAreaView } from "react-native";
 import { StatusBar } from "expo-status-bar";
+import { useFonts } from "expo-font";
+import ralewayVariableFont from "../assets/fonts/Raleway.ttf";
 import { TamaguiProvider } from "tamagui";
-import { ScreenContainer, Spinner, Tabs, Text, tamaguiConfig } from "@spudly/ui";
+import {
+  createTamaguiConfig,
+  memorizeTheme,
+  ScreenContainer,
+  Spinner,
+  Tabs,
+  Text,
+} from "@spudly/ui";
 import { createMemorizeStore, type MemorizeStore } from "@memorize/core";
 import { appStorage, dataSourceFor } from "./lib";
 import DrillScreen from "./screens/DrillScreen";
@@ -10,6 +19,14 @@ import ReviewScreen from "./screens/ReviewScreen";
 import SearchScreen from "./screens/SearchScreen";
 import SettingsScreen from "./screens/SettingsScreen";
 import VersesScreen from "./screens/VersesScreen";
+
+// @spudly/ui 1.x exports no pre-built Tamagui config: a config
+// created at module scope inside the package would install itself
+// as Tamagui's global singleton for every consumer (the
+// spudly/eciperay#149 cross-brand theming bug). Each app creates
+// its own exactly once, in app-owned code — Memorize's from the
+// DS memorizeTheme (Quiet Dawn).
+const tamaguiConfig = createTamaguiConfig(memorizeTheme);
 
 type Tab = "verses" | "search" | "review" | "settings";
 
@@ -24,6 +41,13 @@ export default function App() {
   const store: MemorizeStore = useMemo(() => createMemorizeStore(appStorage), []);
   const [, setTick] = useState(0);
   const [ready, setReady] = useState(false);
+  // @spudly/ui 1.4.0 names "Raleway" as the native font family for
+  // every theme (#65): the app bundles the Raleway variable font and
+  // registers it under that exact name, so the DS weights resolve
+  // numerically against the one family. A load failure must not brick
+  // the app — the DS tokens fall back to the platform sans — so the
+  // gate below waits for either success or error.
+  const [fontsLoaded, fontError] = useFonts({ Raleway: ralewayVariableFont });
   const [tab, setTab] = useState<Tab>("verses");
   const [drillingId, setDrillingId] = useState<string | null>(null);
 
@@ -36,7 +60,7 @@ export default function App() {
   const { apiKey } = store.getState();
   const dataSource = useMemo(() => dataSourceFor(apiKey), [apiKey]);
 
-  if (!ready) {
+  if (!ready || (!fontsLoaded && !fontError)) {
     return (
       <TamaguiProvider config={tamaguiConfig} defaultTheme="light">
         <SafeAreaView style={{ flex: 1 }}>
