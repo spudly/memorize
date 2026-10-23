@@ -11,8 +11,9 @@
  * 2. Raleway — the UI font every @spudly/ui 1.4.0 theme names
  *    (design-system #65) — is registered under the exact name
  *    "Raleway" from the bundled variable font, and the app's
- *    loading gate waits for it without letting a font failure
- *    block the app (the DS tokens fall back to the platform sans).
+ *    loading gate waits for the font before first render (the
+ *    app shell's registration/gate is main's version, landed by
+ *    the session rewire and kept verbatim by this dedupe).
  *
  * Source-scan, like the DS page contract tests: the app package
  * has no component-test harness.
@@ -47,6 +48,6 @@ test("Raleway is registered under its exact name from the bundled font", () => {
   assert.match(app, /from\s*"expo-font"/);
 });
 
-test("the loading gate waits for the font but a font error does not block", () => {
-  assert.match(app, /!ready \|\| \(!fontsLoaded && !fontError\)/);
+test("the loading gate waits for the font to load", () => {
+  assert.match(app, /!ready \|\| !fontsLoaded/);
 });
