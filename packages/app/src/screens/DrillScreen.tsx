@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { BlankWord, Button, Card, InlineAlert, StepDots, Text, VerseText } from "@spudly/ui";
+import { MemorizationSessionPage } from "@spudly/ui/pages";
 import {
   BLANK_FRACTIONS,
   blankedIndices,
@@ -7,6 +7,7 @@ import {
   tokenize,
   type MemorizeStore,
 } from "@memorize/core";
+import { isFinalRound, retryFeedback, toSessionWords } from "./drillViewModel";
 
 interface Props {
   store: MemorizeStore;
@@ -14,6 +15,17 @@ interface Props {
   onBack(): void;
 }
 
+/**
+ * The memorization session screen (#49): the session engine
+ * stays here and in @memorize/core — tokenizing, blank
+ * selection, grading, peek counting, round advancement, and
+ * persistence — and the rendered surface is the design system's
+ * MemorizationSessionPage, driven entirely through props (see
+ * drillViewModel for the word/feedback mapping). Finishing the
+ * final round completes the drill and navigates back, so the
+ * view has no "complete" state; a missing verse is the page's
+ * not-found branch.
+ */
 export default function DrillScreen({ store, verseId, onBack }: Props) {
   const entry = store.getState().data.verses.find((v) => v.verse.id === verseId);
   const [round, setRound] = useState(entry?.drillRound ?? 0);
@@ -29,12 +41,7 @@ export default function DrillScreen({ store, verseId, onBack }: Props) {
   );
 
   if (!entry) {
-    return (
-      <>
-        <Text>Verse not found.</Text>
-        <Button onPress={onBack}>Back</Button>
-      </>
-    );
+    return <MemorizationSessionPage state="not-found" onBack={onBack} />;
   }
 
   const peek = (index: number): void => {
@@ -51,9 +58,7 @@ export default function DrillScreen({ store, verseId, onBack }: Props) {
 
   const nextRound = (): void => {
     if (gradeRound(blanks.size, peeks) === "retry") {
-      setMessage(
-        `Not quite — you peeked ${peeks} time(s) on ${blanks.size} blank(s). Try the round again.`,
-      );
+      setMessage(retryFeedback(peeks, blanks.size));
       return;
     }
     if (round + 1 >= BLANK_FRACTIONS.length) {
@@ -69,47 +74,18 @@ export default function DrillScreen({ store, verseId, onBack }: Props) {
     store.actions.setDrillProgress(verseId, next, 0);
   };
 
-  const isLastRound = round + 1 >= BLANK_FRACTIONS.length;
-
-  let blankOrdinal = -1;
-
   return (
-    <>
-      <Button variant="ghost" onPress={onBack}>
-        ← Back
-      </Button>
-      <Text variant="heading">{entry.verse.reference}</Text>
-      <Text variant="hint">
-        Round {round + 1} of {BLANK_FRACTIONS.length} — tap a blank to peek at the word.
-      </Text>
-      <StepDots count={BLANK_FRACTIONS.length} activeIndex={round} />
-      <Card>
-        <VerseText>
-          {words.map((word, i) => {
-            if (blanks.has(i)) {
-              blankOrdinal += 1;
-              return (
-                <Text key={i} variant="verse">
-                  <BlankWord
-                    word={word}
-                    revealed={revealed.has(i)}
-                    onReveal={() => peek(i)}
-                    index={blankOrdinal}
-                    total={blanks.size}
-                  />{" "}
-                </Text>
-              );
-            }
-            return (
-              <Text key={i} variant="verse">
-                {word}{" "}
-              </Text>
-            );
-          })}
-        </VerseText>
-      </Card>
-      {message && <InlineAlert severity="warning">{message}</InlineAlert>}
-      <Button onPress={nextRound}>{isLastRound ? "Finish — mark memorized" : "Next round"}</Button>
-    </>
+    <MemorizationSessionPage
+      state="ready"
+      reference={entry.verse.reference}
+      roundIndex={round}
+      roundCount={BLANK_FRACTIONS.length}
+      words={toSessionWords(words, blanks, revealed)}
+      feedback={message}
+      isFinalRound={isFinalRound(round, BLANK_FRACTIONS.length)}
+      onBack={onBack}
+      onBlankReveal={peek}
+      onAdvance={nextRound}
+    />
   );
 }

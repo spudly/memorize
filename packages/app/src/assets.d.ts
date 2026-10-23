@@ -1,6 +1,5 @@
-// Bundled font assets are Metro asset module ids at runtime; TS has
-// no built-in module type for them.
+// Bundled font files load through Metro as registered asset ids.
 declare module "*.ttf" {
-  const assetId: number;
-  export default assetId;
+  const asset: number;
+  export default asset;
 }

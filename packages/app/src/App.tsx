@@ -2,17 +2,17 @@ import { useEffect, useMemo, useState } from "react";
 import { SafeAreaView } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { useFonts } from "expo-font";
+import Raleway from "../assets/fonts/Raleway.ttf";
 import { TamaguiProvider } from "tamagui";
 import { ScreenContainer, Spinner, Tabs, Text } from "@spudly/ui";
+import { appTamaguiConfig } from "./tamaguiConfig";
 import { createMemorizeStore, type MemorizeStore } from "@memorize/core";
 import { appStorage, dataSourceFor } from "./lib";
-import { appTamaguiConfig } from "./tamaguiConfig";
 import DrillScreen from "./screens/DrillScreen";
 import ReviewScreen from "./screens/ReviewScreen";
 import SearchScreen from "./screens/SearchScreen";
 import SettingsScreen from "./screens/SettingsScreen";
 import VersesScreen from "./screens/VersesScreen";
-import Raleway from "../assets/fonts/Raleway.ttf";
 
 type Tab = "verses" | "search" | "review" | "settings";
 
@@ -24,12 +24,11 @@ const TABS: { value: Tab; label: string }[] = [
 ];
 
 export default function App() {
-  // @spudly/ui 1.4.0 names "Raleway" as the UI font for every theme
-  // (design-system #65); native surfaces must register a font under
-  // that exact name — the bundled variable font, so the DS weights
-  // resolve numerically against the one family. A load failure does
-  // not block the app: the DS tokens fall back to the platform sans.
-  const [fontsLoaded, fontError] = useFonts({ Raleway });
+  // @spudly/ui 1.4.0 names Raleway as the UI font for every theme
+  // (design-system #65); it is not a stock font, so the app bundles
+  // the variable font and registers it under the exact name
+  // "Raleway" — numeric weights resolve against the one family.
+  const [fontsLoaded] = useFonts({ Raleway });
   const store: MemorizeStore = useMemo(() => createMemorizeStore(appStorage), []);
   const [, setTick] = useState(0);
   const [ready, setReady] = useState(false);
@@ -45,7 +44,7 @@ export default function App() {
   const { apiKey } = store.getState();
   const dataSource = useMemo(() => dataSourceFor(apiKey), [apiKey]);
 
-  if (!ready || (!fontsLoaded && !fontError)) {
+  if (!ready || !fontsLoaded) {
     return (
       <TamaguiProvider config={appTamaguiConfig} defaultTheme="light">
         <SafeAreaView style={{ flex: 1 }}>

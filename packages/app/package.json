@@ -19,7 +19,11 @@
     "tamagui": "^3.0.15"
   },
   "devDependencies": {
-    "@types/react": "~19.3.0"
+    "@swc/core": "^1.15.47",
+    "@swc/jest": "^0.2.39",
+    "@types/jest": "^30.0.0",
+    "@types/react": "~19.3.0",
+    "jest": "^30.5.2"
   },
   "main": "index.ts",
   "name": "@memorize/app",
@@ -30,7 +34,7 @@
     "ios": "expo start --ios",
     "lint": "echo 'lint disabled until typescript-eslint supports TypeScript 7 (TS sources are excluded in the root eslint.config.ts; JS tooling files are linted by the root lint script)'",
     "start": "expo start",
-    "test": "node --test test/*.test.mjs",
+    "test": "jest && node --test test/*.test.mjs",
     "typecheck": "tsc --noEmit",
     "web": "expo start --web"
   },
