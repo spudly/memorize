@@ -1,9 +1,9 @@
 module.exports = {
   testEnvironment: "node",
   testMatch: ["<rootDir>/tests/**/*.test.ts"],
-  // Mirrors @memorize/core's setup: @swc/jest is transpile-only
-  // (ts-jest needs the TS JS compiler API, which native TypeScript
-  // 7 no longer exposes). Type safety stays enforced by
+  // Same transpile-only setup as @memorize/core: @swc/jest (ts-jest
+  // needs the TS JS compiler API, which native TypeScript 7 no
+  // longer exposes). Type safety stays enforced by
   // `npm run typecheck` under TS7.
   transform: {
     "^.+\\.ts$": [
