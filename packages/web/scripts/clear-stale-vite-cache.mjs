@@ -95,7 +95,7 @@ try {
         cleared.push(relative(repoRoot, dir));
       }
     }
-    writeFileSync(STAMP_PATH, JSON.stringify({ fingerprint }, null, 2) + "\n");
+    writeFileSync(STAMP_PATH, `${JSON.stringify({ fingerprint }, null, 2)}\n`);
     if (cleared.length > 0) {
       console.log(
         `[memorize] Cleared stale Vite dep cache (${cleared.join(", ")}) — @memorize/core/types dist changed since it was built.`,

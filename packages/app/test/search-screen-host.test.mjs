@@ -30,7 +30,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const screenPath = join(here, "..", "src", "screens", "SearchScreen.tsx");
 
 function stripComments(source) {
-  return source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+  return source.replaceAll(/\/\*[\s\S]*?\*\//g, "").replaceAll(/^\s*\/\/.*$/gm, "");
 }
 
 const code = stripComments(readFileSync(screenPath, "utf8"));
