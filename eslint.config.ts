@@ -29,24 +29,6 @@ export default [
   ...reactNative,
   ...jest,
   {
-    // This repo names files in kebab-case alongside camelCase and
-    // PascalCase (e.g. screens are PascalCase components, everything
-    // else is kebab-case). The shared config's filename-case only
-    // allows camel/Pascal, which fights the repo-wide convention, so
-    // kebab-case is allowed here too. The ignore list mirrors the
-    // shared config's own.
-    files: ["**/*.{ts,tsx,js,jsx,cjs,mjs}"],
-    rules: {
-      "unicorn/filename-case": [
-        "error",
-        {
-          cases: { camelCase: true, pascalCase: true, kebabCase: true },
-          ignore: [/^react-native\.config\.(?:js|cjs)$/u, /^(?:__tests__|__mocks__|mcp-server)$/u],
-        },
-      ],
-    },
-  },
-  {
     // Standalone Node tooling scripts (e.g. the web predev cache
     // guard): they run under Node, so Node globals apply and console
     // is their interface — the shared base's app-code no-console /
