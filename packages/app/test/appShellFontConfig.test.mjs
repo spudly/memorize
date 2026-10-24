@@ -29,7 +29,7 @@ const appCode = readFileSync(join(here, "..", "src", "App.tsx"), "utf8");
 const configCode = readFileSync(join(here, "..", "src", "tamaguiConfig.ts"), "utf8");
 
 function stripComments(source) {
-  return source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+  return source.replaceAll(/\/\*[\s\S]*?\*\//g, "").replaceAll(/^\s*\/\/.*$/gm, "");
 }
 
 const app = stripComments(appCode);

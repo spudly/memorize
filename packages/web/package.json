@@ -18,7 +18,7 @@
   "private": true,
   "scripts": {
     "build": "vite build",
-    "predev": "node scripts/clear-stale-vite-cache.mjs",
+    "predev": "node scripts/clearStaleViteCache.mjs",
     "dev": "vite",
     "lint": "echo 'lint disabled until typescript-eslint supports TypeScript 7 (TS sources are excluded in the root eslint.config.ts; JS tooling files are linted by the root lint script)'",
     "preview": "vite preview",
