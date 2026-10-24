@@ -2,7 +2,7 @@
   "devDependencies": {
     "@commitlint/cli": "^21.2.3",
     "@commitlint/config-conventional": "^21.2.3",
-    "@spudly/eslint-config": "^0.1.0",
+    "@spudly/eslint-config": "^0.2.0",
     "eslint": "^10.12.0",
     "husky": "^9.1.7",
     "lint-staged": "^17.6.0",
