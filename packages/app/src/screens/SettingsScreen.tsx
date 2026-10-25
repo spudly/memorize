@@ -1,6 +1,5 @@
 import { useState } from "react";
-import { XStack } from "tamagui";
-import { Button, InlineAlert, SectionCard, Text, TextField } from "@spudly/ui";
+import { MemorizeSettingsPage } from "@spudly/ui/pages";
 import {
   DEFAULT_SETTINGS,
   LocalStore,
@@ -20,6 +19,18 @@ interface Props {
   store: MemorizeStore;
 }
 
+/**
+ * Settings tab host (#127): the app keeps every piece of state
+ * and business logic — the API-key input and store actions, the
+ * Drive OAuth flow (useDriveAuth), and the sync/conflict
+ * machinery — and hands display state to the DS
+ * MemorizeSettingsPage, whose actions come back as bare
+ * intents. The conflict choice crosses as the page's two named
+ * callbacks and resolves here to the sync directions
+ * ("push" = keep this device, "pull" = keep Drive). Store
+ * readiness is gated in App, above this screen, so there is no
+ * loading state here.
+ */
 export default function SettingsScreen({ store }: Props) {
   const { apiKey, data } = store.getState();
   const [keyInput, setKeyInput] = useState(apiKey ?? "");
@@ -102,68 +113,23 @@ export default function SettingsScreen({ store }: Props) {
   };
 
   return (
-    <>
-      <Text variant="heading">Settings</Text>
-
-      <SectionCard title="Scripture source">
-        <Text variant="hint">
-          A gospel-engine API key unlocks full-library search. The key stays on this device and is
-          never synced.
-        </Text>
-        <TextField
-          label="API key"
-          value={keyInput}
-          onChangeText={setKeyInput}
-          placeholder="gospel-engine API key"
-          secureTextEntry
-          autoCapitalize="none"
-        />
-        <XStack gap="$2">
-          <Button size="sm" onPress={saveKey} disabled={!keyInput.trim()}>
-            Save key
-          </Button>
-          {apiKey && (
-            <Button size="sm" variant="secondary" onPress={clearKey}>
-              Clear key
-            </Button>
-          )}
-        </XStack>
-      </SectionCard>
-
-      <SectionCard title="Google Drive sync">
-        <Text variant="hint">
-          Syncs your verse list (never your API key) to memorize-data.json in the “{folderName}”
-          Drive folder.
-        </Text>
-        {!driveAuth.accessToken ? (
-          <Button onPress={driveAuth.connect} disabled={!driveAuth.ready || busy}>
-            Connect Google Drive
-          </Button>
-        ) : (
-          <Button onPress={() => void runSync()} disabled={busy}>
-            Sync with Drive
-          </Button>
-        )}
-        {driveAuth.error && <InlineAlert severity="error">{driveAuth.error}</InlineAlert>}
-        {syncMessage && (
-          <InlineAlert severity={conflict ? "warning" : "info"}>{syncMessage}</InlineAlert>
-        )}
-        {conflict && (
-          <XStack gap="$2">
-            <Button size="sm" onPress={() => void resolveConflict("push")} disabled={busy}>
-              Keep this device
-            </Button>
-            <Button
-              size="sm"
-              variant="secondary"
-              onPress={() => void resolveConflict("pull")}
-              disabled={busy}
-            >
-              Keep Drive
-            </Button>
-          </XStack>
-        )}
-      </SectionCard>
-    </>
+    <MemorizeSettingsPage
+      apiKeyValue={keyInput}
+      onApiKeyValueChange={setKeyInput}
+      hasSavedApiKey={Boolean(apiKey)}
+      onSaveApiKeyPress={saveKey}
+      onClearApiKeyPress={clearKey}
+      driveFolderName={folderName}
+      driveConnected={Boolean(driveAuth.accessToken)}
+      driveConnectReady={driveAuth.ready}
+      isSyncing={busy}
+      driveError={driveAuth.error}
+      syncMessage={syncMessage}
+      syncConflict={conflict}
+      onConnectDrivePress={driveAuth.connect}
+      onSyncDrivePress={() => void runSync()}
+      onKeepDevicePress={() => void resolveConflict("push")}
+      onKeepDrivePress={() => void resolveConflict("pull")}
+    />
   );
 }
