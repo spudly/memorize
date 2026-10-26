@@ -39,3 +39,24 @@ jobs:
       - run: npm run lint
       - run: npm run test
       - run: npx turbo build --filter=@memorize/web
+
+  # Always-reporting gate for branch protection: needs every job in
+  # this workflow and reports on every run. It fails only when a needed
+  # job failed or was cancelled, and passes when the rest succeeded or
+  # were legitimately skipped.
+  ci-gate:
+    name: ci-gate
+    needs: ci
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify job results
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: |
+          echo "$NEEDS_JSON" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          if echo "$NEEDS_JSON" | jq -e '[.[] | .result] | any(. == "failure" or . == "cancelled")' > /dev/null; then
+            echo "::error::A job this gate depends on failed or was cancelled."
+            exit 1
+          fi
