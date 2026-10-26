@@ -3,7 +3,7 @@
     "@memorize/types": "0.1.0"
   },
   "devDependencies": {
-    "@swc/core": "^1.15.47",
+    "@swc/core": "^1.16.20",
     "@swc/jest": "^0.2.39",
     "@types/jest": "^30.0.0",
     "jest": "^30.5.2"
