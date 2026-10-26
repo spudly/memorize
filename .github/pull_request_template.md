@@ -20,3 +20,6 @@ before this PR is merged.
 - [ ] Manual tests for the changed areas run against this PR's preview
       deployment and passed, or not applicable (no behavior change,
       docs-only, or version-only)
+- [ ] If this PR bumps @spudly/ui: manual tests cover the design-system
+      changes in the bumped version range (per the DS changelog), or
+      none of those changes are user-visible
