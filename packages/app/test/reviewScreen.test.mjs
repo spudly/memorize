@@ -52,8 +52,11 @@ test("App registers the bundled Raleway variable font under the DS family name",
   // The registration shape pinned here is the one that landed on main
   // via the session rewire (spudly/memorize#34): the ttf import is
   // bound to the name Raleway and handed to useFonts under that exact
-  // family name, and first render gates on the load.
-  assert.match(appCode, /useFonts\(\{ Raleway \}\)/);
+  // family name, and first render gates on the load. #127 extends the
+  // same call with Alegreya, the Quiet Dawn verse font (design-system
+  // #66) the DS theme contract also expects the app to bundle; the
+  // Alegreya assertions live in appShellFontConfig.test.mjs.
+  assert.match(appCode, /useFonts\(\{ Raleway, Alegreya \}\)/);
   assert.match(appCode, /assets\/fonts\/Raleway\.ttf/);
   assert.match(appCode, /!ready \|\| !fontsLoaded/);
 });

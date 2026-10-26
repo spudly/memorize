@@ -3,6 +3,7 @@ import { SafeAreaView } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { useFonts } from "expo-font";
 import Raleway from "../assets/fonts/Raleway.ttf";
+import Alegreya from "../assets/fonts/Alegreya.ttf";
 import { TamaguiProvider } from "tamagui";
 import { ScreenContainer, Spinner, Tabs, Text } from "@spudly/ui";
 import { appTamaguiConfig } from "./tamaguiConfig";
@@ -24,11 +25,14 @@ const TABS: { value: Tab; label: string }[] = [
 ];
 
 export default function App() {
-  // @spudly/ui 1.4.0 names Raleway as the UI font for every theme
+  // @spudly/ui names Raleway as the UI font for every theme
   // (design-system #65); it is not a stock font, so the app bundles
   // the variable font and registers it under the exact name
   // "Raleway" — numeric weights resolve against the one family.
-  const [fontsLoaded] = useFonts({ Raleway });
+  // The Quiet Dawn theme additionally names Alegreya for verse
+  // text (design-system #66), bundled and registered the same
+  // way under its exact name "Alegreya" (#127).
+  const [fontsLoaded] = useFonts({ Raleway, Alegreya });
   const store: MemorizeStore = useMemo(() => createMemorizeStore(appStorage), []);
   const [, setTick] = useState(0);
   const [ready, setReady] = useState(false);

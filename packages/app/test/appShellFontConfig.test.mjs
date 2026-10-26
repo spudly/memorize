@@ -8,12 +8,18 @@
  *    the single most recently created global config, so the app
  *    must create its own, exactly once, in app-owned code; see
  *    spudly/eciperay#149 for the wrong-brand failure this avoids).
- * 2. Raleway — the UI font every @spudly/ui 1.4.0 theme names
+ * 2. Raleway — the UI font every @spudly/ui theme names
  *    (design-system #65) — is registered under the exact name
  *    "Raleway" from the bundled variable font, and the app's
  *    loading gate waits for the font before first render (the
  *    app shell's registration/gate is main's version, landed by
  *    the session rewire and kept verbatim by this dedupe).
+ * 3. Alegreya — the verse-text font the Quiet Dawn theme names
+ *    (design-system #66) — is bundled and registered the same
+ *    way under its exact name "Alegreya" (#127): the theme
+ *    contract expects the app to bundle it, and without the
+ *    registration native verse text falls back to the serif
+ *    stack.
  *
  * Source-scan, like the DS page contract tests: the app package
  * has no component-test harness.
@@ -42,9 +48,10 @@ test("the app creates its Tamagui config via the DS factory and Memorize theme",
   assert.match(app, /config=\{appTamaguiConfig\}/);
 });
 
-test("Raleway is registered under its exact name from the bundled font", () => {
-  assert.match(app, /useFonts\(\{\s*Raleway\s*\}\)/);
+test("Raleway and Alegreya are registered under their exact names from the bundled fonts", () => {
+  assert.match(app, /useFonts\(\{\s*Raleway\s*,\s*Alegreya\s*\}\)/);
   assert.match(app, /from\s*"\.\.\/assets\/fonts\/Raleway\.ttf"/);
+  assert.match(app, /from\s*"\.\.\/assets\/fonts\/Alegreya\.ttf"/);
   assert.match(app, /from\s*"expo-font"/);
 });
 
