@@ -31,7 +31,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -62,7 +62,7 @@ jobs:
       # Same JDK/Android SDK pattern as Eciperay's android-build-setup
       # composite action (temurin 17; SDK versions match Expo SDK 58's
       # generated project: compileSdk 36, build-tools 36.0.0, NDK 27).
-      - uses: actions/setup-java@v5
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: 17
@@ -83,7 +83,7 @@ jobs:
             "cmake;3.22.1"
 
       - name: Restore Gradle caches
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: |
             ~/.gradle/caches
