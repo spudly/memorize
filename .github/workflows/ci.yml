@@ -6,7 +6,11 @@ on:
   # PR branches are covered by the pull_request trigger below.
   push:
     branches: [main]
+  # The `edited` type matters: editing the PR body (e.g. checking off
+  # pre-merge checklist items) must re-run the gate so the merge-guard
+  # job below re-evaluates the task list.
   pull_request:
+    types: [opened, synchronize, reopened, edited]
 
 # Cancel superseded runs for the same PR/branch so fix-pushes don't burn
 # minutes on already-obsolete work. Keyed by PR number (not branch name)
@@ -40,13 +44,63 @@ jobs:
       - run: npm run test
       - run: npx turbo build --filter=@memorize/web
 
+  # Merge guard: fails while the PR body still contains unchecked
+  # task-list items, so the pre-merge checklist in the PR template is
+  # enforced by the gate instead of by convention alone. An item
+  # struck through (~~...~~) counts as waived, matching the template's
+  # "checked or struck through with a reason" rule. Fenced code blocks
+  # and HTML comments are ignored, so quoting a checklist in prose or
+  # in the template's guidance comments doesn't trip the guard.
+  # Dependabot PRs are exempt: their bodies quote upstream changelogs
+  # that can contain task lists nobody here owns.
+  merge-guard:
+    name: merge-guard
+    if: github.event.pull_request.user.login != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: read
+    steps:
+      - name: Fetch PR body
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh api "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}" --jq '.body // ""' > "$RUNNER_TEMP/pr-body.md"
+      - name: Check for unchecked task-list items
+        run: |
+          node <<'SCRIPT'
+          const fs = require('node:fs');
+          const body = fs.readFileSync(process.env.RUNNER_TEMP + '/pr-body.md', 'utf8');
+          // Drop fenced code blocks (``` or ~~~) line by line.
+          let inFence = false;
+          const kept = [];
+          for (const line of body.split('\n')) {
+            if (/^\s*(`{3,}|~{3,})/.test(line)) {
+              inFence = !inFence;
+              continue;
+            }
+            if (!inFence) kept.push(line);
+          }
+          // Drop HTML comments, then look for unchecked task items.
+          const text = kept.join('\n').replace(/<!--[\s\S]*?-->/g, '');
+          const unchecked = text
+            .split('\n')
+            .filter((line) => /^\s*[-*+]\s+\[\s\]\s+\S/.test(line) && !line.includes('~~'));
+          if (unchecked.length > 0) {
+            console.log('::error::Unchecked task-list items remain in the PR body:');
+            for (const line of unchecked) console.log(line);
+            console.log('Check each item off, or strike it through (~~...~~) with a one-line reason, per the PR template.');
+            process.exit(1);
+          }
+          console.log('All task-list items in the PR body are complete.');
+          SCRIPT
+
   # Always-reporting gate for branch protection: needs every job in
   # this workflow and reports on every run. It fails only when a needed
   # job failed or was cancelled, and passes when the rest succeeded or
   # were legitimately skipped.
   ci-gate:
     name: ci-gate
-    needs: ci
+    needs: [ci, merge-guard]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
