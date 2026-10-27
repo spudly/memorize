@@ -1,5 +1,6 @@
 {
   "devDependencies": {
+    "@changesets/cli": "^3.0.3",
     "@commitlint/cli": "^21.2.4",
     "@commitlint/config-conventional": "^21.2.3",
     "@spudly/eslint-config": "^0.2.0",

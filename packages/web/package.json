@@ -1,7 +1,7 @@
 {
   "dependencies": {
-    "@memorize/core": "0.1.0",
-    "@memorize/types": "0.1.0",
+    "@memorize/core": "1.0.0",
+    "@memorize/types": "1.0.0",
     "@spudly/ui": "^0.4.1",
     "react": "19.3.1",
     "react-dom": "19.3.1",
@@ -26,5 +26,5 @@
     "typecheck": "tsc --noEmit"
   },
   "type": "module",
-  "version": "0.1.0"
+  "version": "1.0.0"
 }
