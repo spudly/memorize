@@ -1,6 +1,6 @@
 name: e2e
 
-# Playwright web integration tests (issue #30). Unit tests never load the
+# Playwright web integration tests (issues #30, #45). Unit tests never load the
 # real app in a browser; this job builds the web package and exercises the
 # core flows in Chromium — demo-mode flows offline, and gospel-engine
 # flows against fixture-mocked /api responses (no live engine, no real
