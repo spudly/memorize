@@ -78,6 +78,15 @@ export default defineConfig(({ mode }) => {
       // Keep workspace symlinks (node_modules/@memorize/* -> packages/*) intact
       // so the CommonJS transform applies to @memorize/core's dist output.
       preserveSymlinks: true,
+      alias: [
+        // @spudly/ui's component graph pulls in react-native (via
+        // react-native-svg and friends); on web it resolves to
+        // react-native-web — the same substitution the design system's
+        // web Storybook and the eciperay web build make. Exact-name
+        // alias only: subpath imports (react-native/...) are not used
+        // and must not be rewritten.
+        { find: /^react-native$/, replacement: "react-native-web" },
+      ],
     },
   };
 });

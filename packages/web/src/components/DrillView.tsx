@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { BlankWord, Button, InlineAlert, ProgressBar, Text, VerseText } from "@spudly/ui";
+import { Alert, BlankWord, Button, ProgressBar, Text, VerseText } from "@spudly/ui";
 import {
   BLANK_FRACTIONS,
   blankedIndices,
@@ -107,7 +107,7 @@ export default function DrillView({ store, verseId, onBack }: Props) {
           );
         })}
       </VerseText>
-      {message && <InlineAlert severity="warning">{message}</InlineAlert>}
+      {message && <Alert severity="warning">{message}</Alert>}
       <Button onPress={nextRound}>{isLastRound ? "Finish — mark memorized" : "Next round"}</Button>
     </>
   );
