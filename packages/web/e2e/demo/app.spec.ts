@@ -64,6 +64,32 @@ test("drill renders blanks and tapping a blank reveals its word", async ({ page 
   const blankCount = await blanks.count();
   expect(blankCount).toBeGreaterThan(0);
 
+  // Layout guard for the inline flow itself (spudly/design-system#225):
+  // counting blanks cannot distinguish inline blanks from the old
+  // block-stacked ones. A hidden blank must sit on the same line as the
+  // word after it, narrower than the verse, with a visible gap before
+  // that word (the separator after each blank).
+  const layout = await blanks.first().evaluate((blank) => {
+    const container = blank.parentElement;
+    if (!container) return null;
+    const blankRect = blank.getBoundingClientRect();
+    let next = blank.nextElementSibling;
+    while (next && !next.textContent?.trim()) next = next.nextElementSibling;
+    if (!next) return null;
+    const nextRect = next.getBoundingClientRect();
+    return {
+      blankWidth: blankRect.width,
+      containerWidth: container.getBoundingClientRect().width,
+      overlap: Math.min(blankRect.bottom, nextRect.bottom) - Math.max(blankRect.top, nextRect.top),
+      gap: nextRect.left - blankRect.right,
+    };
+  });
+  expect(layout).not.toBeNull();
+  if (!layout) throw new Error("blank layout probe found no following word");
+  expect(layout.overlap).toBeGreaterThan(0);
+  expect(layout.gap).toBeGreaterThan(0);
+  expect(layout.blankWidth).toBeLessThan(layout.containerWidth / 2);
+
   // The web drill's input is tap-to-peek: revealing a blank takes it out
   // of the set of hidden blanks.
   await blanks.first().click();
