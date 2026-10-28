@@ -1,0 +1,57 @@
+name: Release
+
+# Pending-release flow (issue #48). Every push to main runs the
+# changesets job: with changesets pending, changesets/action maintains
+# the Pending Release PR; without them (the Pending Release PR just
+# merged), its publish step (scripts/changesetRelease.mjs) stamps
+# expo.version, tags the release, and pushes the exact tagged commit
+# to the `production` branch. Vercel's Production Branch for this
+# project is `production`, so that push — and only that push — is
+# what deploys production. Merging to main no longer deploys.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: release-production
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Changesets
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          registry-url: https://npm.pkg.github.com
+
+      - name: Install dependencies
+        run: npm install
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_READ_TOKEN }}
+
+      - name: Changesets
+        uses: changesets/action@v2
+        with:
+          github-token: ${{ secrets.CHANGESETS_TOKEN || secrets.GITHUB_TOKEN }}
+          publish-script: node scripts/changesetRelease.mjs
+          commit-message: "chore(release): pending release"
+          pr-title: "chore(release): pending release"
+          create-github-releases: false
+          push-git-tags: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.CHANGESETS_TOKEN || secrets.GITHUB_TOKEN }}
