@@ -34,6 +34,8 @@ jobs:
           node-version: 22
           cache: npm
           registry-url: https://npm.pkg.github.com
+      - name: Enable Corepack (pinned npm)
+        run: corepack enable
       # NOTE: package-lock.json is not committed yet (see README). Use npm install
       # until the lockfile is added, then switch back to npm ci.
       - run: npm install

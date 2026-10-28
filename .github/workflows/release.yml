@@ -39,6 +39,9 @@ jobs:
           cache: npm
           registry-url: https://npm.pkg.github.com
 
+      - name: Enable Corepack (pinned npm)
+        run: corepack enable
+
       - name: Install dependencies
         run: npm install
         env:
