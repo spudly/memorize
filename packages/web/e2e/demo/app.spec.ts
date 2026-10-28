@@ -69,14 +69,39 @@ test("drill renders blanks and tapping a blank reveals its word", async ({ page 
   // block-stacked ones. A hidden blank must sit on the same line as the
   // word after it, narrower than the verse, with a visible gap before
   // that word (the separator after each blank).
-  const layout = await blanks.first().evaluate((blank) => {
-    const container = blank.parentElement;
+  const layout = await page.evaluate(() => {
+    const blank = document.querySelector(
+      'button[aria-label^="Reveal blank word"], button[accessibilitylabel^="Reveal blank word"]',
+    );
+    if (!blank) return null;
+    // The verse container is the blank's closest ancestor holding the
+    // whole verse (several words), whatever wrappers sit in between —
+    // the blank is not a direct sibling of the word elements.
+    let container: Element | null = blank.parentElement;
+    while (container && (container.textContent ?? "").trim().split(/\s+/).length < 5) {
+      container = container.parentElement;
+    }
     if (!container) return null;
     const blankRect = blank.getBoundingClientRect();
-    let next = blank.nextElementSibling;
-    while (next && !next.textContent?.trim()) next = next.nextElementSibling;
-    if (!next) return null;
-    const nextRect = next.getBoundingClientRect();
+    // The word after the blank is the next text node outside the blank
+    // with real content; measure it with a range so element nesting
+    // doesn't matter.
+    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+    let node: Node | null = null;
+    let pastBlank = false;
+    let nextRect: DOMRect | null = null;
+    while ((node = walker.nextNode())) {
+      if (blank.contains(node)) {
+        pastBlank = true;
+        continue;
+      }
+      if (!pastBlank || !(node.textContent ?? "").trim()) continue;
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      nextRect = range.getBoundingClientRect();
+      break;
+    }
+    if (!nextRect) return null;
     return {
       blankWidth: blankRect.width,
       containerWidth: container.getBoundingClientRect().width,
