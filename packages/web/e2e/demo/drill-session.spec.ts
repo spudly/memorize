@@ -62,6 +62,30 @@ test("peeking at too many blanks holds the round with a retry message", async ({
   );
   const blankCount = await blanks.count();
   expect(blankCount).toBeGreaterThan(1);
+
+  // Same inline-flow layout guard as app.spec.ts (design-system#225):
+  // the first blank must share a line with the word after it, narrower
+  // than the verse, with a visible gap before that word.
+  const layout = await blanks.first().evaluate((blank) => {
+    const container = blank.parentElement;
+    if (!container) return null;
+    const blankRect = blank.getBoundingClientRect();
+    let next = blank.nextElementSibling;
+    while (next && !next.textContent?.trim()) next = next.nextElementSibling;
+    if (!next) return null;
+    const nextRect = next.getBoundingClientRect();
+    return {
+      blankWidth: blankRect.width,
+      containerWidth: container.getBoundingClientRect().width,
+      overlap: Math.min(blankRect.bottom, nextRect.bottom) - Math.max(blankRect.top, nextRect.top),
+      gap: nextRect.left - blankRect.right,
+    };
+  });
+  expect(layout).not.toBeNull();
+  if (!layout) throw new Error("blank layout probe found no following word");
+  expect(layout.overlap).toBeGreaterThan(0);
+  expect(layout.gap).toBeGreaterThan(0);
+  expect(layout.blankWidth).toBeLessThan(layout.containerWidth / 2);
   for (let i = 0; i < blankCount; i++) {
     // Revealed blanks leave the hidden set, so always click the first.
     await blanks.first().click();
