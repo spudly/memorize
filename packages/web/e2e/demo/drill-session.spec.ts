@@ -8,6 +8,61 @@ import { expect, test, type Page } from "@playwright/test";
  * verse from the built-in set needs no account or network.
  */
 
+/**
+ * Inline-flow layout guard (spudly/design-system#225): the first hidden
+ * blank must share a line with whatever follows it in the verse, be
+ * narrower than half the verse, and keep a visible gap before that
+ * following content (the separator after each blank). Measured on text
+ * nodes via a DOM range — the blank is not a direct sibling of the word
+ * elements in the rendered tree, so sibling traversal finds nothing.
+ */
+async function expectFirstBlankInline(page: Page): Promise<void> {
+  const layout = await page.evaluate(() => {
+    const blank = document.querySelector(
+      'button[aria-label^="Reveal blank word"], button[accessibilitylabel^="Reveal blank word"]',
+    );
+    if (!blank) return null;
+    // The verse container is the closest ancestor holding the whole
+    // verse (several words), whatever wrappers sit in between.
+    let container: Element | null = blank.parentElement;
+    while (container && (container.textContent ?? "").trim().split(/\s+/).length < 5) {
+      container = container.parentElement;
+    }
+    if (!container) return null;
+    const blankRect = blank.getBoundingClientRect();
+    // The content after the blank is the next text node outside the
+    // blank with real content (a plain word, or the sizing word inside
+    // the next blank when blanks are adjacent).
+    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+    let node: Node | null = null;
+    let pastBlank = false;
+    let nextRect: DOMRect | null = null;
+    while ((node = walker.nextNode())) {
+      if (blank.contains(node)) {
+        pastBlank = true;
+        continue;
+      }
+      if (!pastBlank || !(node.textContent ?? "").trim()) continue;
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      nextRect = range.getBoundingClientRect();
+      break;
+    }
+    if (!nextRect) return null;
+    return {
+      blankWidth: blankRect.width,
+      containerWidth: container.getBoundingClientRect().width,
+      overlap: Math.min(blankRect.bottom, nextRect.bottom) - Math.max(blankRect.top, nextRect.top),
+      gap: nextRect.left - blankRect.right,
+    };
+  });
+  expect(layout).not.toBeNull();
+  if (!layout) throw new Error("blank layout probe found no following content");
+  expect(layout.overlap).toBeGreaterThan(0);
+  expect(layout.gap).toBeGreaterThan(0);
+  expect(layout.blankWidth).toBeLessThan(layout.containerWidth / 2);
+}
+
 async function addDemoVerse(page: Page, reference: string): Promise<void> {
   await page.getByRole("tab", { name: "Search" }).click();
   await page.getByPlaceholder(/Ether 12:27/).fill(reference);
@@ -33,6 +88,9 @@ test("completing every drill round marks the verse memorized", async ({ page }) 
   for (let round = 2; round <= 7; round++) {
     await page.getByRole("button", { name: "Next round" }).click();
     await expect(page.getByText(new RegExp(`Round ${round} of 7`))).toBeVisible();
+    // Every round's blanks must flow inline too (design-system#225) —
+    // later rounds blank more words, including adjacent ones.
+    await expectFirstBlankInline(page);
   }
   await page.getByRole("button", { name: "Finish — mark memorized" }).click();
 
@@ -63,54 +121,8 @@ test("peeking at too many blanks holds the round with a retry message", async ({
   const blankCount = await blanks.count();
   expect(blankCount).toBeGreaterThan(1);
 
-  // Same inline-flow layout guard as app.spec.ts (design-system#225):
-  // the first blank must share a line with the word after it, narrower
-  // than the verse, with a visible gap before that word.
-  const layout = await page.evaluate(() => {
-    const blank = document.querySelector(
-      'button[aria-label^="Reveal blank word"], button[accessibilitylabel^="Reveal blank word"]',
-    );
-    if (!blank) return null;
-    // The verse container is the blank's closest ancestor holding the
-    // whole verse (several words), whatever wrappers sit in between —
-    // the blank is not a direct sibling of the word elements.
-    let container: Element | null = blank.parentElement;
-    while (container && (container.textContent ?? "").trim().split(/\s+/).length < 5) {
-      container = container.parentElement;
-    }
-    if (!container) return null;
-    const blankRect = blank.getBoundingClientRect();
-    // The word after the blank is the next text node outside the blank
-    // with real content; measure it with a range so element nesting
-    // doesn't matter.
-    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
-    let node: Node | null = null;
-    let pastBlank = false;
-    let nextRect: DOMRect | null = null;
-    while ((node = walker.nextNode())) {
-      if (blank.contains(node)) {
-        pastBlank = true;
-        continue;
-      }
-      if (!pastBlank || !(node.textContent ?? "").trim()) continue;
-      const range = document.createRange();
-      range.selectNodeContents(node);
-      nextRect = range.getBoundingClientRect();
-      break;
-    }
-    if (!nextRect) return null;
-    return {
-      blankWidth: blankRect.width,
-      containerWidth: container.getBoundingClientRect().width,
-      overlap: Math.min(blankRect.bottom, nextRect.bottom) - Math.max(blankRect.top, nextRect.top),
-      gap: nextRect.left - blankRect.right,
-    };
-  });
-  expect(layout).not.toBeNull();
-  if (!layout) throw new Error("blank layout probe found no following word");
-  expect(layout.overlap).toBeGreaterThan(0);
-  expect(layout.gap).toBeGreaterThan(0);
-  expect(layout.blankWidth).toBeLessThan(layout.containerWidth / 2);
+  // Inline-flow layout guard (design-system#225), as in app.spec.ts.
+  await expectFirstBlankInline(page);
   for (let i = 0; i < blankCount; i++) {
     // Revealed blanks leave the hidden set, so always click the first.
     await blanks.first().click();
