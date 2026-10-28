@@ -139,9 +139,7 @@ export default function SettingsTab({ store }: Props) {
           Sync with Drive
         </Button>
         {busy && <Spinner label="Syncing with Drive" />}
-        {syncMessage && (
-          <Alert severity={conflict ? "warning" : "info"}>{syncMessage}</Alert>
-        )}
+        {syncMessage && <Alert severity={conflict ? "warning" : "info"}>{syncMessage}</Alert>}
         {conflict && (
           <>
             <Button size="sm" onPress={() => void resolveConflict("push")} disabled={busy}>
