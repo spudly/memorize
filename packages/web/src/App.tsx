@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { TamaguiProvider } from "tamagui";
-import { tamaguiConfig, Tabs, Text, ScreenContainer, Spinner } from "@spudly/ui";
+import { Tabs, Text, ScreenContainer, Spinner } from "@spudly/ui";
+import { webTamaguiConfig } from "./tamaguiConfig";
 import { createMemorizeStore, type MemorizeStore } from "@memorize/core";
 import DrillView from "./components/DrillView";
 import ReviewTab from "./components/ReviewTab";
@@ -30,7 +31,7 @@ export default function App() {
 
   if (!ready) {
     return (
-      <TamaguiProvider config={tamaguiConfig} defaultTheme="light">
+      <TamaguiProvider config={webTamaguiConfig} defaultTheme="light">
         <ScreenContainer>
           <Spinner label="Loading Memorize" />
         </ScreenContainer>
@@ -51,7 +52,7 @@ export default function App() {
   };
 
   return (
-    <TamaguiProvider config={tamaguiConfig} defaultTheme="light">
+    <TamaguiProvider config={webTamaguiConfig} defaultTheme="light">
       <ScreenContainer>
         <Text variant="heading">Memorize</Text>
         <Tabs

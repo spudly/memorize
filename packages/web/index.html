@@ -3,6 +3,17 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- Raleway is the @spudly/ui UI font for every theme and Alegreya is
+         the verse-text font under the Memorize (Quiet Dawn) theme. Neither
+         is a stock web font, so they load from Google Fonts — the same
+         wiring the design system's web Storybook uses; without it the
+         browser silently falls along the token stacks to system fonts. -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Raleway:wght@400;500;600;700&family=Alegreya:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap"
+      rel="stylesheet"
+    />
     <title>Memorize — Scripture Memorization</title>
     <script>
       // Tamagui's runtime reads process.env.* (TAMAGUI_* flags, IS_STATIC, …).

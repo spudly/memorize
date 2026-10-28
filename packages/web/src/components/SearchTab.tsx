@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Button, Card, EmptyState, InlineAlert, SearchField, Spinner, Text } from "@spudly/ui";
+import { Alert, Button, Card, EmptyState, SearchField, Spinner, Text } from "@spudly/ui";
 import type { MemorizeStore, ScriptureDataSource, Verse } from "@memorize/core";
 
 interface Props {
@@ -50,7 +50,7 @@ export default function SearchTab({ store, dataSource, usingDemo }: Props) {
       <Button onPress={() => void runSearch()} disabled={busy || !query.trim()}>
         Search
       </Button>
-      {error && <InlineAlert severity="error">{error}</InlineAlert>}
+      {error && <Alert severity="error">{error}</Alert>}
       {busy && <Spinner label="Searching verses" />}
       {!busy && searched && results.length === 0 && !error && (
         <EmptyState title="No results" body="Try a different reference or keyword." />

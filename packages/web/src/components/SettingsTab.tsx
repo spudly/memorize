@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Button, InlineAlert, SectionCard, Spinner, Text, TextField } from "@spudly/ui";
+import { Alert, Button, SectionCard, Spinner, Text, TextField } from "@spudly/ui";
 import {
   DEFAULT_SETTINGS,
   LocalStore,
@@ -139,9 +139,7 @@ export default function SettingsTab({ store }: Props) {
           Sync with Drive
         </Button>
         {busy && <Spinner label="Syncing with Drive" />}
-        {syncMessage && (
-          <InlineAlert severity={conflict ? "warning" : "info"}>{syncMessage}</InlineAlert>
-        )}
+        {syncMessage && <Alert severity={conflict ? "warning" : "info"}>{syncMessage}</Alert>}
         {conflict && (
           <>
             <Button size="sm" onPress={() => void resolveConflict("push")} disabled={busy}>

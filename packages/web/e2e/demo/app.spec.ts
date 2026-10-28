@@ -53,12 +53,67 @@ test("drill renders blanks and tapping a blank reveals its word", async ({ page 
   // first round with hidden words.
   await page.getByRole("button", { name: "Next round" }).click();
   await expect(page.getByText(/Round 2 of \d+/)).toBeVisible();
-  // In the @spudly/ui version Memorize pins, a hidden blank renders as a
-  // button whose label is underscores (later versions name it "Reveal
-  // blank word N of M").
-  const blanks = page.getByRole("button", { name: /^_+$/ });
+  // A hidden blank is a button labeled "Reveal blank word N of M"
+  // (@spudly/ui 1.x BlankWord; the 0.4.x version labeled it with
+  // underscores). On web the DS currently emits that label as an
+  // `accessibilitylabel` attribute instead of `aria-label`
+  // (spudly/design-system#235), so match both spellings.
+  const blanks = page.locator(
+    'button[aria-label^="Reveal blank word"], button[accessibilitylabel^="Reveal blank word"]',
+  );
   const blankCount = await blanks.count();
   expect(blankCount).toBeGreaterThan(0);
+
+  // Layout guard for the inline flow itself (spudly/design-system#225):
+  // counting blanks cannot distinguish inline blanks from the old
+  // block-stacked ones. A hidden blank must sit on the same line as the
+  // word after it, narrower than the verse, with a visible gap before
+  // that word (the separator after each blank).
+  const layout = await page.evaluate(() => {
+    const blank = document.querySelector(
+      'button[aria-label^="Reveal blank word"], button[accessibilitylabel^="Reveal blank word"]',
+    );
+    if (!blank) return null;
+    // The verse container is the blank's closest ancestor holding the
+    // whole verse (several words), whatever wrappers sit in between —
+    // the blank is not a direct sibling of the word elements.
+    let container: Element | null = blank.parentElement;
+    while (container && (container.textContent ?? "").trim().split(/\s+/).length < 5) {
+      container = container.parentElement;
+    }
+    if (!container) return null;
+    const blankRect = blank.getBoundingClientRect();
+    // The word after the blank is the next text node outside the blank
+    // with real content; measure it with a range so element nesting
+    // doesn't matter.
+    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+    let node: Node | null = null;
+    let pastBlank = false;
+    let nextRect: DOMRect | null = null;
+    while ((node = walker.nextNode())) {
+      if (blank.contains(node)) {
+        pastBlank = true;
+        continue;
+      }
+      if (!pastBlank || !(node.textContent ?? "").trim()) continue;
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      nextRect = range.getBoundingClientRect();
+      break;
+    }
+    if (!nextRect) return null;
+    return {
+      blankWidth: blankRect.width,
+      containerWidth: container.getBoundingClientRect().width,
+      overlap: Math.min(blankRect.bottom, nextRect.bottom) - Math.max(blankRect.top, nextRect.top),
+      gap: nextRect.left - blankRect.right,
+    };
+  });
+  expect(layout).not.toBeNull();
+  if (!layout) throw new Error("blank layout probe found no following word");
+  expect(layout.overlap).toBeGreaterThan(0);
+  expect(layout.gap).toBeGreaterThan(0);
+  expect(layout.blankWidth).toBeLessThan(layout.containerWidth / 2);
 
   // The web drill's input is tap-to-peek: revealing a blank takes it out
   // of the set of hidden blanks.

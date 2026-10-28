@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { BlankWord, Button, InlineAlert, ProgressBar, Text, VerseText } from "@spudly/ui";
+import { Fragment, useMemo, useState } from "react";
+import { Alert, BlankWord, Button, ProgressBar, Text, VerseText } from "@spudly/ui";
 import {
   BLANK_FRACTIONS,
   blankedIndices,
@@ -90,14 +90,20 @@ export default function DrillView({ store, verseId, onBack }: Props) {
           if (blanks.has(i)) {
             blankOrdinal += 1;
             return (
-              <BlankWord
-                key={i}
-                word={word}
-                revealed={revealed.has(i)}
-                onReveal={() => peek(i)}
-                index={blankOrdinal}
-                total={blanks.size}
-              />
+              <Fragment key={i}>
+                <BlankWord
+                  word={word}
+                  revealed={revealed.has(i)}
+                  onReveal={() => peek(i)}
+                  index={blankOrdinal}
+                  total={blanks.size}
+                />
+                {/* Separator matching the plain-word branch's trailing
+                    space (the DS's own drill composition puts an explicit
+                    space after each BlankWord); without it an inline
+                    blank touches the word that follows it. */}
+                <Text variant="verse"> </Text>
+              </Fragment>
             );
           }
           return (
@@ -107,7 +113,7 @@ export default function DrillView({ store, verseId, onBack }: Props) {
           );
         })}
       </VerseText>
-      {message && <InlineAlert severity="warning">{message}</InlineAlert>}
+      {message && <Alert severity="warning">{message}</Alert>}
       <Button onPress={nextRound}>{isLastRound ? "Finish — mark memorized" : "Next round"}</Button>
     </>
   );
