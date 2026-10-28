@@ -54,7 +54,12 @@ test("peeking at too many blanks holds the round with a retry message", async ({
 
   // Round 2 blanks 20% of the words; a round only passes with peeks in
   // the first quarter of the blanks, so revealing every blank must fail.
-  const blanks = page.getByRole("button", { name: /^_+$/ });
+  // Hidden blanks are the "Reveal blank word N of M" buttons; on web
+  // the label currently lands in an `accessibilitylabel` attribute
+  // instead of `aria-label` (spudly/design-system#235) — match both.
+  const blanks = page.locator(
+    'button[aria-label^="Reveal blank word"], button[accessibilitylabel^="Reveal blank word"]',
+  );
   const blankCount = await blanks.count();
   expect(blankCount).toBeGreaterThan(1);
   for (let i = 0; i < blankCount; i++) {

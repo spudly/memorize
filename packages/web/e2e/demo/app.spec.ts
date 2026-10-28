@@ -53,10 +53,14 @@ test("drill renders blanks and tapping a blank reveals its word", async ({ page 
   // first round with hidden words.
   await page.getByRole("button", { name: "Next round" }).click();
   await expect(page.getByText(/Round 2 of \d+/)).toBeVisible();
-  // In the @spudly/ui version Memorize pins, a hidden blank renders as a
-  // button whose label is underscores (later versions name it "Reveal
-  // blank word N of M").
-  const blanks = page.getByRole("button", { name: /^_+$/ });
+  // A hidden blank is a button labeled "Reveal blank word N of M"
+  // (@spudly/ui 1.x BlankWord; the 0.4.x version labeled it with
+  // underscores). On web the DS currently emits that label as an
+  // `accessibilitylabel` attribute instead of `aria-label`
+  // (spudly/design-system#235), so match both spellings.
+  const blanks = page.locator(
+    'button[aria-label^="Reveal blank word"], button[accessibilitylabel^="Reveal blank word"]',
+  );
   const blankCount = await blanks.count();
   expect(blankCount).toBeGreaterThan(0);
 
