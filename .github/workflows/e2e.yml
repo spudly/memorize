@@ -68,7 +68,7 @@ jobs:
           registry-url: https://npm.pkg.github.com
 
       - name: Enable Corepack (pinned npm)
-        run: corepack enable
+        run: corepack enable npm
 
       # @spudly/ui lives on GitHub Packages; the workflow GITHUB_TOKEN has
       # no read_package grant for it (cold-cache npm ci fails 403), so use
