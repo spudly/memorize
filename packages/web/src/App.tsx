@@ -1,13 +1,18 @@
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, lazy, useEffect, useMemo, useState } from "react";
 import { TamaguiProvider } from "tamagui";
 import { Tabs, Text, ScreenContainer, Spinner } from "@spudly/ui";
 import { webTamaguiConfig } from "./tamaguiConfig";
 import { createMemorizeStore, type MemorizeStore } from "@memorize/core";
-import DrillView from "./components/DrillView";
-import ReviewTab from "./components/ReviewTab";
-import SearchTab from "./components/SearchTab";
-import SettingsTab from "./components/SettingsTab";
+import ChunkErrorBoundary from "./components/ChunkErrorBoundary";
 import VersesTab from "./components/VersesTab";
+
+// Code-split the non-initial surfaces (memorize#54, Option B): the verses tab
+// is the landing view and stays in the initial chunk; drill, search, review
+// and settings load on first navigation to them.
+const DrillView = lazy(() => import("./components/DrillView"));
+const ReviewTab = lazy(() => import("./components/ReviewTab"));
+const SearchTab = lazy(() => import("./components/SearchTab"));
+const SettingsTab = lazy(() => import("./components/SettingsTab"));
 import { dataSourceFor, isDemoDataSource } from "./lib/gospel";
 import { webStorage } from "./lib/storage";
 
@@ -60,17 +65,25 @@ export default function App() {
           value={tab}
           onValueChange={handleTabChange}
         />
-        {drillingId ? (
-          <DrillView store={store} verseId={drillingId} onBack={() => setDrillingId(null)} />
-        ) : tab === "verses" ? (
-          <VersesTab store={store} onDrill={setDrillingId} />
-        ) : tab === "search" ? (
-          <SearchTab store={store} dataSource={dataSource} usingDemo={isDemoDataSource(apiKey)} />
-        ) : tab === "review" ? (
-          <ReviewTab store={store} />
-        ) : (
-          <SettingsTab store={store} />
-        )}
+        <ChunkErrorBoundary key={drillingId ? "drill" : tab}>
+          <Suspense fallback={<Spinner label="Loading" />}>
+            {drillingId ? (
+              <DrillView store={store} verseId={drillingId} onBack={() => setDrillingId(null)} />
+            ) : tab === "verses" ? (
+              <VersesTab store={store} onDrill={setDrillingId} />
+            ) : tab === "search" ? (
+              <SearchTab
+                store={store}
+                dataSource={dataSource}
+                usingDemo={isDemoDataSource(apiKey)}
+              />
+            ) : tab === "review" ? (
+              <ReviewTab store={store} />
+            ) : (
+              <SettingsTab store={store} />
+            )}
+          </Suspense>
+        </ChunkErrorBoundary>
       </ScreenContainer>
     </TamaguiProvider>
   );
