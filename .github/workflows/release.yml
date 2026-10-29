@@ -2,12 +2,16 @@ name: Release
 
 # Pending-release flow (issue #48). Every push to main runs the
 # changesets job: with changesets pending, changesets/action maintains
-# the Pending Release PR; without them (the Pending Release PR just
-# merged), its publish step (scripts/changesetRelease.mjs) stamps
-# expo.version, tags the release, and pushes the exact tagged commit
-# to the `production` branch. Vercel's Production Branch for this
-# project is `production`, so that push — and only that push — is
-# what deploys production. Merging to main no longer deploys.
+# the Pending Release PR — its version step also stamps expo.version
+# into packages/app/app.json (scripts/changesetVersion.mjs), so the
+# stamp reaches main through the PR. Without pending changesets (the
+# Pending Release PR just merged), its publish step
+# (scripts/changesetRelease.mjs) tags the release and pushes the exact
+# tagged commit to the `production` branch; it never pushes to main
+# (the ruleset rejects direct pushes — GH013, issue #65). Vercel's
+# Production Branch for this project is `production`, so that push —
+# and only that push — is what deploys production. Merging to main no
+# longer deploys.
 
 on:
   push:
@@ -51,6 +55,7 @@ jobs:
         uses: changesets/action@v2
         with:
           github-token: ${{ secrets.CHANGESETS_TOKEN || secrets.GITHUB_TOKEN }}
+          version-script: node scripts/changesetVersion.mjs
           publish-script: node scripts/changesetRelease.mjs
           commit-message: "chore(release): pending release"
           pr-title: "chore(release): pending release"
