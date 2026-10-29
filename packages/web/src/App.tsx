@@ -8,7 +8,7 @@ import ReviewTab from "./components/ReviewTab";
 import SearchTab from "./components/SearchTab";
 import SettingsTab from "./components/SettingsTab";
 import VersesTab from "./components/VersesTab";
-import { dataSourceFor } from "./lib/gospel";
+import { dataSourceFor, isDemoDataSource } from "./lib/gospel";
 import { webStorage } from "./lib/storage";
 
 type Tab = "verses" | "search" | "review" | "settings";
@@ -65,7 +65,7 @@ export default function App() {
         ) : tab === "verses" ? (
           <VersesTab store={store} onDrill={setDrillingId} />
         ) : tab === "search" ? (
-          <SearchTab store={store} dataSource={dataSource} usingDemo={!apiKey} />
+          <SearchTab store={store} dataSource={dataSource} usingDemo={isDemoDataSource(apiKey)} />
         ) : tab === "review" ? (
           <ReviewTab store={store} />
         ) : (

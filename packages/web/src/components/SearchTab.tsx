@@ -40,7 +40,9 @@ export default function SearchTab({ store, dataSource, usingDemo }: Props) {
       <SearchField
         value={query}
         onChangeText={setQuery}
-        placeholder="e.g. Ether 12:27 or “charity”"
+        placeholder={
+          usingDemo ? "e.g. Ether 12:27 or “weakness”" : "e.g. Ether 12:27 or “charity”"
+        }
         onKeyDown={(e) => {
           if (e.key === "Enter") {
             void runSearch();
