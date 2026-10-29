@@ -3,7 +3,7 @@ name: Release
 # Pending-release flow (issue #48). Every push to main runs the
 # changesets job: with changesets pending, changesets/action maintains
 # the Pending Release PR — its version step also stamps expo.version
-# into packages/app/app.json (scripts/syncExpoVersion.mjs), so the
+# into packages/app/app.json (scripts/changesetVersion.mjs), so the
 # stamp reaches main through the PR. Without pending changesets (the
 # Pending Release PR just merged), its publish step
 # (scripts/changesetRelease.mjs) tags the release and pushes the exact
@@ -55,7 +55,7 @@ jobs:
         uses: changesets/action@v2
         with:
           github-token: ${{ secrets.CHANGESETS_TOKEN || secrets.GITHUB_TOKEN }}
-          version-script: npx changeset version && node scripts/syncExpoVersion.mjs
+          version-script: node scripts/changesetVersion.mjs
           publish-script: node scripts/changesetRelease.mjs
           commit-message: "chore(release): pending release"
           pr-title: "chore(release): pending release"
