@@ -42,6 +42,22 @@ test("demo mode: searching a demo verse renders its passage", async ({ page }) =
   expect(errors).toEqual([]);
 });
 
+test("demo mode: the placeholder's keyword example finds a demo verse", async ({ page }) => {
+  const errors = trackPageErrors(page);
+  await page.goto("/");
+  await page.getByRole("tab", { name: "Search" }).click();
+  await expect(page.getByText("Searching the built-in demo set.")).toBeVisible();
+  // The demo set contains no "charity" verse (#59): the suggested keyword
+  // example must be one the demo set can actually match.
+  await expect(page.getByPlaceholder(/Ether 12:27/)).toHaveAttribute(
+    "placeholder",
+    /weakness/,
+  );
+  await searchDemoVerse(page, "weakness");
+  await expect(page.getByText("Ether 12:27", { exact: true })).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
 test("drill renders blanks and tapping a blank reveals its word", async ({ page }) => {
   const errors = trackPageErrors(page);
   await page.goto("/");
