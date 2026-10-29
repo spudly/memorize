@@ -103,8 +103,9 @@ verse actions.
 
 ## Search & adding verses
 
-_Automated: Playwright covers demo-set search rendering
-(`app.spec.ts`), fixture-mocked proxy search and add-to-library
+_Automated: Playwright covers demo-set search rendering and the
+demo-mode placeholder keyword example (`app.spec.ts`), fixture-mocked
+proxy search and add-to-library
 (`proxy/search.spec.ts`, `proxy/add.spec.ts`), and the in-place
 "Added" confirmation state on a result whose verse is in the library
 (`app.spec.ts`). Real-engine behavior

@@ -34,9 +34,12 @@ jobs:
           node-version: 22
           cache: npm
           registry-url: https://npm.pkg.github.com
-      # NOTE: package-lock.json is not committed yet (see README). Use npm install
-      # until the lockfile is added, then switch back to npm ci.
-      - run: npm install
+      - name: Enable Corepack (pinned npm)
+        run: corepack enable npm
+      # package-lock.json is committed (this PR): install with npm ci so CI
+      # validates the committed lockfile instead of resolving a fresh tree,
+      # matching the android and e2e jobs.
+      - run: npm ci
         env:
           NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_READ_TOKEN }}
       - run: npm run typecheck
