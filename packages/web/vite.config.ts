@@ -73,6 +73,31 @@ export default defineConfig(({ mode }) => {
   const gospelServerKey = process.env.GOSPEL_ENGINE_API_KEY ?? fileEnv.GOSPEL_ENGINE_API_KEY;
   return {
     plugins: [react(), gospelApiDevProxy(gospelServerKey)],
+    build: {
+      rolldownOptions: {
+        output: {
+          // Vendor splitting (memorize#54, Option B): keep the framework and
+          // design-system runtime out of the app entry chunk so the entry
+          // stays small and the vendor chunks cache across app releases.
+          // Combined with the lazy tab surfaces in App.tsx, no single chunk
+          // exceeds Vite's 500 kB warning threshold.
+          codeSplitting: {
+            groups: [
+              {
+                name: "vendor-react",
+                test: /node_modules[\\/](react|react-dom|scheduler)[\\/]/,
+                priority: 30,
+              },
+              {
+                name: "vendor-ui",
+                test: /node_modules[\\/](@spudly[\\/]ui|@tamagui|tamagui|react-native-web|@floating-ui|react-native-svg)[\\/]/,
+                priority: 20,
+              },
+            ],
+          },
+        },
+      },
+    },
     server: { port: 5173 },
     resolve: {
       // Keep workspace symlinks (node_modules/@memorize/* -> packages/*) intact
