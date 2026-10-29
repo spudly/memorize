@@ -3,6 +3,7 @@ import { TamaguiProvider } from "tamagui";
 import { Tabs, Text, ScreenContainer, Spinner } from "@spudly/ui";
 import { webTamaguiConfig } from "./tamaguiConfig";
 import { createMemorizeStore, type MemorizeStore } from "@memorize/core";
+import ChunkErrorBoundary from "./components/ChunkErrorBoundary";
 import VersesTab from "./components/VersesTab";
 
 // Code-split the non-initial surfaces (memorize#54, Option B): the verses tab
@@ -64,19 +65,25 @@ export default function App() {
           value={tab}
           onValueChange={handleTabChange}
         />
-        <Suspense fallback={<Spinner label="Loading" />}>
-          {drillingId ? (
-            <DrillView store={store} verseId={drillingId} onBack={() => setDrillingId(null)} />
-          ) : tab === "verses" ? (
-            <VersesTab store={store} onDrill={setDrillingId} />
-          ) : tab === "search" ? (
-            <SearchTab store={store} dataSource={dataSource} usingDemo={isDemoDataSource(apiKey)} />
-          ) : tab === "review" ? (
-            <ReviewTab store={store} />
-          ) : (
-            <SettingsTab store={store} />
-          )}
-        </Suspense>
+        <ChunkErrorBoundary key={drillingId ? "drill" : tab}>
+          <Suspense fallback={<Spinner label="Loading" />}>
+            {drillingId ? (
+              <DrillView store={store} verseId={drillingId} onBack={() => setDrillingId(null)} />
+            ) : tab === "verses" ? (
+              <VersesTab store={store} onDrill={setDrillingId} />
+            ) : tab === "search" ? (
+              <SearchTab
+                store={store}
+                dataSource={dataSource}
+                usingDemo={isDemoDataSource(apiKey)}
+              />
+            ) : tab === "review" ? (
+              <ReviewTab store={store} />
+            ) : (
+              <SettingsTab store={store} />
+            )}
+          </Suspense>
+        </ChunkErrorBoundary>
       </ScreenContainer>
     </TamaguiProvider>
   );
