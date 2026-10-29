@@ -23,7 +23,7 @@
     ]
   },
   "name": "memorize",
-  "packageManager": "npm@10.8.2",
+  "packageManager": "npm@10.9.4",
   "private": true,
   "scripts": {
     "build": "turbo build",
