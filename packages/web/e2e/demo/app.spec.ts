@@ -42,6 +42,37 @@ test("demo mode: searching a demo verse renders its passage", async ({ page }) =
   expect(errors).toEqual([]);
 });
 
+test("adding a search result confirms in place with an Added state (#56)", async ({ page }) => {
+  const errors = trackPageErrors(page);
+  await page.goto("/");
+  await searchDemoVerse(page, "Ether 12:27");
+  await expect(page.getByText("Ether 12:27", { exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "Add to memorize list" }).click();
+
+  // The confirmation replaces the button in place, without leaving the
+  // Search tab: an "Added" button in its disabled state, and no Add
+  // button left on the result.
+  await expect(page.getByRole("button", { name: "Added" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Added" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Add to memorize list" })).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
+test("a result already in the library shows Added instead of Add (#56)", async ({ page }) => {
+  const errors = trackPageErrors(page);
+  await page.goto("/");
+  await addDemoVerse(page, "Ether 12:27");
+
+  // Re-searching the same verse (e.g. after switching tabs) must show
+  // the Added state immediately — the store dedupes the re-add, and
+  // the button state is how the user learns that.
+  await searchDemoVerse(page, "Ether 12:27");
+  await expect(page.getByRole("button", { name: "Added" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Add to memorize list" })).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
 test("demo mode: the placeholder's keyword example finds a demo verse", async ({ page }) => {
   const errors = trackPageErrors(page);
   await page.goto("/");
