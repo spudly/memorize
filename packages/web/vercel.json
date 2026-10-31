@@ -1,6 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "cd ../.. && npx turbo build --filter=@memorize/web",
+  "build": { "env": { "VITE_USE_GOSPEL_PROXY": "1" } },
   "env": { "VITE_USE_GOSPEL_PROXY": "1" },
   "framework": "vite",
   "installCommand": "cd ../.. && npm install --include=dev",
