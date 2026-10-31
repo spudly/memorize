@@ -1,5 +1,35 @@
 # @memorize/core
 
+## 1.1.1
+
+### Patch Changes
+
+- 8dacea3: In demo mode, the Search tab's placeholder now suggests a keyword the
+  built-in demo set can actually match ("weakness", which finds
+  Ether 12:27) instead of "charity", which returns no results in demo
+  mode. Full-library mode keeps the original example. The demo notice
+  and placeholder now follow the effective search source: in proxy
+  builds (Vercel), a visitor without a local API key searches the full
+  library, so the Search tab no longer describes the built-in demo set
+  in that case.
+- 149503c: On web, search results now confirm an add in place: after "Add to
+  memorize list" is clicked, the result's button changes to a disabled
+  "Added" state without leaving the Search tab, and a verse that is
+  already in the library shows "Added" instead of an Add button (the add
+  itself already deduped silently, so the button gave no signal either
+  way). The native app's search screen is unchanged.
+- eae2572: Web: the production bundle is code-split (memorize#54, Option B). The
+  drill, search, review and settings surfaces load lazily on first
+  navigation instead of shipping in the initial chunk, and the React and
+  design-system/Tamagui runtime ships as separate vendor chunks. The app
+  entry chunk drops from ~554 kB to ~25 kB, no chunk exceeds Vite's
+  500 kB warning threshold, and the build no longer prints the chunk-size
+  hint. No user-visible behavior changes.
+- Updated dependencies [8dacea3]
+- Updated dependencies [149503c]
+- Updated dependencies [eae2572]
+  - @memorize/types@1.1.1
+
 ## 1.1.0
 
 ### Patch Changes
