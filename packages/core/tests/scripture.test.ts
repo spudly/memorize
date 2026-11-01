@@ -762,3 +762,38 @@ describe("toPlainText replacement-character cases (#77)", () => {
     expect(mapGetResponse({ reference: "Talk excerpt", text: "\uFFFD\uFFFD" })).toEqual([]);
   });
 });
+
+describe("toPlainText replacement-character round-2 cases (#77)", () => {
+  const mapOne = (text: string) => mapGetResponse({ reference: "Talk excerpt", text })[0]?.text;
+
+  it("drops replacement characters reintroduced by numeric entity decoding", () => {
+    // The first-pass cleanup runs before entity decoding, so an
+    // encoded U+FFFD (&#65533; / &#xFFFD;) used to survive decoding
+    // and render in the card after all.
+    expect(mapOne("Faith &#65533; hope")).toBe("Faith hope");
+    expect(mapOne("Faith &#xFFFD; hope")).toBe("Faith hope");
+    expect(mapOne("&#65533; &amp; faith")).toBe("& faith");
+  });
+
+  it("treats entity-only replacement characters as no result", () => {
+    expect(mapGetResponse({ reference: "Talk excerpt", text: "&#65533;" })).toEqual([]);
+    expect(mapGetResponse({ reference: "Talk excerpt", text: "&#xFFFD;" })).toEqual([]);
+  });
+
+  it("does not mistake literal private-use markers in source text for a code-span placeholder", () => {
+    // The code-span placeholder pair used to be U+E060/U+E061: a
+    // literal "\uE0600\uE061" sequence in engine text was then read
+    // back as "span 0" at restore time and replaced with the span's
+    // content ("Faith and Faith end"). The markers now sit at
+    // U+E066/U+E067, clear of that literal sequence.
+    expect(mapOne("`Faith` and \uE0600\uE061 end")).toBe("Faith and \uE0600\uE061 end");
+  });
+
+  it("keeps code-span content free of replacement artifacts", () => {
+    // Span content is restored after the main cleanup, so it is
+    // cleaned again at restore time; a well-formed pair survives.
+    expect(mapOne("`Faith\uD83D` hope")).toBe("Faith hope");
+    expect(mapOne("`Faith\uFFFD` hope")).toBe("Faith hope");
+    expect(mapOne("`🎧 Listen` now")).toBe("🎧 Listen now");
+  });
+});

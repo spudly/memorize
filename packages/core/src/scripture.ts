@@ -262,8 +262,28 @@ function restoreEscapedPunctuation(text: string): string {
   );
 }
 
-const CODE_SPAN_START = "\uE060";
-const CODE_SPAN_END = "\uE061";
+/**
+ * Drop replacement-character corruption from engine text (#77):
+ * U+FFFD itself, plus unpaired surrogates, which render as U+FFFD.
+ * Well-formed surrogate pairs (real astral characters in engine
+ * text, e.g. the 🎧 audio marker) are untouched. Applied to the raw
+ * input in toPlainText and again to code-span content when it is
+ * restored — span content bypasses the main cleanup behind its
+ * placeholder, so it needs the same treatment on the way back.
+ */
+function dropReplacementArtifacts(text: string): string {
+  return text
+    .replace(/\uFFFD/g, "")
+    .replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, "");
+}
+
+// Private-use placeholder pair for protected code spans. The values
+// sit clear of the escape placeholders above (U+E000–U+E01F) and of
+// the previously used U+E060/U+E061, which engine text can carry
+// literally: a literal "\uE0600\uE061" sequence was read back as
+// "span 0" at restore time and replaced with that span's content.
+const CODE_SPAN_START = "\uE066";
+const CODE_SPAN_END = "\uE067";
 
 function protectCodeSpans(text: string, spans: string[]): string {
   let out = "";
@@ -323,9 +343,10 @@ function protectCodeSpans(text: string, spans: string[]): string {
 }
 
 function restoreCodeSpans(text: string, spans: string[]): string {
-  return text.replace(/\uE060(\d+)\uE061/g, (_m, idxStr: string) => {
+  return text.replace(/\uE066(\d+)\uE067/g, (_m, idxStr: string) => {
     const idx = Number.parseInt(idxStr, 10);
-    return spans[idx] ?? _m;
+    const span = spans[idx];
+    return span === undefined ? _m : dropReplacementArtifacts(span);
   });
 }
 
@@ -656,11 +677,7 @@ export function toPlainText(raw: string): string {
   // well; well-formed surrogate pairs (real emoji in engine text,
   // e.g. the 🎧 audio marker) are untouched. This runs first so the
   // whitespace normalization below tidies any gap a drop leaves.
-  text = text.replace(/\uFFFD/g, "");
-  text = text.replace(
-    /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g,
-    "",
-  );
+  text = dropReplacementArtifacts(text);
   // Protect code spans FIRST: backslash escapes are not interpreted
   // inside a code span, so span content must be captured before
   // escape protection runs — otherwise "\*faith\*" inside backticks
@@ -782,7 +799,11 @@ export function toPlainText(raw: string): string {
   // encoded "*" is not emphasis), while an escaped "&lt;sup&gt;" still
   // stays literal because HTML tags were stripped above. Numeric
   // entities (&#8217;, &#x2019;) decode by code point; an out-of-range
-  // or surrogate value is left as-is rather than throwing.
+  // or surrogate value is left as-is rather than throwing. A numeric
+  // entity for U+FFFD itself (&#65533; / &#xFFFD;) decodes to nothing:
+  // it is the same replacement-character corruption as the raw form
+  // dropped at the top of this function, in entity form, and decoding
+  // runs after that cleanup (#77).
   // One combined pass: decoding numeric and named references in two
   // passes would reinterpret characters the first pass produced
   // ("&#38;lt;" must stay the literal text "&lt;", not become "<").
@@ -793,6 +814,9 @@ export function toPlainText(raw: string): string {
         return HTML_ENTITIES[entity] ?? entity;
       }
       const codePoint = Number.parseInt(decimal ?? hex, decimal !== undefined ? 10 : 16);
+      if (codePoint === 0xfffd) {
+        return "";
+      }
       return codePoint >= 1 &&
         codePoint <= 0x10ffff &&
         !(codePoint >= 0xd800 && codePoint <= 0xdfff)
