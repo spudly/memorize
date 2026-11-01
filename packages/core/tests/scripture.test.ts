@@ -540,7 +540,12 @@ describe("toPlainText manual-pass cases (#74)", () => {
   });
 
   it("drops empty-text links entirely", () => {
-    expect(mapOne("[](06_lecture_6.md)[]()")).toBe("");
+    // A result whose text is only empty-text links converts to
+    // nothing, so the mapper drops it instead of returning a verse
+    // with an empty body (CodeRabbit round on 5a0ed2d).
+    expect(mapGetResponse({ reference: "Talk excerpt", text: "[](06_lecture_6.md)[]()" })).toEqual(
+      [],
+    );
     expect(mapOne("Text [](06_lecture_6.md) more")).toBe("Text more");
   });
 
@@ -551,5 +556,43 @@ describe("toPlainText manual-pass cases (#74)", () => {
 
   it("leaves bare bracketed words alone", () => {
     expect(mapOne("the [Obedience] principle")).toBe("the [Obedience] principle");
+  });
+});
+
+describe("toPlainText round-3 cases (#74)", () => {
+  const mapOne = (text: string) => mapGetResponse({ reference: "Talk excerpt", text })[0]?.text;
+
+  it("does not rescan nested bare brackets exponentially", () => {
+    const nested = `${"[".repeat(30)}Faith${"]".repeat(30)}`;
+    expect(mapOne(nested)).toBe(nested);
+    // The already-processed label is consumed whole: an inner link
+    // inside bare outer brackets is unwrapped exactly once.
+    expect(mapOne("[[Moroni 7](https://example.test/m)]")).toBe("[Moroni 7]");
+  });
+
+  it("does not let a link destination scan cross into a later paragraph or line", () => {
+    expect(mapOne("[Listen to Audio](https://example.test/cut-off\n\n2) Pray daily.")).toBe(
+      "Listen to Audio\n\n2) Pray daily.",
+    );
+    expect(mapOne("[Listen](https://example.test/cut-off\n1) Faith")).toBe("Listen\n1) Faith");
+  });
+
+  it("preserves backslash-escaped punctuation as literal punctuation", () => {
+    expect(mapOne("\\*faith\\*")).toBe("*faith*");
+    expect(mapOne("\\_faith\\_")).toBe("_faith_");
+    expect(mapOne("\\`code\\`")).toBe("`code`");
+    expect(mapOne("\\*\\*faith\\*\\*")).toBe("**faith**");
+    expect(mapOne("\\[not a link](https://example.test/x)")).toBe(
+      "[not a link](https://example.test/x)",
+    );
+    // An escaped ampersand is literal, so what follows it is not an entity.
+    expect(mapOne("\\&amp; chips")).toBe("&amp; chips");
+  });
+
+  it("drops results whose converted text is empty", () => {
+    expect(mapGetResponse({ reference: "Talk excerpt", text: "<sup>[1](#fn-1)</sup>" })).toEqual(
+      [],
+    );
+    expect(mapOne("Faith <sup>[1](#fn-1)</sup>")).toBe("Faith");
   });
 });

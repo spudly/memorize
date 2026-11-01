@@ -163,6 +163,39 @@ const HTML_ENTITIES: Record<string, string> = {
   "&nbsp;": " ",
 };
 
+/**
+ * Backslash-escaped ASCII punctuation is literal text in Markdown,
+ * never markup: `\*faith\*` is the literal string `*faith*`, not
+ * emphasis, and `\[` never opens a link. The markup passes below are
+ * not escape-aware (their regexes would strip the escaped `*`, `_`,
+ * or backtick as a delimiter and leave the backslashes behind), so
+ * each escaped punctuation character is protected as a private-use
+ * placeholder before any cleanup runs and restored verbatim only
+ * after every pass — including entity decoding, so `\&amp;` restores
+ * to the literal text `&amp;` rather than decoding to `&`.
+ */
+const ESCAPED_PUNCTUATION = "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~";
+const ESCAPE_PLACEHOLDER_BASE = 0xe000;
+
+function protectEscapedPunctuation(text: string): string {
+  return text.replace(/\\([!"#$%&'()*+,\-./:;<=>?@\[\\\]^_`{|}~])/g, (_match, ch: string) =>
+    String.fromCharCode(ESCAPE_PLACEHOLDER_BASE + ESCAPED_PUNCTUATION.indexOf(ch)),
+  );
+}
+
+function restoreEscapedPunctuation(text: string): string {
+  return text.replace(
+    /[\uE000-\uE01F]/g,
+    (ch) => ESCAPED_PUNCTUATION[ch.charCodeAt(0) - ESCAPE_PLACEHOLDER_BASE] ?? ch,
+  );
+}
+
+/** Index of the first blank line (paragraph boundary) at or after `start`, or -1. */
+function paragraphBoundaryAfter(text: string, start: number): number {
+  const match = /\n[ \t]*\n/.exec(text.slice(start));
+  return match ? start + match.index : -1;
+}
+
 /** Index of the bracket closing the one at `open`, or -1. Honors nesting and backslash escapes. */
 function matchingBracket(text: string, open: number, openCh: string, closeCh: string): number {
   let depth = 0;
@@ -215,7 +248,15 @@ function stripMarkdownLinks(text: string): string {
       continue;
     }
     const open = isImage ? i + 1 : i;
-    const closeBracket = matchingBracket(text, open, "[", "]");
+    let closeBracket = matchingBracket(text, open, "[", "]");
+    // A link never spans a paragraph boundary: a "]" in a later
+    // paragraph does not close this bracket.
+    if (closeBracket !== -1) {
+      const boundary = paragraphBoundaryAfter(text, open);
+      if (boundary !== -1 && boundary < closeBracket) {
+        closeBracket = -1;
+      }
+    }
     if (closeBracket === -1) {
       out += text[i];
       i++;
@@ -226,8 +267,15 @@ function stripMarkdownLinks(text: string): string {
     const label = stripMarkdownLinks(text.slice(open + 1, closeBracket));
     const after = closeBracket + 1;
     if (text[after] === "(") {
+      // The destination scan is bounded by the current line (which
+      // also stops it crossing a paragraph boundary): a ")" on a
+      // later line does not terminate a destination cut off mid-URL,
+      // so the bounded fallback below runs instead and the following
+      // lines — paragraph breaks included — survive intact.
+      const lineEnd = text.indexOf("\n", after);
+      const limit = lineEnd === -1 ? text.length : lineEnd;
       const closeParen = matchingBracket(text, after, "(", ")");
-      if (closeParen !== -1) {
+      if (closeParen !== -1 && closeParen < limit) {
         out += label;
         i = closeParen + 1;
         continue;
@@ -235,8 +283,6 @@ function stripMarkdownLinks(text: string): string {
       // Unbalanced or cut-off destination: drop the destination
       // fragment up to the first ")" on this line, or to the line's
       // end when there is none, and keep only the label.
-      const lineEnd = text.indexOf("\n", after);
-      const limit = lineEnd === -1 ? text.length : lineEnd;
       const firstClose = text.indexOf(")", after);
       out += label;
       i = firstClose !== -1 && firstClose < limit ? firstClose + 1 : limit;
@@ -244,15 +290,21 @@ function stripMarkdownLinks(text: string): string {
     }
     if (text[after] === "[") {
       const closeRef = matchingBracket(text, after, "[", "]");
-      if (closeRef !== -1) {
+      const boundary = paragraphBoundaryAfter(text, after);
+      if (closeRef !== -1 && (boundary === -1 || closeRef < boundary)) {
         out += label;
         i = closeRef + 1;
         continue;
       }
     }
     // Not a link after all ("[Note]: …", "the [Obedience] principle").
-    out += text[i];
-    i++;
+    // Consume the whole matched bracket range using the label already
+    // processed above instead of advancing one character and
+    // rescanning the interior: with nested bare brackets the rescan
+    // reprocessed the same interior at every level, which is
+    // exponential work on adversarial input ("[[[[…Faith…]]]]").
+    out += `${isImage ? "!" : ""}[${label}]`;
+    i = closeBracket + 1;
   }
   return out;
 }
@@ -272,6 +324,10 @@ function stripMarkdownLinks(text: string): string {
  */
 export function toPlainText(raw: string): string {
   let text = raw.replace(/\r\n?/g, "\n");
+  // Protect backslash-escaped punctuation for the whole cleanup (see
+  // protectEscapedPunctuation above): the escapes are restored at the
+  // very end, after entity decoding and whitespace normalization.
+  text = protectEscapedPunctuation(text);
   // Footnote reference markers are pure clutter in a result card; drop
   // the whole <sup>…</sup> span, link syntax inside included. Only the
   // footnote form ("<sup>[1](#fn-1)</sup>") goes: any other superscript
@@ -332,11 +388,10 @@ export function toPlainText(raw: string): string {
   text = text.replace(/(?<!\*)\*(?!\s)([^*\n]+?)(?<!\s)\*(?!\d)(?!\*)/g, "$1");
   text = text.replace(/(?<![\w])_(?!\s)([^_\n]+?)(?<!\s)_(?![\w])/g, "$1");
   text = text.replace(/`([^`\n]+)`/g, "$1");
-  // Backslash escapes of ASCII punctuation are literal punctuation in
-  // Markdown ("1\. Faith…" on a hymn card kept its backslash): resolve
-  // them only now, after the structural rules, so an escaped character
-  // is never mistaken for markup ("\[" is not a link opener, "\#" is
-  // not a heading) by the passes above.
+  // Any backslash escape still in its raw form at this point was not
+  // present in the source (source escapes were protected above and
+  // are restored at the end); resolve it the same way so a character
+  // is never mistaken for markup by the passes above.
   text = text.replace(/\\([!"#$%&'()*+,\-./:;<=>?@\[\\\]^_`{|}~])/g, "$1");
   // Decode entities only after Markdown cleanup: decoded characters
   // are literal text (an encoded "#" is not a heading marker and an
@@ -363,11 +418,23 @@ export function toPlainText(raw: string): string {
   text = text.replace(/[ \t]+/g, " ");
   text = text.replace(/ +\n/g, "\n");
   text = text.replace(/\n{3,}/g, "\n\n");
-  return text.trim();
+  // Restore the protected escaped punctuation last: restored
+  // characters are literal text and must not be reinterpreted as
+  // markup, entities ("\&amp;" is the literal text "&amp;"), or
+  // whitespace by any pass above.
+  return restoreEscapedPunctuation(text.trim());
 }
 
-function buildVerse(reference: string, text: string, obj: Record<string, unknown>): Verse {
-  const verse: Verse = { id: normalizeReference(reference), reference, text: toPlainText(text) };
+function buildVerse(reference: string, text: string, obj: Record<string, unknown>): Verse | null {
+  const plain = toPlainText(text);
+  // Non-blank source markup can convert to nothing at all (an
+  // empty-text link, a lone footnote marker): that is not a result
+  // with an empty body, it is no result — both callers already drop
+  // nulls.
+  if (plain.length === 0) {
+    return null;
+  }
+  const verse: Verse = { id: normalizeReference(reference), reference, text: plain };
   const book = firstString(obj, ["book", "book_name"]);
   if (book !== undefined) {
     verse.book = book;
