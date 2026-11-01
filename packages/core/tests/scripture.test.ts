@@ -701,4 +701,11 @@ describe("toPlainText round-5 cases (#74)", () => {
     const input = "[".repeat(20000) + "Faith";
     expect(mapOne(input)).toBe(input);
   });
+
+  it("never matches brackets across a paragraph boundary, even past a backslash", () => {
+    // A trailing hard-break backslash before the blank line must not
+    // hide the boundary from the bracket matcher.
+    const input = "Faith [hope\\\n\nlove](https://x) end";
+    expect(mapOne(input)).toBe(input);
+  });
 });

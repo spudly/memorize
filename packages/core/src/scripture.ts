@@ -363,6 +363,11 @@ function bracketMatches(text: string, boundaries: number[]): Map<number, number>
     if (boundarySet.has(i)) stack.length = 0;
     const ch = text[i];
     if (ch === "\\") {
+      // The skipped character is never visited by the loop, so a
+      // boundary there must still reset the stack: a trailing
+      // hard-break backslash before a blank line must not let a
+      // bracket match across the paragraph.
+      if (boundarySet.has(i + 1)) stack.length = 0;
       i++;
     } else if (ch === "[") {
       stack.push(i);
