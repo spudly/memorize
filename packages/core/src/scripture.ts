@@ -65,6 +65,23 @@ const KNOWN_BOOK_NAMES: ReadonlySet<string> = new Set(
   ].map((name) => name.toLowerCase()),
 );
 
+// The engine also accepts spoken ordinals ("First Nephi" for "1 Nephi");
+// add those forms for every numbered book so the known-book check sees
+// them too.
+const ORDINAL_WORDS: Record<string, string> = {
+  "1": "first",
+  "2": "second",
+  "3": "third",
+  "4": "fourth",
+};
+for (const name of [...KNOWN_BOOK_NAMES]) {
+  const numbered = /^([1-4]) (.+)$/.exec(name);
+  const word = numbered?.[1] ? ORDINAL_WORDS[numbered[1]] : undefined;
+  if (numbered?.[2] && word) {
+    KNOWN_BOOK_NAMES.add(`${word} ${numbered[2]}`);
+  }
+}
+
 /** The book part of a canonical reference built by parseReference. */
 function referenceBookName(reference: string): string {
   const match = /^(.+?) \d+(?::\d+(?:\s*[-–]\s*\d+)?)?$/.exec(reference);
