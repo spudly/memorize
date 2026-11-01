@@ -25,8 +25,8 @@
   to readable plain text in @memorize/core — markdown images keep their
   alt text, footnote `<sup>` markers and empty anchor tags are dropped,
   headings/emphasis/links keep their words, remaining HTML tags are
-  stripped, and common entities are decoded. Scripture verse text, which
-  is already plain, passes through unchanged.
+  stripped, and common entities are decoded. Scripture verse text is
+  already plain. Whitespace is normalized and the text is trimmed.
 
 ## 1.1.1
 
