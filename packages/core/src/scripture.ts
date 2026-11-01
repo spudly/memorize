@@ -179,19 +179,26 @@ const HTML_ENTITIES: Record<string, string> = {
 export function toPlainText(raw: string): string {
   let text = raw.replace(/\r\n?/g, "\n");
   // Footnote reference markers are pure clutter in a result card; drop
-  // the whole <sup>…</sup> span, link syntax inside included.
-  text = text.replace(/<sup\b[^>]*>[\s\S]*?<\/sup\s*>/gi, "");
-  // Autolinks (<https://…>) would otherwise be eaten as HTML tags.
+  // the whole <sup>…</sup> span, link syntax inside included. Only the
+  // footnote form ("<sup>[1](#fn-1)</sup>") goes: any other superscript
+  // (an exponent, an ordinal suffix like "19<sup>th</sup>") is content,
+  // and the generic tag strip below keeps its text.
+  text = text.replace(/<sup\b[^>]*>\s*\[[^\]]*\]\(#fn-[^)\s]*\)\s*<\/sup\s*>/gi, "");
+  // Autolinks (<https://…>, <someone@example.org>) would otherwise be
+  // eaten as HTML tags.
   text = text.replace(/<(https?:\/\/[^>\s]+)>/g, "$1");
+  text = text.replace(/<([\w.+-]+@[\w-]+(?:\.[\w-]+)+)>/g, "$1");
   // Reference definitions are pure syntax once references resolve;
   // drop the whole line — but only lines that are valid definitions
-  // (a bracketed label, a destination, an optional quoted title).
+  // (a bracketed label, a destination, an optional quoted title) with
+  // at most three leading spaces: four or more make the line an
+  // indented code block in Markdown, i.e. content, not a definition.
   // Ordinary text that merely starts with a bracketed label and a
   // colon ("[Note]: Remember to pray…") is content, not a definition,
   // and stays. Footnote definitions ("[^1]: …") carry prose after the
   // colon by design, so they get their own rule.
   text = text.replace(
-    /^[ \t]*\[[^\]]+\]:[ \t]*(?:<[^>\n]*>|\S+)(?:[ \t]+(?:"[^"\n]*"|'[^'\n]*'|\([^()\n]*\)))?[ \t]*$/gm,
+    /^ {0,3}\[[^\]]+\]:[ \t]*(?:<[^>\n]*>|\S+)(?:[ \t]+(?:"[^"\n]*"|'[^'\n]*'|\([^()\n]*\)))?[ \t]*$/gm,
     "",
   );
   text = text.replace(/^[ \t]*\[\^[^\]]+\]:.*$/gm, "");
@@ -221,8 +228,11 @@ export function toPlainText(raw: string): string {
   // arithmetic, not emphasis ("2*3*4", "2**3**4"): the closing-side
   // (?!\d) keeps those intact, while emphasis that merely follows a
   // digit ("1*st*", "1**st**") or wraps digits ("**3**") still
-  // unwraps.
-  text = text.replace(/(\*\*|__)(?!\s)([\s\S]*?)(?<!\s)\1(?!\d)/g, "$2");
+  // unwraps. The captured content may not itself contain the delimiter
+  // pair, so when the digit guard rejects a closing pair the match
+  // fails there instead of swallowing a later emphasis span
+  // ("2**3**4 and **faith**" keeps the operator, unwraps "faith").
+  text = text.replace(/(\*\*|__)(?!\s)((?:(?!\1)[\s\S])*?)(?<!\s)\1(?!\d)/g, "$2");
   text = text.replace(/~~(?!\s)([\s\S]*?)(?<!\s)~~/g, "$1");
   text = text.replace(/(?<!\*)\*(?!\s)([^*\n]+?)(?<!\s)\*(?!\d)(?!\*)/g, "$1");
   text = text.replace(/(?<![\w])_(?!\s)([^_\n]+?)(?<!\s)_(?![\w])/g, "$1");

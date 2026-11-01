@@ -488,3 +488,28 @@ describe("toPlainText Copilot-round cases (#74)", () => {
     expect(mapOne("Fish &amp; chips")).toBe("Fish & chips");
   });
 });
+
+describe("toPlainText fb81f6 review-round cases (#74)", () => {
+  const mapOne = (text: string) => mapGetResponse({ reference: "Talk excerpt", text })[0]?.text;
+
+  it("does not let a rejected arithmetic pair swallow a later emphasis span", () => {
+    expect(mapOne("2**3**4 and **faith**")).toBe("2**3**4 and faith");
+    expect(mapOne("a **b** c **d** e")).toBe("a b c d e");
+  });
+
+  it("drops only footnote sup spans and keeps other superscripts as text", () => {
+    expect(mapOne("Faith<sup>[1](#fn-1)</sup> grows")).toBe("Faith grows");
+    expect(mapOne("the 19<sup>th</sup> century")).toBe("the 19th century");
+    expect(mapOne("x<sup>2</sup> plus y")).toBe("x2 plus y");
+  });
+
+  it("drops reference definitions only at up to three leading spaces", () => {
+    expect(mapOne("Text.\n\n   [1]: https://example.test/a")).toBe("Text.");
+    expect(mapOne("Text.\n\n    [1]: https://example.test/a")).toBe("Text.\n\n [1]: https://example.test/a");
+  });
+
+  it("keeps the address in email autolinks", () => {
+    expect(mapOne("Contact <help@example.org> today.")).toBe("Contact help@example.org today.");
+    expect(mapOne("See <https://example.test/x> now.")).toBe("See https://example.test/x now.");
+  });
+});
