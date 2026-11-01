@@ -196,10 +196,23 @@ export function toPlainText(raw: string): string {
   text = text.replace(/<\/(?:p|div|li|ul|ol|h[1-6]|blockquote|tr|section|article)\s*>/gi, "\n");
   // Any remaining HTML tags go, keeping the text they wrapped.
   text = text.replace(/<\/?[a-zA-Z][^>]*>/g, "");
-  // Decode entities after tag stripping, so an escaped "&lt;sup&gt;"
-  // stays literal text instead of becoming a tag. Numeric entities
-  // (&#8217;, &#x2019;) decode by code point; an out-of-range or
-  // surrogate value is left as-is rather than throwing.
+  // Markdown line structure: headings and blockquotes keep their words.
+  text = text.replace(/^[ \t]{0,3}#{1,6}[ \t]+/gm, "");
+  text = text.replace(/^[ \t]*>[ \t]?/gm, "");
+  // Emphasis and code markers keep the words they wrap. Delimiters
+  // must hug non-whitespace content, so literal operators in ordinary
+  // text (e.g. "2 * 3 * 4") are not mistaken for emphasis.
+  text = text.replace(/(\*\*|__)(?!\s)([\s\S]*?)(?<!\s)\1/g, "$2");
+  text = text.replace(/~~(?!\s)([\s\S]*?)(?<!\s)~~/g, "$1");
+  text = text.replace(/\*(?!\s)([^*\n]+?)(?<!\s)\*/g, "$1");
+  text = text.replace(/(?<![\w])_(?!\s)([^_\n]+?)(?<!\s)_(?![\w])/g, "$1");
+  text = text.replace(/`([^`\n]+)`/g, "$1");
+  // Decode entities only after Markdown cleanup: decoded characters
+  // are literal text (an encoded "#" is not a heading marker and an
+  // encoded "*" is not emphasis), while an escaped "&lt;sup&gt;" still
+  // stays literal because HTML tags were stripped above. Numeric
+  // entities (&#8217;, &#x2019;) decode by code point; an out-of-range
+  // or surrogate value is left as-is rather than throwing.
   text = text.replace(/&#(\d+);|&#x([0-9a-fA-F]+);/g, (entity, decimal, hex) => {
     const codePoint = Number.parseInt(decimal ?? hex, decimal !== undefined ? 10 : 16);
     return codePoint >= 1 && codePoint <= 0x10ffff && !(codePoint >= 0xd800 && codePoint <= 0xdfff)
@@ -210,15 +223,6 @@ export function toPlainText(raw: string): string {
     /&(?:amp|lt|gt|quot|#39|apos|nbsp);/g,
     (entity) => HTML_ENTITIES[entity] ?? entity,
   );
-  // Markdown line structure: headings and blockquotes keep their words.
-  text = text.replace(/^[ \t]{0,3}#{1,6}[ \t]+/gm, "");
-  text = text.replace(/^[ \t]*>[ \t]?/gm, "");
-  // Emphasis and code markers keep the words they wrap.
-  text = text.replace(/(\*\*|__)([\s\S]*?)\1/g, "$2");
-  text = text.replace(/~~([\s\S]*?)~~/g, "$1");
-  text = text.replace(/\*([^*\n]+)\*/g, "$1");
-  text = text.replace(/(?<![\w])_([^_\n]+)_(?![\w])/g, "$1");
-  text = text.replace(/`([^`\n]+)`/g, "$1");
   // Normalize whitespace: no trailing spaces, no run of blank lines.
   text = text.replace(/[ \t]+/g, " ");
   text = text.replace(/ +\n/g, "\n");

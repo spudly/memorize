@@ -427,3 +427,19 @@ describe("toPlainText review-round cases (#74)", () => {
     expect(results[0]?.text).toBe("Charity But charity is the pure love of Christ.");
   });
 });
+
+describe("toPlainText literal-text cases (#74)", () => {
+  const mapOne = (text: string) => mapGetResponse({ reference: "Talk excerpt", text })[0]?.text;
+
+  it("preserves literal operators instead of treating them as emphasis", () => {
+    expect(mapOne("2 * 3 * 4")).toBe("2 * 3 * 4");
+    expect(mapOne("2 ** 3 ** 4")).toBe("2 ** 3 ** 4");
+    expect(mapOne("A *real* emphasis")).toBe("A real emphasis");
+  });
+
+  it("keeps characters produced by entity decoding literal", () => {
+    expect(mapOne("&#35; 1 priority")).toBe("# 1 priority");
+    expect(mapOne("&#42;not emphasis&#42;")).toBe("*not emphasis*");
+    expect(mapOne("Fish &#38; chips")).toBe("Fish & chips");
+  });
+});
