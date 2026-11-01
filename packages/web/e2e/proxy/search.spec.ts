@@ -37,6 +37,12 @@ const SEARCH_CHARITY = {
       reference: "Moroni 7:47",
       text: "But charity is the pure love of Christ, and it endureth forever.",
     },
+    {
+      // Talk/manual-style result carrying its source markup inline —
+      // the #74 QA finding. The card must render the cleaned text.
+      reference: "Elaine L. Jack, Relief Society",
+      text: "# Charity\n\n![Elaine L. Jack](https://example.test/portrait) **Charity** is the pure love of Christ.<sup>[1](#fn-1)</sup>",
+    },
   ],
 };
 
@@ -92,7 +98,17 @@ test("keyword search renders results from the /api/search fixture", async ({ pag
   await page.goto("/");
   await search(page, "charity");
   await expect(page.getByText("Moroni 7:47", { exact: true })).toBeVisible();
-  await expect(page.getByText(/pure love of Christ/)).toBeVisible();
+  await expect(
+    page.getByText("But charity is the pure love of Christ, and it endureth forever.", { exact: true }),
+  ).toBeVisible();
+  // #74 regression: the markup-laden talk result renders cleaned —
+  // alt text kept, heading/emphasis markers and the footnote span gone.
+  await expect(
+    page.getByText("Charity Elaine L. Jack Charity is the pure love of Christ.", { exact: true }),
+  ).toBeVisible();
+  await expect(page.locator("body")).not.toContainText("![Elaine L. Jack]");
+  await expect(page.locator("body")).not.toContainText("<sup>");
+  await expect(page.locator("body")).not.toContainText("[1](#fn-1)");
   expect(searchRequests).toHaveLength(1);
   expect(searchRequests[0]).toContain("q=charity");
 });

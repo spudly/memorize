@@ -42,26 +42,98 @@ const BOOK_ALIASES: Record<string, string> = {
 const KNOWN_BOOK_NAMES: Set<string> = new Set(
   [
     // Old Testament
-    "Genesis", "Exodus", "Leviticus", "Numbers", "Deuteronomy", "Joshua",
-    "Judges", "Ruth", "1 Samuel", "2 Samuel", "1 Kings", "2 Kings",
-    "1 Chronicles", "2 Chronicles", "Ezra", "Nehemiah", "Esther", "Job",
-    "Psalms", "Psalm", "Proverbs", "Ecclesiastes", "Song of Solomon",
-    "Song of Songs", "Isaiah", "Jeremiah", "Lamentations", "Ezekiel",
-    "Daniel", "Hosea", "Joel", "Amos", "Obadiah", "Jonah", "Micah",
-    "Nahum", "Habakkuk", "Zephaniah", "Haggai", "Zechariah", "Malachi",
+    "Genesis",
+    "Exodus",
+    "Leviticus",
+    "Numbers",
+    "Deuteronomy",
+    "Joshua",
+    "Judges",
+    "Ruth",
+    "1 Samuel",
+    "2 Samuel",
+    "1 Kings",
+    "2 Kings",
+    "1 Chronicles",
+    "2 Chronicles",
+    "Ezra",
+    "Nehemiah",
+    "Esther",
+    "Job",
+    "Psalms",
+    "Psalm",
+    "Proverbs",
+    "Ecclesiastes",
+    "Song of Solomon",
+    "Song of Songs",
+    "Isaiah",
+    "Jeremiah",
+    "Lamentations",
+    "Ezekiel",
+    "Daniel",
+    "Hosea",
+    "Joel",
+    "Amos",
+    "Obadiah",
+    "Jonah",
+    "Micah",
+    "Nahum",
+    "Habakkuk",
+    "Zephaniah",
+    "Haggai",
+    "Zechariah",
+    "Malachi",
     // New Testament
-    "Matthew", "Mark", "Luke", "John", "Acts", "Romans", "1 Corinthians",
-    "2 Corinthians", "Galatians", "Ephesians", "Philippians", "Colossians",
-    "1 Thessalonians", "2 Thessalonians", "1 Timothy", "2 Timothy",
-    "Titus", "Philemon", "Hebrews", "James", "1 Peter", "2 Peter",
-    "1 John", "2 John", "3 John", "Jude", "Revelation",
+    "Matthew",
+    "Mark",
+    "Luke",
+    "John",
+    "Acts",
+    "Romans",
+    "1 Corinthians",
+    "2 Corinthians",
+    "Galatians",
+    "Ephesians",
+    "Philippians",
+    "Colossians",
+    "1 Thessalonians",
+    "2 Thessalonians",
+    "1 Timothy",
+    "2 Timothy",
+    "Titus",
+    "Philemon",
+    "Hebrews",
+    "James",
+    "1 Peter",
+    "2 Peter",
+    "1 John",
+    "2 John",
+    "3 John",
+    "Jude",
+    "Revelation",
     // Book of Mormon
-    "1 Nephi", "2 Nephi", "Jacob", "Enos", "Jarom", "Omni",
-    "Words of Mormon", "Mosiah", "Alma", "Helaman", "3 Nephi", "4 Nephi",
-    "Mormon", "Ether", "Moroni",
+    "1 Nephi",
+    "2 Nephi",
+    "Jacob",
+    "Enos",
+    "Jarom",
+    "Omni",
+    "Words of Mormon",
+    "Mosiah",
+    "Alma",
+    "Helaman",
+    "3 Nephi",
+    "4 Nephi",
+    "Mormon",
+    "Ether",
+    "Moroni",
     // Doctrine and Covenants / Pearl of Great Price
-    "Doctrine and Covenants", "Moses", "Abraham", "Joseph Smith—Matthew",
-    "Joseph Smith—History", "Articles of Faith",
+    "Doctrine and Covenants",
+    "Moses",
+    "Abraham",
+    "Joseph Smith—Matthew",
+    "Joseph Smith—History",
+    "Articles of Faith",
   ].map((name) => name.toLowerCase().replace(/[—–]/g, "-")),
 );
 
@@ -153,8 +225,586 @@ function firstString(obj: Record<string, unknown>, keys: string[]): string | und
   return undefined;
 }
 
-function buildVerse(reference: string, text: string, obj: Record<string, unknown>): Verse {
-  const verse: Verse = { id: normalizeReference(reference), reference, text };
+const HTML_ENTITIES: Record<string, string> = {
+  "&amp;": "&",
+  "&lt;": "<",
+  "&gt;": ">",
+  "&quot;": '"',
+  "&#39;": "'",
+  "&apos;": "'",
+  "&nbsp;": " ",
+};
+
+/**
+ * Backslash-escaped ASCII punctuation is literal text in Markdown,
+ * never markup: `\*faith\*` is the literal string `*faith*`, not
+ * emphasis, and `\[` never opens a link. The markup passes below are
+ * not escape-aware (their regexes would strip the escaped `*`, `_`,
+ * or backtick as a delimiter and leave the backslashes behind), so
+ * each escaped punctuation character is protected as a private-use
+ * placeholder before any cleanup runs and restored verbatim only
+ * after every pass — including entity decoding, so `\&amp;` restores
+ * to the literal text `&amp;` rather than decoding to `&`.
+ */
+const ESCAPED_PUNCTUATION = "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~";
+const ESCAPE_PLACEHOLDER_BASE = 0xe000;
+
+function protectEscapedPunctuation(text: string): string {
+  return text.replace(/\\([!"#$%&'()*+,\-./:;<=>?@\[\\\]^_`{|}~])/g, (_match, ch: string) =>
+    String.fromCharCode(ESCAPE_PLACEHOLDER_BASE + ESCAPED_PUNCTUATION.indexOf(ch)),
+  );
+}
+
+function restoreEscapedPunctuation(text: string): string {
+  return text.replace(
+    /[\uE000-\uE01F]/g,
+    (ch) => ESCAPED_PUNCTUATION[ch.charCodeAt(0) - ESCAPE_PLACEHOLDER_BASE] ?? ch,
+  );
+}
+
+const CODE_SPAN_START = "\uE060";
+const CODE_SPAN_END = "\uE061";
+
+function protectCodeSpans(text: string, spans: string[]): string {
+  let out = "";
+  let i = 0;
+  while (i < text.length) {
+    // An escaped character is literal text: an escaped backtick
+    // never opens a code span. (Escapes inside a span need no
+    // handling — span content is literal by definition.)
+    if (text[i] === "\\" && i + 1 < text.length) {
+      out += text.slice(i, i + 2);
+      i += 2;
+      continue;
+    }
+    if (text[i] !== "`") {
+      out += text[i];
+      i++;
+      continue;
+    }
+    let runEnd = i;
+    while (runEnd < text.length && text[runEnd] === "`") runEnd++;
+    const runLen = runEnd - i;
+    // Find a closing run of the same length on the same line.
+    let closeStart = -1;
+    let closeEnd = -1;
+    let j = runEnd;
+    const lineLimit = (() => {
+      const nl = text.indexOf("\n", i);
+      return nl === -1 ? text.length : nl;
+    })();
+    while (j < lineLimit) {
+      if (text[j] === "`") {
+        let rEnd = j;
+        while (rEnd < text.length && text[rEnd] === "`") rEnd++;
+        if (rEnd - j === runLen) {
+          closeStart = j;
+          closeEnd = rEnd;
+          break;
+        }
+        j = rEnd;
+      } else {
+        j++;
+      }
+    }
+    if (closeStart === -1 || closeStart === runEnd) {
+      // No closing run (or empty content) on this line: leave literal.
+      out += text.slice(i, runEnd);
+      i = runEnd;
+      continue;
+    }
+    const content = text.slice(runEnd, closeStart);
+    const idx = spans.length;
+    spans.push(content);
+    out += `${CODE_SPAN_START}${idx}${CODE_SPAN_END}`;
+    i = closeEnd;
+  }
+  return out;
+}
+
+function restoreCodeSpans(text: string, spans: string[]): string {
+  return text.replace(/\uE060(\d+)\uE061/g, (_m, idxStr: string) => {
+    const idx = Number.parseInt(idxStr, 10);
+    return spans[idx] ?? _m;
+  });
+}
+
+function normalizeLinkLabel(label: string): string {
+  return label.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+/** All paragraph-boundary start indices in `text`, computed in one pass. */
+function paragraphBoundaries(text: string): number[] {
+  const indices: number[] = [];
+  const re = /\n[ \t]*\n/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    indices.push(m.index);
+    // Advance by 1 so overlapping boundaries are also recorded.
+    re.lastIndex = m.index + 1;
+  }
+  return indices;
+}
+
+/**
+ * Every matched square-bracket pair in `text`, computed in one
+ * stack pass: opening index -> closing index. Honors backslash
+ * escapes, and matches never cross a paragraph boundary (the stack
+ * resets there). Looking matches up in this map replaces rescanning
+ * from every "[": when no closing bracket exists at all, the old
+ * per-"[" rescan advanced one character and rescanned the whole
+ * remainder, which is quadratic work on input like "[[[[…Faith".
+ */
+function bracketMatches(text: string, boundaries: number[]): Map<number, number> {
+  const matches = new Map<number, number>();
+  const boundarySet = new Set(boundaries);
+  const stack: number[] = [];
+  for (let i = 0; i < text.length; i++) {
+    if (boundarySet.has(i)) stack.length = 0;
+    const ch = text[i];
+    if (ch === "\\") {
+      // The skipped character is never visited by the loop, so a
+      // boundary there must still reset the stack: a trailing
+      // hard-break backslash before a blank line must not let a
+      // bracket match across the paragraph.
+      if (boundarySet.has(i + 1)) stack.length = 0;
+      i++;
+    } else if (ch === "[") {
+      stack.push(i);
+    } else if (ch === "]" && stack.length > 0) {
+      matches.set(stack.pop() as number, i);
+    }
+  }
+  return matches;
+}
+
+/**
+ * Index of the ")" closing an inline link whose "(" is at `open`,
+ * or -1 when there is no well-formed close before `limit`. The
+ * destination is scanned with a paren-depth counter (nested parens
+ * stay inside it), and an optional title after the destination is
+ * parsed separately: a quoted title ("…" or '…') may itself contain
+ * parentheses, which belong to the title, not the destination, and a
+ * parenthesized title is skipped as a balanced group. Without the
+ * separate title parse, a title like "Faith ) hope" ended the link
+ * early and leaked the rest of the title into the text.
+ */
+function inlineLinkEnd(text: string, open: number, limit: number): number {
+  let i = open + 1;
+  while (i < limit && (text[i] === " " || text[i] === "\t")) i++;
+  let depth = 0;
+  while (i < limit) {
+    const ch = text[i];
+    if (ch === "\\") {
+      i += 2;
+      continue;
+    }
+    if (ch === "(") {
+      depth++;
+      i++;
+      continue;
+    }
+    if (ch === ")") {
+      if (depth === 0) return i;
+      depth--;
+      i++;
+      continue;
+    }
+    if (ch === " " || ch === "\t") {
+      // The destination ended; only an optional title and the
+      // closing ")" may follow.
+      let j = i;
+      while (j < limit && (text[j] === " " || text[j] === "\t")) j++;
+      if (j >= limit) return -1;
+      const opener = text[j] as string;
+      if (opener === '"' || opener === "'") {
+        let k = j + 1;
+        while (k < limit && text[k] !== opener) {
+          if (text[k] === "\\") k++;
+          k++;
+        }
+        if (k >= limit) return -1;
+        j = k + 1;
+      } else if (opener === "(") {
+        let inner = 0;
+        let k = j;
+        let closed = false;
+        while (k < limit) {
+          const kc = text[k];
+          if (kc === "\\") {
+            k += 2;
+            continue;
+          }
+          if (kc === "(") inner++;
+          else if (kc === ")") {
+            inner--;
+            if (inner === 0) {
+              closed = true;
+              break;
+            }
+          }
+          k++;
+        }
+        if (!closed) return -1;
+        j = k + 1;
+      } else {
+        return -1;
+      }
+      while (j < limit && (text[j] === " " || text[j] === "\t")) j++;
+      return j < limit && text[j] === ")" ? j : -1;
+    }
+    i++;
+  }
+  return -1;
+}
+
+/**
+ * Plain paren-depth scan for an inline link's closing ")": the
+ * fallback when the title-aware scan above cannot parse the shape
+ * (e.g. a parenthesized title containing an unbalanced ")", which
+ * CommonMark titles may not contain but engine text might). Honors
+ * backslash escapes; bounded by `limit`.
+ */
+function parenDepthEnd(text: string, open: number, limit: number): number {
+  const end = Math.min(limit, text.length);
+  let depth = 0;
+  for (let i = open; i < end; i++) {
+    const ch = text[i];
+    if (ch === "\\") {
+      i++;
+    } else if (ch === "(") {
+      depth++;
+    } else if (ch === ")") {
+      depth--;
+      if (depth === 0) return i;
+    }
+  }
+  return -1;
+}
+
+/**
+ * Replace Markdown images and links with their alt/link text.
+ *
+ * Inline destinations are scanned with a paren-depth counter, so
+ * parentheses nested any number of levels deep stay inside the
+ * destination instead of ending it early. Two failure shapes from
+ * live engine text get a bounded fallback when no balanced close
+ * exists on the line: an unbalanced "(" in the destination (the
+ * link's own closing paren was already spent as an inner close) ends
+ * at the first ")" on the line, and a destination cut off mid-URL
+ * ends at the line's end — in both cases the readable label survives
+ * and the prose after the line is untouched. Reference-style
+ * ("[text][ref]") forms keep their text the same way, a bare
+ * "[word]" with no destination is ordinary text and stays, and an
+ * escaped bracket ("\[") never opens a link.
+ */
+function stripMarkdownLinks(text: string, definedRefs: Set<string> = new Set<string>()): string {
+  const boundaries = paragraphBoundaries(text);
+  const matches = bracketMatches(text, boundaries);
+  let cachedLineEnd = -1;
+  const lineEndFrom = (pos: number): number => {
+    if (cachedLineEnd !== -1 && pos <= cachedLineEnd) return cachedLineEnd;
+    const idx = text.indexOf("\n", pos);
+    cachedLineEnd = idx === -1 ? text.length : idx;
+    return cachedLineEnd;
+  };
+  let out = "";
+  let i = 0;
+  while (i < text.length) {
+    // An escaped character is literal text, never markup.
+    if (text[i] === "\\" && i + 1 < text.length) {
+      out += text.slice(i, i + 2);
+      i += 2;
+      continue;
+    }
+    const isImage = text[i] === "!" && text[i + 1] === "[";
+    if (!isImage && text[i] !== "[") {
+      out += text[i];
+      i++;
+      continue;
+    }
+    const open = isImage ? i + 1 : i;
+    // A link never spans a paragraph boundary; bracketMatches
+    // already guarantees the match (if any) stays inside one.
+    const closeBracket = matches.get(open) ?? -1;
+    if (closeBracket === -1) {
+      out += text[i];
+      i++;
+      continue;
+    }
+    // Recurse into the label: a linked image ("[![alt](img)](page)")
+    // carries a whole image inside its link text.
+    const label = stripMarkdownLinks(text.slice(open + 1, closeBracket), definedRefs);
+    const after = closeBracket + 1;
+    if (text[after] === "(") {
+      const limit = lineEndFrom(after);
+      // Angle-bracket destination: may contain unbalanced parens/spaces.
+      let angleHandled = false;
+      {
+        let p = after + 1;
+        while (p < limit && (text[p] === " " || text[p] === "\t")) p++;
+        if (p < limit && text[p] === "<") {
+          const gt = text.indexOf(">", p + 1);
+          if (gt !== -1 && gt < limit) {
+            let q = gt + 1;
+            while (q < limit && (text[q] === " " || text[q] === "\t")) q++;
+            let malformed = false;
+            if (q < limit && (text[q] === '"' || text[q] === "'")) {
+              const quote = text[q] as string;
+              const endQuote = text.indexOf(quote, q + 1);
+              if (endQuote === -1 || endQuote >= limit) malformed = true;
+              else {
+                q = endQuote + 1;
+                while (q < limit && (text[q] === " " || text[q] === "\t")) q++;
+              }
+            } else if (q < limit && text[q] === "(") {
+              const endParen = text.indexOf(")", q + 1);
+              if (endParen === -1 || endParen >= limit) malformed = true;
+              else {
+                q = endParen + 1;
+                while (q < limit && (text[q] === " " || text[q] === "\t")) q++;
+              }
+            }
+            if (!malformed && q < limit && text[q] === ")") {
+              out += label;
+              i = q + 1;
+              angleHandled = true;
+            }
+          }
+        }
+      }
+      if (angleHandled) continue;
+      const titleAwareEnd = inlineLinkEnd(text, after, limit);
+      const closeParen = titleAwareEnd !== -1 ? titleAwareEnd : parenDepthEnd(text, after, limit);
+      if (closeParen !== -1 && closeParen < limit) {
+        out += label;
+        i = closeParen + 1;
+        continue;
+      }
+      // Unbalanced or cut-off destination: drop the destination
+      // fragment up to the first ")" on this line, or to the line's
+      // end when there is none, and keep only the label.
+      const firstClose = text.indexOf(")", after);
+      out += label;
+      i = firstClose !== -1 && firstClose < limit ? firstClose + 1 : limit;
+      continue;
+    }
+    if (text[after] === "[") {
+      const closeRef = matches.get(after) ?? -1;
+      if (closeRef !== -1) {
+        // A reference-style suffix is consumed only when its label
+        // has a definition; an undefined reference is ordinary text,
+        // not a link ("Read [Faith][Hope] today." keeps "Hope").
+        // A collapsed "[]" reference uses the first label.
+        const refLabel = text.slice(after + 1, closeRef);
+        const effectiveLabel =
+          refLabel.trim() === "" ? text.slice(open + 1, closeBracket) : refLabel;
+        if (definedRefs.has(normalizeLinkLabel(effectiveLabel))) {
+          out += label;
+          i = closeRef + 1;
+          continue;
+        }
+      }
+      // Undefined reference suffix: fall through and treat the first
+      // bracket on its own (shortcut reference or literal text); the
+      // second bracket is then processed on its own merits.
+    }
+    // Shortcut reference: a bare bracket whose label has a definition.
+    if (definedRefs.has(normalizeLinkLabel(label))) {
+      out += label;
+      i = closeBracket + 1;
+      continue;
+    }
+    // Not a link after all ("[Note]: …", "the [Obedience] principle").
+    // Consume the whole matched bracket range using the label already
+    // processed above instead of advancing one character and
+    // rescanning the interior: with nested bare brackets the rescan
+    // reprocessed the same interior at every level, which is
+    // exponential work on adversarial input ("[[[[…Faith…]]]]").
+    out += `${isImage ? "!" : ""}[${label}]`;
+    i = closeBracket + 1;
+  }
+  return out;
+}
+
+/**
+ * Convert engine source text to readable plain text (#74).
+ *
+ * Scripture verses arrive as plain text, but full-library results for
+ * talks, manuals, and study aids carry their source markup inline:
+ * markdown images (`![Elaine L. Jack](https://…)`), footnote markup
+ * (`<sup>[1](#fn-1)</sup>`, `<a id="fn-21"></a>`), markdown headings
+ * (`# Prayer`), emphasis markers, and raw HTML tags. Both apps render
+ * `Verse.text` as-is, so the markup is stripped here, at the single
+ * mapping choke point, keeping the readable words and dropping the
+ * syntax around them. Plain text passes through unchanged apart from
+ * whitespace normalization.
+ */
+export function toPlainText(raw: string): string {
+  let text = raw.replace(/\r\n?/g, "\n");
+  // Protect code spans FIRST: backslash escapes are not interpreted
+  // inside a code span, so span content must be captured before
+  // escape protection runs — otherwise "\*faith\*" inside backticks
+  // came back as "*faith*", its literal backslashes eaten by the
+  // escape placeholders. The span scanner is itself escape-aware, so
+  // an escaped backtick outside a span still never opens one.
+  const codeSpans: string[] = [];
+  text = protectCodeSpans(text, codeSpans);
+  // Protect backslash-escaped punctuation for the whole cleanup (see
+  // protectEscapedPunctuation above): the escapes are restored at the
+  // very end, after entity decoding and whitespace normalization.
+  text = protectEscapedPunctuation(text);
+  // HTML comments are not content; remove them (code spans already
+  // protected, so comments inside code spans survive literally).
+  text = text.replace(/<!--[\s\S]*?-->/g, "");
+  // Footnote reference markers are pure clutter in a result card; drop
+  // the whole <sup>…</sup> span, link syntax inside included. Only the
+  // footnote form ("<sup>[1](#fn-1)</sup>") goes: any other superscript
+  // (an exponent, an ordinal suffix like "19<sup>th</sup>") is content,
+  // and the generic tag strip below keeps its text.
+  text = text.replace(/<sup\b[^>]*>\s*\[[^\]]*\]\(#fn-[^)\s]*\)\s*<\/sup\s*>/gi, "");
+  // Autolinks are unwrapped after stripMarkdownLinks below, not here:
+  // unwrapping here would also unwrap an angle-bracket link
+  // destination ("[Read](<https://…a)b>)"), destroying its ">" so the
+  // link scanner could no longer find the destination's end.
+  // Reference definitions are pure syntax once references resolve;
+  // drop the whole line — but only lines that are valid definitions
+  // (a bracketed label, a destination, an optional quoted title) with
+  // at most three leading spaces: four or more make the line an
+  // indented code block in Markdown, i.e. content, not a definition.
+  // Ordinary text that merely starts with a bracketed label and a
+  // colon ("[Note]: Remember to pray…") is content, not a definition,
+  // and stays. Footnote definitions ("[^1]: …") carry prose after the
+  // colon by design, so they get their own rule.
+  const definedRefs = new Set<string>();
+  {
+    const defRe =
+      /^ {0,3}\[([^\]]+)\]:[ \t]*(?:<[^>\n]*>|\S+)(?:[ \t]+(?:"[^"\n]*"|'[^'\n]*'|\([^()\n]*\)))?[ \t]*$/gm;
+    let dm: RegExpExecArray | null;
+    while ((dm = defRe.exec(text)) !== null) {
+      // Footnote definitions ("[^1]: Ibid.") also match defRe when
+      // their body is a single token, but a footnote label is not a
+      // link reference: admitting "^1" would make every "[^1]"
+      // marker resolve as a shortcut reference and leave a stray
+      // "^1" in the card. Footnote definitions are removed by their
+      // own rule below.
+      if (dm[1] !== undefined && !dm[1].startsWith("^")) {
+        definedRefs.add(normalizeLinkLabel(dm[1]));
+      }
+    }
+  }
+  text = text.replace(
+    /^ {0,3}\[[^\]]+\]:[ \t]*(?:<[^>\n]*>|\S+)(?:[ \t]+(?:"[^"\n]*"|'[^'\n]*'|\([^()\n]*\)))?[ \t]*$/gm,
+    "",
+  );
+  text = text.replace(/^[ \t]*\[\^[^\]]+\]:.*$/gm, "");
+  // Markdown images and links (inline and reference style) keep only
+  // their alt/link text; empty-text forms ("[](06_lecture_6.md)") drop
+  // entirely. A scanner, not a regex: real engine destinations defeat
+  // the "(one level of balanced parens)" pattern — URLs with parens
+  // nested two deep, an unbalanced "(" that makes the closing paren
+  // read as an inner group close, and destinations cut off mid-URL
+  // all left the raw "[text](…)" syntax on live search cards (#74
+  // manual pass on fb81f6d: Hunter chapter audio links, chapter
+  // images). See stripMarkdownLinks below.
+  text = stripMarkdownLinks(text, definedRefs);
+  // Autolinks (<https://…>, <someone@example.org>) would otherwise be
+  // eaten as HTML tags by the generic tag strip below.
+  text = text.replace(/<(https?:\/\/[^>\s]+)>/g, "$1");
+  text = text.replace(/<([\w.+-]+@[\w-]+(?:\.[\w-]+)+)>/g, "$1");
+  // Line-break and block tags separate words: turn them into
+  // whitespace before stripping, or "<p>Faith</p><p>hope</p>" would
+  // come out as "Faithhope". Opening block tags separate too, not
+  // just closing ones: "<div>Faith<div>hope</div></div>" has no
+  // closing tag between the two words, so closing-only handling
+  // still joined them into "Faithhope". Opening tags become a space
+  // rather than a newline so an adjacent closing tag's newline is
+  // not doubled into a paragraph break.
+  text = text.replace(/<br\b[^>]*>/gi, "\n");
+  text = text.replace(
+    /<\/(?:p|div|li|ul|ol|h[1-6]|blockquote|tr|td|th|section|article)\s*>/gi,
+    "\n",
+  );
+  text = text.replace(
+    /<(?:p|div|li|ul|ol|h[1-6]|blockquote|tr|td|th|section|article|table|thead|tbody|pre|figure|figcaption|dl|dt|dd|header|footer|main|nav|aside|form|fieldset|hr)\b[^>]*>/gi,
+    (_tag, offset: number, whole: string) =>
+      // No separator needed right after a newline (e.g. the one a
+      // preceding closing tag just produced): it already separates.
+      offset > 0 && whole[offset - 1] === "\n" ? "" : " ",
+  );
+  // Any remaining HTML tags go, keeping the text they wrapped.
+  text = text.replace(/<\/?[a-zA-Z][^>]*>/g, "");
+  // Markdown line structure: headings and blockquotes keep their words.
+  text = text.replace(/^[ \t]{0,3}#{1,6}[ \t]+/gm, "");
+  text = text.replace(/^[ \t]*>[ \t]?/gm, "");
+  // Emphasis and code markers keep the words they wrap. Delimiters
+  // must hug non-whitespace content, so literal operators in ordinary
+  // text (e.g. "2 * 3 * 4") are not mistaken for emphasis.
+  // Asterisk pairs whose closing marker runs into another digit are
+  // arithmetic, not emphasis ("2*3*4", "2**3**4"): the closing-side
+  // (?!\d) keeps those intact, while emphasis that merely follows a
+  // digit ("1*st*", "1**st**") or wraps digits ("**3**") still
+  // unwraps. The captured content may not itself contain the delimiter
+  // pair, so when the digit guard rejects a closing pair the match
+  // fails there instead of swallowing a later emphasis span
+  // ("2**3**4 and **faith**" keeps the operator, unwraps "faith").
+  text = text.replace(/(\*\*|__)(?!\s)((?:(?!\1)[\s\S])*?)(?<!\s)\1(?!\d)/g, "$2");
+  text = text.replace(/~~(?!\s)([\s\S]*?)(?<!\s)~~/g, "$1");
+  text = text.replace(/(?<!\*)\*(?!\s)([^*\n]+?)(?<!\s)\*(?!\d)(?!\*)/g, "$1");
+  text = text.replace(/(?<![\w])_(?!\s)([^_\n]+?)(?<!\s)_(?![\w])/g, "$1");
+  text = text.replace(/`([^`\n]+)`/g, "$1");
+  // Any backslash escape still in its raw form at this point was not
+  // present in the source (source escapes were protected above and
+  // are restored at the end); resolve it the same way so a character
+  // is never mistaken for markup by the passes above.
+  text = text.replace(/\\([!"#$%&'()*+,\-./:;<=>?@\[\\\]^_`{|}~])/g, "$1");
+  // Decode entities only after Markdown cleanup: decoded characters
+  // are literal text (an encoded "#" is not a heading marker and an
+  // encoded "*" is not emphasis), while an escaped "&lt;sup&gt;" still
+  // stays literal because HTML tags were stripped above. Numeric
+  // entities (&#8217;, &#x2019;) decode by code point; an out-of-range
+  // or surrogate value is left as-is rather than throwing.
+  // One combined pass: decoding numeric and named references in two
+  // passes would reinterpret characters the first pass produced
+  // ("&#38;lt;" must stay the literal text "&lt;", not become "<").
+  text = text.replace(
+    /&#(\d+);|&#x([0-9a-fA-F]+);|&(?:amp|lt|gt|quot|apos|nbsp);/g,
+    (entity, decimal, hex) => {
+      if (decimal === undefined && hex === undefined) {
+        return HTML_ENTITIES[entity] ?? entity;
+      }
+      const codePoint = Number.parseInt(decimal ?? hex, decimal !== undefined ? 10 : 16);
+      return codePoint >= 1 &&
+        codePoint <= 0x10ffff &&
+        !(codePoint >= 0xd800 && codePoint <= 0xdfff)
+        ? String.fromCodePoint(codePoint)
+        : entity;
+    },
+  );
+  // Normalize whitespace: no trailing spaces, no run of blank lines.
+  text = text.replace(/[ \t]+/g, " ");
+  text = text.replace(/ +\n/g, "\n");
+  text = text.replace(/\n{3,}/g, "\n\n");
+  // Restore the protected escaped punctuation last: restored
+  // characters are literal text and must not be reinterpreted as
+  // markup, entities ("\&amp;" is the literal text "&amp;"), or
+  // whitespace by any pass above.
+  // Code spans restore first: their contents are literal (they were
+  // captured before escape protection ran), and restoring them
+  // before the escape placeholders keeps the two from interfering.
+  return restoreEscapedPunctuation(restoreCodeSpans(text.trim(), codeSpans));
+}
+
+function buildVerse(reference: string, text: string, obj: Record<string, unknown>): Verse | null {
+  const plain = toPlainText(text);
+  // Non-blank source markup can convert to nothing at all (an
+  // empty-text link, a lone footnote marker): that is not a result
+  // with an empty body, it is no result — both callers already drop
+  // nulls.
+  if (plain.length === 0) {
+    return null;
+  }
+  const verse: Verse = { id: normalizeReference(reference), reference, text: plain };
   const book = firstString(obj, ["book", "book_name"]);
   if (book !== undefined) {
     verse.book = book;
@@ -333,11 +983,7 @@ export class GospelEngineDataSource implements ScriptureDataSource {
           return verses;
         }
       } catch (error) {
-        if (
-          isDefinitiveReference &&
-          error instanceof ScriptureApiError &&
-          error.status === 400
-        ) {
+        if (isDefinitiveReference && error instanceof ScriptureApiError && error.status === 400) {
           return [];
         }
         // Fall through to semantic search.

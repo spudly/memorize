@@ -359,3 +359,353 @@ describe("DemoDataSource", () => {
     expect(results.map((v) => v.reference)).toContain("Ether 12:27");
   });
 });
+
+describe("toPlainText via mapGetResponse (#74)", () => {
+  const mapOne = (text: string) =>
+    mapGetResponse({ reference: "Elaine L. Jack, Relief Society talk", text })[0]?.text;
+
+  it("strips markdown image syntax, keeping the alt text", () => {
+    expect(
+      mapOne(
+        "![Elaine L. Jack](https://www.churchofjesuschrist.org/imgs/example) spoke on charity.",
+      ),
+    ).toBe("Elaine L. Jack spoke on charity.");
+  });
+
+  it("drops footnote sup markers and empty anchor tags entirely", () => {
+    expect(mapOne("Charity is the pure love of Christ.<sup>[1](#fn-1)</sup>")).toBe(
+      "Charity is the pure love of Christ.",
+    );
+    expect(mapOne('<a id="fn-21"></a>**21.** See Moroni 7.')).toBe("21. See Moroni 7.");
+  });
+
+  it("strips markdown headings, emphasis, and links, keeping the words", () => {
+    expect(mapOne("# **Prayer**")).toBe("Prayer");
+    expect(mapOne("Read [Moroni 7](https://example.test/moroni) on *charity* and _faith_.")).toBe(
+      "Read Moroni 7 on charity and faith.",
+    );
+  });
+
+  it("strips raw HTML tags and decodes common entities", () => {
+    expect(mapOne("<p>Faith &amp; hope &lt;always&gt;</p>")).toBe("Faith & hope <always>");
+  });
+
+  it("leaves plain scripture text unchanged", () => {
+    const plain =
+      "And if men come unto me I will show unto them their weakness. I give unto men weakness that they may be humble;";
+    expect(mapOne(plain)).toBe(plain);
+  });
+});
+
+describe("toPlainText review-round cases (#74)", () => {
+  const mapOne = (text: string) => mapGetResponse({ reference: "Talk excerpt", text })[0]?.text;
+
+  it("keeps words separated across block tags and line breaks", () => {
+    expect(mapOne("<p>Faith</p><p>hope</p>")).toBe("Faith\nhope");
+    expect(mapOne("Faith<br>hope")).toBe("Faith\nhope");
+  });
+
+  it("decodes decimal and hexadecimal numeric entities", () => {
+    expect(mapOne("It&#8217;s charity &#x2014; the pure love")).toBe(
+      "It’s charity — the pure love",
+    );
+  });
+
+  it("runs the conversion on the /api/search path, not just /api/get", async () => {
+    stubFetch(() => ({
+      ok: true,
+      status: 200,
+      body: {
+        results: [
+          {
+            reference: "Moroni 7:47",
+            text: "![Charity](https://example.test/c) **But charity** is <em>the pure love of Christ</em>.<sup>[1](#fn-1)</sup>",
+          },
+        ],
+      },
+    }));
+    const source = new GospelEngineDataSource("https://engine.example", "stdy_test");
+    const results = await source.search("charity");
+    expect(results).toHaveLength(1);
+    expect(results[0]?.text).toBe("Charity But charity is the pure love of Christ.");
+  });
+});
+
+describe("toPlainText literal-text cases (#74)", () => {
+  const mapOne = (text: string) => mapGetResponse({ reference: "Talk excerpt", text })[0]?.text;
+
+  it("preserves literal operators instead of treating them as emphasis", () => {
+    expect(mapOne("2 * 3 * 4")).toBe("2 * 3 * 4");
+    expect(mapOne("2 ** 3 ** 4")).toBe("2 ** 3 ** 4");
+    expect(mapOne("A *real* emphasis")).toBe("A real emphasis");
+  });
+
+  it("keeps characters produced by entity decoding literal", () => {
+    expect(mapOne("&#35; 1 priority")).toBe("# 1 priority");
+    expect(mapOne("&#42;not emphasis&#42;")).toBe("*not emphasis*");
+    expect(mapOne("Fish &#38; chips")).toBe("Fish & chips");
+  });
+});
+
+describe("toPlainText numeric-operator cases (#74)", () => {
+  const mapOne = (text: string) => mapGetResponse({ reference: "Talk excerpt", text })[0]?.text;
+
+  it("preserves asterisk operators between digits", () => {
+    expect(mapOne("2*3*4")).toBe("2*3*4");
+    expect(mapOne("2**3**4")).toBe("2**3**4");
+    expect(mapOne("The lot measured 2*3*4 cubits and was *very* wide")).toBe(
+      "The lot measured 2*3*4 cubits and was very wide",
+    );
+  });
+
+  it("unwraps emphasis adjacent to digits when it is not an operator", () => {
+    expect(mapOne("1*st*")).toBe("1st");
+    expect(mapOne("1**st**")).toBe("1st");
+    expect(mapOne("**3** Nephi")).toBe("3 Nephi");
+  });
+});
+
+describe("toPlainText Copilot-round cases (#74)", () => {
+  const mapOne = (text: string) => mapGetResponse({ reference: "Talk excerpt", text })[0]?.text;
+
+  it("handles destinations with balanced parentheses", () => {
+    expect(mapOne("![Portrait](https://example.test/image_(small).png)")).toBe("Portrait");
+    expect(mapOne("See [the talk](https://example.test/talk_(2024)) today")).toBe(
+      "See the talk today",
+    );
+  });
+
+  it("resolves reference-style images and drops reference definitions", () => {
+    expect(mapOne("![Faith][image]\n\n[image]: https://example.test/faith.png")).toBe("Faith");
+    expect(mapOne("Text.\n\n[^1]: A footnote definition with prose")).toBe("Text.");
+  });
+
+  it("keeps ordinary text that merely starts with a bracketed label", () => {
+    expect(mapOne("[Note]: Remember to pray and serve.")).toBe(
+      "[Note]: Remember to pray and serve.",
+    );
+  });
+
+  it("keeps table cells as separate words", () => {
+    expect(mapOne("<table><tr><td>Faith</td><td>hope</td></tr></table>")).toBe("Faith\nhope");
+  });
+
+  it("decodes entities exactly once", () => {
+    expect(mapOne("&#38;lt;")).toBe("&lt;");
+    expect(mapOne("Fish &amp; chips")).toBe("Fish & chips");
+  });
+});
+
+describe("toPlainText fb81f6 review-round cases (#74)", () => {
+  const mapOne = (text: string) => mapGetResponse({ reference: "Talk excerpt", text })[0]?.text;
+
+  it("does not let a rejected arithmetic pair swallow a later emphasis span", () => {
+    expect(mapOne("2**3**4 and **faith**")).toBe("2**3**4 and faith");
+    expect(mapOne("a **b** c **d** e")).toBe("a b c d e");
+  });
+
+  it("drops only footnote sup spans and keeps other superscripts as text", () => {
+    expect(mapOne("Faith<sup>[1](#fn-1)</sup> grows")).toBe("Faith grows");
+    expect(mapOne("the 19<sup>th</sup> century")).toBe("the 19th century");
+    expect(mapOne("x<sup>2</sup> plus y")).toBe("x2 plus y");
+  });
+
+  it("drops reference definitions only at up to three leading spaces", () => {
+    expect(mapOne("Text.\n\n   [1]: https://example.test/a")).toBe("Text.");
+    expect(mapOne("Text.\n\n    [1]: https://example.test/a")).toBe(
+      "Text.\n\n [1]: https://example.test/a",
+    );
+  });
+
+  it("keeps the address in email autolinks", () => {
+    expect(mapOne("Contact <help@example.org> today.")).toBe("Contact help@example.org today.");
+    expect(mapOne("See <https://example.test/x> now.")).toBe("See https://example.test/x now.");
+  });
+});
+
+describe("toPlainText manual-pass cases (#74)", () => {
+  const mapOne = (text: string) => mapGetResponse({ reference: "Talk excerpt", text })[0]?.text;
+
+  it("strips links and images whose destinations nest parentheses two deep", () => {
+    expect(mapOne("🎧 [Listen to Audio](https://example.test/a_(b_(c)).mp3)")).toBe(
+      "🎧 Listen to Audio",
+    );
+    expect(mapOne("![Jesus Christ healing man](https://example.test/imgs/a_(b_(c)).jpg)")).toBe(
+      "Jesus Christ healing man",
+    );
+    expect(mapOne("![family praying](https://example.test/imgs/a_(b_(c)).jpg)")).toBe(
+      "family praying",
+    );
+  });
+
+  it("strips links whose destination has an unbalanced parenthesis", () => {
+    expect(mapOne("🎧 [Listen to Audio](https://example.test/a_(b.mp3)")).toBe(
+      "🎧 Listen to Audio",
+    );
+    expect(mapOne("![family praying](https://example.test/imgs/a_(b.jpg)")).toBe("family praying");
+  });
+
+  it("keeps the label when a destination is cut off mid-URL", () => {
+    expect(
+      mapOne(
+        "🎧 [Listen to Audio](https://media2.example.test/assets/teachings/2016-01-024-chapter-20-walking-the-saviors-path",
+      ),
+    ).toBe("🎧 Listen to Audio");
+    expect(mapOne("[Listen to Audio](https://example.test/cut-off\n\nFollowing prose stays.")).toBe(
+      "Listen to Audio\n\nFollowing prose stays.",
+    );
+  });
+
+  it("drops empty-text links entirely", () => {
+    // A result whose text is only empty-text links converts to
+    // nothing, so the mapper drops it instead of returning a verse
+    // with an empty body (CodeRabbit round on 5a0ed2d).
+    expect(mapGetResponse({ reference: "Talk excerpt", text: "[](06_lecture_6.md)[]()" })).toEqual(
+      [],
+    );
+    expect(mapOne("Text [](06_lecture_6.md) more")).toBe("Text more");
+  });
+
+  it("unescapes backslash-escaped punctuation", () => {
+    expect(mapOne("1\\. Faith is knowing the sun will rise")).toBe(
+      "1. Faith is knowing the sun will rise",
+    );
+    expect(mapOne("\\[Obedience\\] is a gospel principle")).toBe(
+      "[Obedience] is a gospel principle",
+    );
+  });
+
+  it("leaves bare bracketed words alone", () => {
+    expect(mapOne("the [Obedience] principle")).toBe("the [Obedience] principle");
+  });
+});
+
+describe("toPlainText round-3 cases (#74)", () => {
+  const mapOne = (text: string) => mapGetResponse({ reference: "Talk excerpt", text })[0]?.text;
+
+  it("does not rescan nested bare brackets exponentially", () => {
+    const nested = `${"[".repeat(30)}Faith${"]".repeat(30)}`;
+    expect(mapOne(nested)).toBe(nested);
+    // The already-processed label is consumed whole: an inner link
+    // inside bare outer brackets is unwrapped exactly once.
+    expect(mapOne("[[Moroni 7](https://example.test/m)]")).toBe("[Moroni 7]");
+  });
+
+  it("does not let a link destination scan cross into a later paragraph or line", () => {
+    expect(mapOne("[Listen to Audio](https://example.test/cut-off\n\n2) Pray daily.")).toBe(
+      "Listen to Audio\n\n2) Pray daily.",
+    );
+    expect(mapOne("[Listen](https://example.test/cut-off\n1) Faith")).toBe("Listen\n1) Faith");
+  });
+
+  it("preserves backslash-escaped punctuation as literal punctuation", () => {
+    expect(mapOne("\\*faith\\*")).toBe("*faith*");
+    expect(mapOne("\\_faith\\_")).toBe("_faith_");
+    expect(mapOne("\\`code\\`")).toBe("`code`");
+    expect(mapOne("\\*\\*faith\\*\\*")).toBe("**faith**");
+    expect(mapOne("\\[not a link](https://example.test/x)")).toBe(
+      "[not a link](https://example.test/x)",
+    );
+    // An escaped ampersand is literal, so what follows it is not an entity.
+    expect(mapOne("\\&amp; chips")).toBe("&amp; chips");
+  });
+
+  it("drops results whose converted text is empty", () => {
+    expect(mapGetResponse({ reference: "Talk excerpt", text: "<sup>[1](#fn-1)</sup>" })).toEqual(
+      [],
+    );
+    expect(mapOne("Faith <sup>[1](#fn-1)</sup>")).toBe("Faith");
+  });
+});
+
+describe("toPlainText round-4 cases (#74)", () => {
+  const mapOne = (text: string) => mapGetResponse({ reference: "Talk excerpt", text })[0]?.text;
+
+  it("handles angle-bracket destinations containing parentheses", () => {
+    expect(mapOne("[Read](<https://example.test/a)b>) today")).toBe("Read today");
+    expect(mapOne("[Read](<https://example.test/a b>) today")).toBe("Read today");
+  });
+
+  it("resolves shortcut references to their label and keeps undefined shortcuts literal", () => {
+    expect(mapOne("![Faith]\n\n[Faith]: https://example.test/faith.png")).toBe("Faith");
+    expect(mapOne("[Faith]\n\n[Faith]: https://example.test/faith")).toBe("Faith");
+    expect(mapOne("[Faith] and [Hope]")).toBe("[Faith] and [Hope]");
+    // Case and whitespace differences still resolve.
+    expect(mapOne("[FAITH]\n\n[Faith]: https://example.test/faith")).toBe("FAITH");
+  });
+
+  it("removes HTML comments but preserves comments inside code spans", () => {
+    expect(mapOne("Faith<!-- editor note --> and hope")).toBe("Faith and hope");
+    expect(mapOne("Faith `<!-- editor note -->` and hope")).toBe(
+      "Faith <!-- editor note --> and hope",
+    );
+  });
+
+  it("keeps code span contents literal", () => {
+    expect(mapOne("The pattern is `*faith*`.")).toBe("The pattern is *faith*.");
+    expect(mapOne("Use `<b>bold</b>` tags")).toBe("Use <b>bold</b> tags");
+    expect(mapOne("Use ``a `b` c`` here")).toBe("Use a `b` c here");
+  });
+
+  it("converts many consecutive links correctly", () => {
+    const input = Array.from({ length: 1000 }, () => "[Faith](https://example.test/faith)").join(
+      " ",
+    );
+    const expected = Array.from({ length: 1000 }, () => "Faith").join(" ");
+    expect(mapOne(input)).toBe(expected);
+  });
+
+  it("keeps bare brackets that span a paragraph boundary literal", () => {
+    expect(mapOne("[Faith\n\nhope]")).toBe("[Faith\n\nhope]");
+    expect(mapOne("the [Obedience] principle")).toBe("the [Obedience] principle");
+  });
+});
+
+describe("toPlainText round-5 cases (#74)", () => {
+  const mapOne = (text: string) => mapGetResponse({ reference: "Talk excerpt", text })[0]?.text;
+
+  it("parses a quoted link title separately from the destination", () => {
+    expect(mapOne('[Faith](https://example.test/faith "Faith ) hope")')).toBe("Faith");
+    expect(mapOne('![Faith](https://example.test/faith "Faith ) hope")')).toBe("Faith");
+    expect(mapOne("[Faith](https://example.test/faith 'Faith ) hope')")).toBe("Faith");
+  });
+
+  it("keeps reference-style text whose label has no definition", () => {
+    expect(mapOne("Read [Faith][Hope] today.")).toBe("Read [Faith][Hope] today.");
+    expect(mapOne("Read [Faith][Faith] today.\n\n[Faith]: https://example.test/faith")).toBe(
+      "Read Faith today.",
+    );
+    expect(mapOne("Read [Faith][] today.\n\n[Faith]: https://example.test/faith")).toBe(
+      "Read Faith today.",
+    );
+  });
+
+  it("preserves backslashes inside code spans", () => {
+    expect(mapOne("The code `\\*faith\\*` here")).toBe("The code \\*faith\\* here");
+    // An escaped backtick outside a span is still a literal backtick.
+    expect(mapOne("Faith \\` hope")).toBe("Faith ` hope");
+  });
+
+  it("separates words at opening block tags too", () => {
+    expect(mapOne("<div>Faith<div>hope</div></div>")).toBe("Faith hope");
+    expect(mapOne("Faith<p>hope</p>")).toBe("Faith hope");
+    expect(mapOne("<p>Faith</p><p>hope</p>")).toBe("Faith\nhope");
+  });
+
+  it("does not treat footnote labels as link references", () => {
+    expect(mapOne("Faith[^1]\n\n[^1]: Ibid.")).toBe("Faith[^1]");
+    expect(mapOne("Faith[^2] and hope\n\n[^2]: See Ibid. p. 4")).toBe("Faith[^2] and hope");
+  });
+
+  it("handles many unmatched opening brackets without quadratic rescans", () => {
+    const input = "[".repeat(20000) + "Faith";
+    expect(mapOne(input)).toBe(input);
+  });
+
+  it("never matches brackets across a paragraph boundary, even past a backslash", () => {
+    // A trailing hard-break backslash before the blank line must not
+    // hide the boundary from the bracket matcher.
+    const input = "Faith [hope\\\n\nlove](https://x) end";
+    expect(mapOne(input)).toBe(input);
+  });
+});
