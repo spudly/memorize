@@ -634,14 +634,33 @@ function stripMarkdownLinks(text: string, definedRefs: Set<string> = new Set<str
  * talks, manuals, and study aids carry their source markup inline:
  * markdown images (`![Elaine L. Jack](https://…)`), footnote markup
  * (`<sup>[1](#fn-1)</sup>`, `<a id="fn-21"></a>`), markdown headings
- * (`# Prayer`), emphasis markers, and raw HTML tags. Both apps render
- * `Verse.text` as-is, so the markup is stripped here, at the single
- * mapping choke point, keeping the readable words and dropping the
- * syntax around them. Plain text passes through unchanged apart from
- * whitespace normalization.
+ * (`# Prayer`), emphasis markers, and raw HTML tags — and search
+ * snippets can carry U+FFFD replacement characters where the engine's
+ * byte-wise excerpt cut a multibyte character in two (#77). Both apps
+ * render `Verse.text` as-is, so the markup is stripped here, at the
+ * single mapping choke point, keeping the readable words and dropping
+ * the syntax around them. Plain text passes through unchanged apart
+ * from whitespace normalization.
  */
 export function toPlainText(raw: string): string {
   let text = raw.replace(/\r\n?/g, "\n");
+  // Replacement characters are corruption, never content (#77). The
+  // engine builds search snippets by slicing source text at a byte
+  // limit (upstream gospel-engine `snippet`); when the cut falls
+  // inside a multibyte UTF-8 character, its JSON encoder turns each
+  // leftover byte into U+FFFD, so a card read "…(2014), 46��…" — the
+  // sliced character itself (here the page-range dash) never reaches
+  // us and cannot be recovered, but the replacement glyphs must not
+  // render. Unpaired surrogates render as U+FFFD too (a UTF-16 slice
+  // through an astral character leaves one behind), so they go as
+  // well; well-formed surrogate pairs (real emoji in engine text,
+  // e.g. the 🎧 audio marker) are untouched. This runs first so the
+  // whitespace normalization below tidies any gap a drop leaves.
+  text = text.replace(/\uFFFD/g, "");
+  text = text.replace(
+    /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g,
+    "",
+  );
   // Protect code spans FIRST: backslash escapes are not interpreted
   // inside a code span, so span content must be captured before
   // escape protection runs — otherwise "\*faith\*" inside backticks

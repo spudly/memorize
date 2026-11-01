@@ -2,6 +2,7 @@ import {
   DemoDataSource,
   GospelEngineDataSource,
   mapGetResponse,
+  mapSearchItem,
   parseReference,
   ScriptureApiError,
 } from "../src/scripture";
@@ -707,5 +708,57 @@ describe("toPlainText round-5 cases (#74)", () => {
     // hide the boundary from the bracket matcher.
     const input = "Faith [hope\\\n\nlove](https://x) end";
     expect(mapOne(input)).toBe(input);
+  });
+});
+
+describe("toPlainText replacement-character cases (#77)", () => {
+  const mapOne = (text: string) => mapGetResponse({ reference: "Talk excerpt", text })[0]?.text;
+
+  it("drops the replacement characters an engine excerpt leaves at its truncation point", () => {
+    // The "Chapter 2: Pray Always" card from the PR #75 manual pass:
+    // the engine builds search snippets by slicing the source text at
+    // a byte limit, cutting a multibyte character (the dash in the
+    // page range after "46") in two; its JSON encoder turns each
+    // leftover byte into U+FFFD, and the snippet's own "…" follows.
+    expect(
+      mapOne(
+        "“Chapter 2: Pray Always,” Teachings of Presidents of the Church: Ezra Taft Benson (2014), 46\uFFFD\uFFFD…",
+      ),
+    ).toBe(
+      "“Chapter 2: Pray Always,” Teachings of Presidents of the Church: Ezra Taft Benson (2014), 46…",
+    );
+  });
+
+  it("drops replacement characters from search-result snippets", () => {
+    // Search cards map through mapSearchItem's snippet field, the
+    // field the engine's byte-sliced excerpt arrives in.
+    expect(
+      mapSearchItem({
+        reference: "Chapter 2: Pray Always",
+        snippet: "Ezra Taft Benson (2014), 46\uFFFD\uFFFD…",
+      })?.text,
+    ).toBe("Ezra Taft Benson (2014), 46…");
+  });
+
+  it("drops a single replacement character and tidies the gap it leaves", () => {
+    expect(mapOne("Faith \uFFFD hope")).toBe("Faith hope");
+    expect(mapOne("\uFFFDFaith and hope\uFFFD")).toBe("Faith and hope");
+  });
+
+  it("drops unpaired surrogates, which render as replacement characters", () => {
+    // A lone surrogate half (e.g. from a UTF-16 slice through an
+    // astral character) displays as U+FFFD in the card.
+    expect(mapOne("Faith\uD83D hope")).toBe("Faith hope");
+    expect(mapOne("Faith hope\uDC00")).toBe("Faith hope");
+  });
+
+  it("keeps valid astral characters intact", () => {
+    // Engine text carries real emoji (e.g. the 🎧 audio marker):
+    // a well-formed surrogate pair is content, not corruption.
+    expect(mapOne("🎧 Listen to Audio")).toBe("🎧 Listen to Audio");
+  });
+
+  it("treats text that is only replacement characters as no result", () => {
+    expect(mapGetResponse({ reference: "Talk excerpt", text: "\uFFFD\uFFFD" })).toEqual([]);
   });
 });
