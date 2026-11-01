@@ -431,6 +431,61 @@ describe("full-library search result identity (#79)", () => {
     expect(verses.map((v) => v.id)).toEqual(["ether-12-27", "ether-12-27-2"]);
   });
 
+  it("keeps scripture search hits on their reference-slug id, matching /api/get", async () => {
+    // Upstream search gives scripture hits source_type "scriptures", a
+    // source_id, AND a real reference. The /api/get shape for the same
+    // verse carries no source_id, so its id is the reference slug; a
+    // search hit that took `scriptures-<source_id>` instead would not
+    // dedupe against the saved verse (the store dedupes by id alone).
+    stubFetch(() => ({
+      ok: true,
+      status: 200,
+      body: {
+        results: [
+          {
+            source_type: "scriptures",
+            source_id: 4360,
+            reference: "Ether 12:27",
+            snippet: "And if men come unto me I will show unto them their weakness.",
+          },
+        ],
+      },
+    }));
+    const results = await source().search("weakness");
+    expect(results.map((v) => v.id)).toEqual(["ether-12-27"]);
+    expect(mapGetResponse(SAMPLE_GET_RESPONSE).map((v) => v.id)).toContain("ether-12-27");
+  });
+
+  it("never lets a generated suffix collide with a later result's own id", () => {
+    // The suffixed canonical id sits AFTER the repeated id: a naive
+    // counter emits `charity-2` for the second `charity`, colliding
+    // with the third result's own id.
+    const verses = mapGetResponse({
+      verses: [
+        { reference: "Charity", text: "First copy." },
+        { reference: "Charity", text: "Second copy." },
+        { reference: "Charity 2", text: "A different result whose own id is charity-2." },
+      ],
+    });
+    const ids = verses.map((v) => v.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids).toEqual(["charity", "charity-3", "charity-2"]);
+  });
+
+  it("never lets a generated suffix collide with an earlier result's own id", () => {
+    // The suffixed canonical id sits BEFORE the repeated id.
+    const verses = mapGetResponse({
+      verses: [
+        { reference: "Alma 32", text: "First copy." },
+        { reference: "Alma 32 2", text: "A different result whose own id is alma-32-2." },
+        { reference: "Alma 32", text: "Second copy." },
+      ],
+    });
+    const ids = verses.map((v) => v.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids).toEqual(["alma-32", "alma-32-2", "alma-32-3"]);
+  });
+
   it("leaves reference-slug ids untouched when ids are already unique", async () => {
     stubFetch(() => ({ ok: true, status: 200, body: SAMPLE_SEARCH_RESPONSE }));
     const results = await source().search("charity");
@@ -851,6 +906,16 @@ describe("mapSearchItem verse identity (#79)", () => {
       text: "But charity is the pure love of Christ.",
     });
     expect(verse?.id).toBe("moroni-7-47");
+  });
+
+  it("keeps the reference-slug id for scripture hits that carry a source identity", () => {
+    const verse = mapSearchItem({
+      source_type: "scriptures",
+      source_id: 4360,
+      reference: "Ether 12:27",
+      snippet: "And if men come unto me I will show unto them their weakness.",
+    });
+    expect(verse?.id).toBe("ether-12-27");
   });
 
   it("returns unique ids for a full search response of same-title results", async () => {

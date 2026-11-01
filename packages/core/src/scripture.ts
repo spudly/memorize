@@ -808,9 +808,21 @@ export function toPlainText(raw: string): string {
  * mounted stale across later searches and tab switches (#79) — and the
  * store, which dedupes by id, treated the two talks as one verse.
  * Returns null when the item carries no source identity (the /api/get
- * shapes, whose items are identified by their reference instead).
+ * shapes, whose items are identified by their reference instead), and
+ * for scripture hits that carry a reference: upstream search gives
+ * scripture hits `source_type: "scriptures"` plus a real `reference`
+ * (gospel-engine internal/search), so the same verse must keep its
+ * reference-slug id here — `/api/get` identifies it that way, and the
+ * store dedupes saved verses by id alone. A `scriptures-<source_id>`
+ * id would make an already-saved verse look addable a second time.
  */
 function searchResultId(obj: Record<string, unknown>): string | null {
+  if (
+    firstString(obj, ["source_type"]) === "scriptures" &&
+    firstString(obj, ["reference", "ref", "citation"]) !== undefined
+  ) {
+    return null;
+  }
   const sourceId = obj["source_id"];
   if (
     typeof sourceId !== "number" &&
@@ -826,6 +838,10 @@ function searchResultId(obj: Record<string, unknown>): string | null {
  * Guarantee unique ids within one result list, suffixing repeats
  * (`-2`, `-3`, …) after the first occurrence. The first occurrence
  * always keeps the canonical id, so ordinary lists are untouched.
+ * Every original id in the list is reserved up front, and a generated
+ * suffix skips any id that is reserved or already assigned — otherwise
+ * `charity`, `charity`, `charity-2` (a result whose own id already
+ * ends in `-2`) would come out with the last two sharing `charity-2`.
  * This is the backstop for shapes {@link searchResultId} cannot
  * disambiguate — e.g. several chunks of one document returned under a
  * single shared reference/title — because duplicate ids in a rendered
@@ -833,11 +849,21 @@ function searchResultId(obj: Record<string, unknown>): string | null {
  * undefined and left stale cards on screen (#79).
  */
 export function withUniqueIds(verses: Verse[]): Verse[] {
-  const seen = new Map<string, number>();
+  const reserved = new Set(verses.map((verse) => verse.id));
+  const assigned = new Set<string>();
   return verses.map((verse) => {
-    const count = (seen.get(verse.id) ?? 0) + 1;
-    seen.set(verse.id, count);
-    return count === 1 ? verse : { ...verse, id: `${verse.id}-${count}` };
+    if (!assigned.has(verse.id)) {
+      assigned.add(verse.id);
+      return verse;
+    }
+    let suffix = 2;
+    let candidate = `${verse.id}-${suffix}`;
+    while (reserved.has(candidate) || assigned.has(candidate)) {
+      suffix += 1;
+      candidate = `${verse.id}-${suffix}`;
+    }
+    assigned.add(candidate);
+    return { ...verse, id: candidate };
   });
 }
 

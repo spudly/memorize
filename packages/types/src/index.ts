@@ -2,9 +2,10 @@
 export interface Verse {
   /**
    * Unique id: the normalized reference slug for scriptures, e.g.
-   * `ether-12-27`; full-library search results instead carry their
-   * engine document identity, e.g. `talks-3161`, because titles repeat
-   * across documents (#79).
+   * `ether-12-27` (kept for scripture search hits too, so search and
+   * `/api/get` agree); non-scripture full-library search results
+   * instead carry their engine document identity, e.g. `talks-3161`,
+   * because titles repeat across documents (#79).
    */
   id: string;
   /** Human-readable reference, e.g. `Ether 12:27`. */

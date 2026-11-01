@@ -37,8 +37,12 @@ carries `source_type`, `source_id`, `title`, `snippet`, `file_path`,
 `web_url`, `score`, and for talks `speaker` / `year` / `month` — there is
 no `reference` or `text` field. Titles are NOT unique across documents
 (a `charity` search returns two different "Charity Never Faileth"
-talks), so the Verse `id` for a search item is derived from
-`source_type` + `source_id`, never from the title alone (#79).
+talks), so the Verse `id` for a non-scripture search item is derived
+from `source_type` + `source_id`, never from the title alone (#79).
+Scripture hits are the exception: upstream gives them a real
+`reference`, and they keep the reference-slug id (`ether-12-27`) so a
+verse has the same id via search and via `/api/get` — the store
+dedupes saved verses by id alone.
 
 The mapper accepts either a top-level JSON array or an object with a
 `results` / `items` / `verses` / `data` array. Each item is read with these
