@@ -120,6 +120,35 @@ describe("memorize store", () => {
     expect(store.getState().data.verses).toHaveLength(1);
   });
 
+  test("keeps an unsaved chunk addable when reordered results renumber ids", async () => {
+    // Copilot's reorder case: chunk B saved from [A, B]; a reordered
+    // [B, A] response must not make the unsaved chunk A look saved
+    // (or reject its add), and re-adding B from that response must
+    // not duplicate it. Chunk ids here use the content-derived
+    // suffix form withUniqueIds emits.
+    const chunkA: Verse = {
+      id: "charity-never-faileth",
+      reference: "Charity Never Faileth",
+      text: "First chunk of the same talk.",
+    };
+    const chunkB: Verse = {
+      id: "charity-never-faileth~abc123",
+      reference: "Charity Never Faileth",
+      text: "Second chunk of the same talk.",
+    };
+    const store = createMemorizeStore(memoryStorage());
+    await store.ready;
+    store.actions.addVerse(chunkB);
+    // Reordered response: B arrives under the canonical id, A under
+    // a content suffix — neither id equals B's saved id positionally.
+    store.actions.addVerse({ ...chunkB, id: "charity-never-faileth" });
+    store.actions.addVerse({ ...chunkA, id: "charity-never-faileth~def456" });
+    await flush();
+    const verses = store.getState().data.verses;
+    expect(verses).toHaveLength(2);
+    expect(verses.map((v) => v.verse.text)).toContain(chunkA.text);
+  });
+
   test("removes a verse", async () => {
     const store = createMemorizeStore(memoryStorage());
     await store.ready;

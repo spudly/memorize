@@ -834,19 +834,35 @@ function searchResultId(obj: Record<string, unknown>): string | null {
   return normalizeReference(`${sourceType} ${String(sourceId).trim()}`);
 }
 
+/** Deterministic 32-bit FNV-1a hash of a verse's text, base-36. */
+function textHash(text: string): string {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(36);
+}
+
 /**
- * Guarantee unique ids within one result list, suffixing repeats
- * (`-2`, `-3`, …) after the first occurrence. The first occurrence
- * always keeps the canonical id, so ordinary lists are untouched.
- * Every original id in the list is reserved up front, and a generated
- * suffix skips any id that is reserved or already assigned — otherwise
- * `charity`, `charity`, `charity-2` (a result whose own id already
- * ends in `-2`) would come out with the last two sharing `charity-2`.
- * This is the backstop for shapes {@link searchResultId} cannot
- * disambiguate — e.g. several chunks of one document returned under a
- * single shared reference/title — because duplicate ids in a rendered
- * result list are duplicate React keys, whose reconciliation is
- * undefined and left stale cards on screen (#79).
+ * Guarantee unique ids within one result list. The first occurrence
+ * of an id keeps the canonical id, so ordinary lists are untouched.
+ * A repeat — a shape {@link searchResultId} cannot disambiguate, e.g.
+ * several chunks of one document under a single shared
+ * reference/title — gets a suffix derived from its own text
+ * (`<id>~<hash>`), never from its position: a positional suffix is
+ * reassigned to a different chunk when a later response reorders the
+ * same results, and a saved chunk's id must stay its own (membership
+ * and dedupe compare ids — see {@link isSameVerse}). The `~`
+ * separator can never appear in a canonical id
+ * ({@link normalizeReference} emits only `[a-z0-9-]`), so a generated
+ * suffix cannot collide with another result's own id the way
+ * `charity`, `charity`, `charity-2` collided under `-2` suffixing;
+ * the counter fallback covers only exact duplicates (same id AND
+ * same text — interchangeable items) and hash collisions. Unique
+ * ids matter because duplicate ids in a rendered result list are
+ * duplicate React keys, whose reconciliation is undefined and left
+ * stale cards on screen (#79).
  */
 /**
  * Whether two Verse objects are the same memorization item, for
@@ -859,10 +875,10 @@ function searchResultId(obj: Record<string, unknown>): string | null {
  *   while the same result now arrives with its document id
  *   (`talks-3161`). No source identity was stored with the legacy
  *   entry, so the id can never be rewritten on load.
- * - A {@link withUniqueIds} suffix is a list-local rendering key, not
- *   a saved identity: the chunk saved as `…-2` in one response is the
- *   canonical `…` in a later response that returns it alone, and a
- *   reordered response can hand the suffix to a different chunk.
+ * - A {@link withUniqueIds} suffix is content-derived, so a chunk
+ *   keeps its suffixed id under reordering — but a later response
+ *   that returns the chunk alone gives it the canonical id instead,
+ *   so the saved copy's id alone cannot recognize it there either.
  *
  * Reference + text is the strongest identity the stored data itself
  * carries, and it distinguishes the cases the id change must not
@@ -879,18 +895,18 @@ export function isSameVerse(a: Verse, b: Verse): boolean {
 }
 
 export function withUniqueIds(verses: Verse[]): Verse[] {
-  const reserved = new Set(verses.map((verse) => verse.id));
   const assigned = new Set<string>();
   return verses.map((verse) => {
     if (!assigned.has(verse.id)) {
       assigned.add(verse.id);
       return verse;
     }
+    const base = `${verse.id}~${textHash(verse.text)}`;
+    let candidate = base;
     let suffix = 2;
-    let candidate = `${verse.id}-${suffix}`;
-    while (reserved.has(candidate) || assigned.has(candidate)) {
+    while (assigned.has(candidate)) {
+      candidate = `${base}~${suffix}`;
       suffix += 1;
-      candidate = `${verse.id}-${suffix}`;
     }
     assigned.add(candidate);
     return { ...verse, id: candidate };

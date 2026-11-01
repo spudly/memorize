@@ -6,9 +6,11 @@ export interface Verse {
    * `/api/get` agree); non-scripture full-library search results
    * instead carry their engine document identity, e.g. `talks-3161`,
    * because titles repeat across documents (#79). Duplicate results
-   * within one list get a list-local `-2`/`-3` suffix so rendered
-   * keys stay unique; that suffix is not a stable saved identity —
-   * membership/dedupe use `isSameVerse` (id, or reference + text).
+   * within one list get a content-derived `~<hash>` suffix so
+   * rendered keys stay unique and a chunk's id is stable under
+   * reordering; membership/dedupe use `isSameVerse` (id, or
+   * reference + text) so a chunk returned alone under its canonical
+   * id still matches its saved suffixed copy.
    */
   id: string;
   /** Human-readable reference, e.g. `Ether 12:27`. */

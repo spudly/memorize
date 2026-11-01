@@ -412,14 +412,33 @@ describe("full-library search result identity (#79)", () => {
     expect(results).toHaveLength(3);
     const ids = results.map((v) => v.id);
     // Duplicate ids are duplicate React keys in the result list — the
-    // stale-card defect. The first keeps the canonical id; repeats are
-    // suffixed, never dropped and never duplicated.
+    // stale-card defect. The first keeps the canonical id; repeats get
+    // content-derived suffixes, never dropped and never duplicated.
     expect(new Set(ids).size).toBe(ids.length);
-    expect(ids).toEqual([
-      "charity-never-faileth",
-      "charity-never-faileth-2",
-      "charity-never-faileth-3",
-    ]);
+    expect(ids[0]).toBe("charity-never-faileth");
+    expect(ids[1]).toMatch(/^charity-never-faileth~[a-z0-9]+$/);
+    expect(ids[2]).toMatch(/^charity-never-faileth~[a-z0-9]+$/);
+  });
+
+  it("gives a repeated-reference chunk the same id when results are reordered", async () => {
+    // Positional suffixes fail this: in [A, B] chunk B is `…-2`, in
+    // [B, A] chunk A is — so a saved B made the unsaved A look Added
+    // and un-addable. Content-derived suffixes keep each chunk's id
+    // attached to the chunk itself. (The first chunk in any list
+    // keeps the canonical id, so the comparison runs with a leading
+    // chunk C in both lists, making A and B repeats in both.)
+    const chunkC = { reference: "Charity Never Faileth", text: "Leading chunk of the talk." };
+    const chunkA = { reference: "Charity Never Faileth", text: "First chunk of the talk." };
+    const chunkB = { reference: "Charity Never Faileth", text: "Second chunk of the same talk." };
+    stubFetch(() => ({ ok: true, status: 200, body: { results: [chunkC, chunkA, chunkB] } }));
+    const first = await source().search("charity");
+    stubFetch(() => ({ ok: true, status: 200, body: { results: [chunkC, chunkB, chunkA] } }));
+    const reordered = await source().search("charity");
+    const idOf = (list: typeof first, text: string) => list.find((v) => v.text === text)?.id;
+    expect(idOf(reordered, chunkA.text)).toBe(idOf(first, chunkA.text));
+    expect(idOf(reordered, chunkB.text)).toBe(idOf(first, chunkB.text));
+    expect(idOf(reordered, chunkA.text)).not.toBe(idOf(first, chunkB.text));
+    expect(new Set(reordered.map((v) => v.id)).size).toBe(3);
   });
 
   it("suffixes duplicate references in a /api/get verses array the same way", () => {
@@ -429,7 +448,10 @@ describe("full-library search result identity (#79)", () => {
         { reference: "Ether 12:27", text: "Second copy." },
       ],
     });
-    expect(verses.map((v) => v.id)).toEqual(["ether-12-27", "ether-12-27-2"]);
+    const ids = verses.map((v) => v.id);
+    expect(ids[0]).toBe("ether-12-27");
+    expect(ids[1]).toMatch(/^ether-12-27~[a-z0-9]+$/);
+    expect(new Set(ids).size).toBe(2);
   });
 
   it("keeps scripture search hits on their reference-slug id, matching /api/get", async () => {
@@ -458,9 +480,10 @@ describe("full-library search result identity (#79)", () => {
   });
 
   it("never lets a generated suffix collide with a later result's own id", () => {
-    // The suffixed canonical id sits AFTER the repeated id: a naive
-    // counter emits `charity-2` for the second `charity`, colliding
-    // with the third result's own id.
+    // Positional `-2` suffixing emitted `charity-2` for the second
+    // `charity`, colliding with the third result's own id. The `~`
+    // separator cannot appear in a canonical slug, so the generated
+    // id is distinct by construction, in either order.
     const verses = mapGetResponse({
       verses: [
         { reference: "Charity", text: "First copy." },
@@ -470,7 +493,9 @@ describe("full-library search result identity (#79)", () => {
     });
     const ids = verses.map((v) => v.id);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(ids).toEqual(["charity", "charity-3", "charity-2"]);
+    expect(ids[0]).toBe("charity");
+    expect(ids[1]).toMatch(/^charity~[a-z0-9]+$/);
+    expect(ids[2]).toBe("charity-2");
   });
 
   it("never lets a generated suffix collide with an earlier result's own id", () => {
@@ -484,7 +509,7 @@ describe("full-library search result identity (#79)", () => {
     });
     const ids = verses.map((v) => v.id);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(ids).toEqual(["alma-32", "alma-32-2", "alma-32-3"]);
+    expect(ids).toEqual(["alma-32", "alma-32-2", expect.stringMatching(/^alma-32~[a-z0-9]+$/)]);
   });
 
   it("leaves reference-slug ids untouched when ids are already unique", async () => {
