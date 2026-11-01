@@ -39,7 +39,7 @@ const BOOK_ALIASES: Record<string, string> = {
  * bearing queries need no such check — an explicit chapter:verse is
  * unambiguously a reference attempt whatever the book part says.
  */
-const KNOWN_BOOK_NAMES: ReadonlySet<string> = new Set(
+const KNOWN_BOOK_NAMES: Set<string> = new Set(
   [
     // Old Testament
     "Genesis", "Exodus", "Leviticus", "Numbers", "Deuteronomy", "Joshua",
