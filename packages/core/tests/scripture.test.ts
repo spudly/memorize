@@ -231,6 +231,30 @@ describe("GospelEngineDataSource", () => {
     expect(results[0]?.reference).toBe("Moroni 7:47");
   });
 
+  it("returns no results for a chapter-only miss on a real book (404) (#70)", async () => {
+    const calls = stubFetch((url) =>
+      url.includes("/api/get")
+        ? { ok: false, status: 404, body: {} }
+        : { ok: true, status: 200, body: SAMPLE_SEARCH_RESPONSE },
+    );
+    const results = await source().search("Ether 16");
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toContain("/api/get");
+    expect(results).toEqual([]);
+  });
+
+  it("returns no results for a chapter-only miss on a real book (400) (#70)", async () => {
+    const calls = stubFetch((url) =>
+      url.includes("/api/get")
+        ? { ok: false, status: 400, body: {} }
+        : { ok: true, status: 200, body: SAMPLE_SEARCH_RESPONSE },
+    );
+    const results = await source().search("Ether 16");
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toContain("/api/get");
+    expect(results).toEqual([]);
+  });
+
   it("falls back to /api/search when /api/get errors", async () => {
     const calls = stubFetch((url) =>
       url.includes("/api/get")
