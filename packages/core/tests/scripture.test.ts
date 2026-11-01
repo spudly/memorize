@@ -739,4 +739,19 @@ describe("toPlainText truncated-link cases (#76)", () => {
     // The fragment continues onto another line: not an excerpt cut.
     expect(mapOne("Faith [hope\ncharity")).toBe("Faith [hope\ncharity");
   });
+
+  it("keeps literal bracket notation in complete text", () => {
+    // This converter also runs on complete chapter/talk text, where a
+    // "[" can be literal notation rather than markup: an interval's
+    // fragment carries a ")", which a truncated link label never
+    // does, so the bracket stays.
+    expect(mapOne("Value in [0, 1) is valid.")).toBe("Value in [0, 1) is valid.");
+  });
+
+  it("drops a truncated linked image's prefix but keeps the outer literal bracket", () => {
+    // "[![alt](img)](page)" cut mid-alt: the outer "[" is a literal
+    // bracket (a link label is not markup), the inner image's "!["
+    // is truncated syntax and drops together.
+    expect(mapOne("Portrait: [![Elaine L. Ja")).toBe("Portrait: [Elaine L. Ja");
+  });
 });

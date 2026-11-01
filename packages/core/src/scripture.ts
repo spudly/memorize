@@ -539,13 +539,24 @@ function stripMarkdownLinks(text: string, definedRefs: Set<string> = new Set<str
       // the partial label as plain text, so a card never renders raw
       // bracket syntax. Unmatched brackets anywhere else are literal
       // text and stay: the guards keep a run of "["s untouched (each
-      // one is either followed by another "[" or preceded by one) and
-      // keep any "[" whose text continues onto another line.
+      // one is either followed by another "[" or preceded by one),
+      // keep any "[" whose text continues onto another line, and keep
+      // any fragment containing a parenthesis — a link label cut
+      // mid-label carries no destination punctuation, while literal
+      // bracket notation in full text (an interval like "[0, 1)")
+      // does, so the full text keeps its bracket. The run guard
+      // checks the character before the bracket itself (`open`), not
+      // before the "!" of an image: for a truncated linked image
+      // ("[![Elaine L. Ja") the outer "[" is literal text handled on
+      // its own iteration, and the image's "![" must still drop
+      // together.
       const isTrailingFragment =
         text.indexOf("[", open + 1) === -1 &&
         text.indexOf("]", open + 1) === -1 &&
         text.indexOf("\n", open + 1) === -1 &&
-        text[i - 1] !== "[";
+        text.indexOf("(", open + 1) === -1 &&
+        text.indexOf(")", open + 1) === -1 &&
+        text[open - 1] !== "[";
       if (isTrailingFragment) {
         i = open + 1;
         continue;
