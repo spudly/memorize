@@ -365,9 +365,11 @@ describe("toPlainText via mapGetResponse (#74)", () => {
     mapGetResponse({ reference: "Elaine L. Jack, Relief Society talk", text })[0]?.text;
 
   it("strips markdown image syntax, keeping the alt text", () => {
-    expect(mapOne("![Elaine L. Jack](https://www.churchofjesuschrist.org/imgs/example) spoke on charity.")).toBe(
-      "Elaine L. Jack spoke on charity.",
-    );
+    expect(
+      mapOne(
+        "![Elaine L. Jack](https://www.churchofjesuschrist.org/imgs/example) spoke on charity.",
+      ),
+    ).toBe("Elaine L. Jack spoke on charity.");
   });
 
   it("drops footnote sup markers and empty anchor tags entirely", () => {
@@ -396,8 +398,7 @@ describe("toPlainText via mapGetResponse (#74)", () => {
 });
 
 describe("toPlainText review-round cases (#74)", () => {
-  const mapOne = (text: string) =>
-    mapGetResponse({ reference: "Talk excerpt", text })[0]?.text;
+  const mapOne = (text: string) => mapGetResponse({ reference: "Talk excerpt", text })[0]?.text;
 
   it("keeps words separated across block tags and line breaks", () => {
     expect(mapOne("<p>Faith</p><p>hope</p>")).toBe("Faith\nhope");
@@ -405,7 +406,9 @@ describe("toPlainText review-round cases (#74)", () => {
   });
 
   it("decodes decimal and hexadecimal numeric entities", () => {
-    expect(mapOne("It&#8217;s charity &#x2014; the pure love")).toBe("It’s charity — the pure love");
+    expect(mapOne("It&#8217;s charity &#x2014; the pure love")).toBe(
+      "It’s charity — the pure love",
+    );
   });
 
   it("runs the conversion on the /api/search path, not just /api/get", async () => {
@@ -467,7 +470,9 @@ describe("toPlainText Copilot-round cases (#74)", () => {
 
   it("handles destinations with balanced parentheses", () => {
     expect(mapOne("![Portrait](https://example.test/image_(small).png)")).toBe("Portrait");
-    expect(mapOne("See [the talk](https://example.test/talk_(2024)) today")).toBe("See the talk today");
+    expect(mapOne("See [the talk](https://example.test/talk_(2024)) today")).toBe(
+      "See the talk today",
+    );
   });
 
   it("resolves reference-style images and drops reference definitions", () => {
@@ -476,7 +481,9 @@ describe("toPlainText Copilot-round cases (#74)", () => {
   });
 
   it("keeps ordinary text that merely starts with a bracketed label", () => {
-    expect(mapOne("[Note]: Remember to pray and serve.")).toBe("[Note]: Remember to pray and serve.");
+    expect(mapOne("[Note]: Remember to pray and serve.")).toBe(
+      "[Note]: Remember to pray and serve.",
+    );
   });
 
   it("keeps table cells as separate words", () => {
@@ -505,7 +512,9 @@ describe("toPlainText fb81f6 review-round cases (#74)", () => {
 
   it("drops reference definitions only at up to three leading spaces", () => {
     expect(mapOne("Text.\n\n   [1]: https://example.test/a")).toBe("Text.");
-    expect(mapOne("Text.\n\n    [1]: https://example.test/a")).toBe("Text.\n\n [1]: https://example.test/a");
+    expect(mapOne("Text.\n\n    [1]: https://example.test/a")).toBe(
+      "Text.\n\n [1]: https://example.test/a",
+    );
   });
 
   it("keeps the address in email autolinks", () => {
@@ -518,22 +527,30 @@ describe("toPlainText manual-pass cases (#74)", () => {
   const mapOne = (text: string) => mapGetResponse({ reference: "Talk excerpt", text })[0]?.text;
 
   it("strips links and images whose destinations nest parentheses two deep", () => {
-    expect(mapOne("🎧 [Listen to Audio](https://example.test/a_(b_(c)).mp3)")).toBe("🎧 Listen to Audio");
+    expect(mapOne("🎧 [Listen to Audio](https://example.test/a_(b_(c)).mp3)")).toBe(
+      "🎧 Listen to Audio",
+    );
     expect(mapOne("![Jesus Christ healing man](https://example.test/imgs/a_(b_(c)).jpg)")).toBe(
       "Jesus Christ healing man",
     );
-    expect(mapOne("![family praying](https://example.test/imgs/a_(b_(c)).jpg)")).toBe("family praying");
+    expect(mapOne("![family praying](https://example.test/imgs/a_(b_(c)).jpg)")).toBe(
+      "family praying",
+    );
   });
 
   it("strips links whose destination has an unbalanced parenthesis", () => {
-    expect(mapOne("🎧 [Listen to Audio](https://example.test/a_(b.mp3)")).toBe("🎧 Listen to Audio");
+    expect(mapOne("🎧 [Listen to Audio](https://example.test/a_(b.mp3)")).toBe(
+      "🎧 Listen to Audio",
+    );
     expect(mapOne("![family praying](https://example.test/imgs/a_(b.jpg)")).toBe("family praying");
   });
 
   it("keeps the label when a destination is cut off mid-URL", () => {
-    expect(mapOne("🎧 [Listen to Audio](https://media2.example.test/assets/teachings/2016-01-024-chapter-20-walking-the-saviors-path")).toBe(
-      "🎧 Listen to Audio",
-    );
+    expect(
+      mapOne(
+        "🎧 [Listen to Audio](https://media2.example.test/assets/teachings/2016-01-024-chapter-20-walking-the-saviors-path",
+      ),
+    ).toBe("🎧 Listen to Audio");
     expect(mapOne("[Listen to Audio](https://example.test/cut-off\n\nFollowing prose stays.")).toBe(
       "Listen to Audio\n\nFollowing prose stays.",
     );
@@ -550,8 +567,12 @@ describe("toPlainText manual-pass cases (#74)", () => {
   });
 
   it("unescapes backslash-escaped punctuation", () => {
-    expect(mapOne("1\\. Faith is knowing the sun will rise")).toBe("1. Faith is knowing the sun will rise");
-    expect(mapOne("\\[Obedience\\] is a gospel principle")).toBe("[Obedience] is a gospel principle");
+    expect(mapOne("1\\. Faith is knowing the sun will rise")).toBe(
+      "1. Faith is knowing the sun will rise",
+    );
+    expect(mapOne("\\[Obedience\\] is a gospel principle")).toBe(
+      "[Obedience] is a gospel principle",
+    );
   });
 
   it("leaves bare bracketed words alone", () => {
@@ -594,5 +615,48 @@ describe("toPlainText round-3 cases (#74)", () => {
       [],
     );
     expect(mapOne("Faith <sup>[1](#fn-1)</sup>")).toBe("Faith");
+  });
+});
+
+describe("toPlainText round-4 cases (#74)", () => {
+  const mapOne = (text: string) => mapGetResponse({ reference: "Talk excerpt", text })[0]?.text;
+
+  it("handles angle-bracket destinations containing parentheses", () => {
+    expect(mapOne("[Read](<https://example.test/a)b>) today")).toBe("Read today");
+    expect(mapOne("[Read](<https://example.test/a b>) today")).toBe("Read today");
+  });
+
+  it("resolves shortcut references to their label and keeps undefined shortcuts literal", () => {
+    expect(mapOne("![Faith]\n\n[Faith]: https://example.test/faith.png")).toBe("Faith");
+    expect(mapOne("[Faith]\n\n[Faith]: https://example.test/faith")).toBe("Faith");
+    expect(mapOne("[Faith] and [Hope]")).toBe("[Faith] and [Hope]");
+    // Case and whitespace differences still resolve.
+    expect(mapOne("[FAITH]\n\n[Faith]: https://example.test/faith")).toBe("FAITH");
+  });
+
+  it("removes HTML comments but preserves comments inside code spans", () => {
+    expect(mapOne("Faith<!-- editor note --> and hope")).toBe("Faith and hope");
+    expect(mapOne("Faith `<!-- editor note -->` and hope")).toBe(
+      "Faith <!-- editor note --> and hope",
+    );
+  });
+
+  it("keeps code span contents literal", () => {
+    expect(mapOne("The pattern is `*faith*`.")).toBe("The pattern is *faith*.");
+    expect(mapOne("Use `<b>bold</b>` tags")).toBe("Use <b>bold</b> tags");
+    expect(mapOne("Use ``a `b` c`` here")).toBe("Use a `b` c here");
+  });
+
+  it("converts many consecutive links correctly", () => {
+    const input = Array.from({ length: 1000 }, () => "[Faith](https://example.test/faith)").join(
+      " ",
+    );
+    const expected = Array.from({ length: 1000 }, () => "Faith").join(" ");
+    expect(mapOne(input)).toBe(expected);
+  });
+
+  it("keeps bare brackets that span a paragraph boundary literal", () => {
+    expect(mapOne("[Faith\n\nhope]")).toBe("[Faith\n\nhope]");
+    expect(mapOne("the [Obedience] principle")).toBe("the [Obedience] principle");
   });
 });

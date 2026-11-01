@@ -42,26 +42,98 @@ const BOOK_ALIASES: Record<string, string> = {
 const KNOWN_BOOK_NAMES: Set<string> = new Set(
   [
     // Old Testament
-    "Genesis", "Exodus", "Leviticus", "Numbers", "Deuteronomy", "Joshua",
-    "Judges", "Ruth", "1 Samuel", "2 Samuel", "1 Kings", "2 Kings",
-    "1 Chronicles", "2 Chronicles", "Ezra", "Nehemiah", "Esther", "Job",
-    "Psalms", "Psalm", "Proverbs", "Ecclesiastes", "Song of Solomon",
-    "Song of Songs", "Isaiah", "Jeremiah", "Lamentations", "Ezekiel",
-    "Daniel", "Hosea", "Joel", "Amos", "Obadiah", "Jonah", "Micah",
-    "Nahum", "Habakkuk", "Zephaniah", "Haggai", "Zechariah", "Malachi",
+    "Genesis",
+    "Exodus",
+    "Leviticus",
+    "Numbers",
+    "Deuteronomy",
+    "Joshua",
+    "Judges",
+    "Ruth",
+    "1 Samuel",
+    "2 Samuel",
+    "1 Kings",
+    "2 Kings",
+    "1 Chronicles",
+    "2 Chronicles",
+    "Ezra",
+    "Nehemiah",
+    "Esther",
+    "Job",
+    "Psalms",
+    "Psalm",
+    "Proverbs",
+    "Ecclesiastes",
+    "Song of Solomon",
+    "Song of Songs",
+    "Isaiah",
+    "Jeremiah",
+    "Lamentations",
+    "Ezekiel",
+    "Daniel",
+    "Hosea",
+    "Joel",
+    "Amos",
+    "Obadiah",
+    "Jonah",
+    "Micah",
+    "Nahum",
+    "Habakkuk",
+    "Zephaniah",
+    "Haggai",
+    "Zechariah",
+    "Malachi",
     // New Testament
-    "Matthew", "Mark", "Luke", "John", "Acts", "Romans", "1 Corinthians",
-    "2 Corinthians", "Galatians", "Ephesians", "Philippians", "Colossians",
-    "1 Thessalonians", "2 Thessalonians", "1 Timothy", "2 Timothy",
-    "Titus", "Philemon", "Hebrews", "James", "1 Peter", "2 Peter",
-    "1 John", "2 John", "3 John", "Jude", "Revelation",
+    "Matthew",
+    "Mark",
+    "Luke",
+    "John",
+    "Acts",
+    "Romans",
+    "1 Corinthians",
+    "2 Corinthians",
+    "Galatians",
+    "Ephesians",
+    "Philippians",
+    "Colossians",
+    "1 Thessalonians",
+    "2 Thessalonians",
+    "1 Timothy",
+    "2 Timothy",
+    "Titus",
+    "Philemon",
+    "Hebrews",
+    "James",
+    "1 Peter",
+    "2 Peter",
+    "1 John",
+    "2 John",
+    "3 John",
+    "Jude",
+    "Revelation",
     // Book of Mormon
-    "1 Nephi", "2 Nephi", "Jacob", "Enos", "Jarom", "Omni",
-    "Words of Mormon", "Mosiah", "Alma", "Helaman", "3 Nephi", "4 Nephi",
-    "Mormon", "Ether", "Moroni",
+    "1 Nephi",
+    "2 Nephi",
+    "Jacob",
+    "Enos",
+    "Jarom",
+    "Omni",
+    "Words of Mormon",
+    "Mosiah",
+    "Alma",
+    "Helaman",
+    "3 Nephi",
+    "4 Nephi",
+    "Mormon",
+    "Ether",
+    "Moroni",
     // Doctrine and Covenants / Pearl of Great Price
-    "Doctrine and Covenants", "Moses", "Abraham", "Joseph Smith—Matthew",
-    "Joseph Smith—History", "Articles of Faith",
+    "Doctrine and Covenants",
+    "Moses",
+    "Abraham",
+    "Joseph Smith—Matthew",
+    "Joseph Smith—History",
+    "Articles of Faith",
   ].map((name) => name.toLowerCase().replace(/[—–]/g, "-")),
 );
 
@@ -190,16 +262,105 @@ function restoreEscapedPunctuation(text: string): string {
   );
 }
 
-/** Index of the first blank line (paragraph boundary) at or after `start`, or -1. */
-function paragraphBoundaryAfter(text: string, start: number): number {
-  const match = /\n[ \t]*\n/.exec(text.slice(start));
-  return match ? start + match.index : -1;
+const CODE_SPAN_START = "\uE060";
+const CODE_SPAN_END = "\uE061";
+
+function protectCodeSpans(text: string, spans: string[]): string {
+  let out = "";
+  let i = 0;
+  while (i < text.length) {
+    if (text[i] !== "`") {
+      out += text[i];
+      i++;
+      continue;
+    }
+    let runEnd = i;
+    while (runEnd < text.length && text[runEnd] === "`") runEnd++;
+    const runLen = runEnd - i;
+    // Find a closing run of the same length on the same line.
+    let closeStart = -1;
+    let closeEnd = -1;
+    let j = runEnd;
+    const lineLimit = (() => {
+      const nl = text.indexOf("\n", i);
+      return nl === -1 ? text.length : nl;
+    })();
+    while (j < lineLimit) {
+      if (text[j] === "`") {
+        let rEnd = j;
+        while (rEnd < text.length && text[rEnd] === "`") rEnd++;
+        if (rEnd - j === runLen) {
+          closeStart = j;
+          closeEnd = rEnd;
+          break;
+        }
+        j = rEnd;
+      } else {
+        j++;
+      }
+    }
+    if (closeStart === -1 || closeStart === runEnd) {
+      // No closing run (or empty content) on this line: leave literal.
+      out += text.slice(i, runEnd);
+      i = runEnd;
+      continue;
+    }
+    const content = text.slice(runEnd, closeStart);
+    const idx = spans.length;
+    spans.push(content);
+    out += `${CODE_SPAN_START}${idx}${CODE_SPAN_END}`;
+    i = closeEnd;
+  }
+  return out;
 }
 
-/** Index of the bracket closing the one at `open`, or -1. Honors nesting and backslash escapes. */
-function matchingBracket(text: string, open: number, openCh: string, closeCh: string): number {
+function restoreCodeSpans(text: string, spans: string[]): string {
+  return text.replace(/\uE060(\d+)\uE061/g, (_m, idxStr: string) => {
+    const idx = Number.parseInt(idxStr, 10);
+    return spans[idx] ?? _m;
+  });
+}
+
+function normalizeLinkLabel(label: string): string {
+  return label.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+/** All paragraph-boundary start indices in `text`, computed in one pass. */
+function paragraphBoundaries(text: string): number[] {
+  const indices: number[] = [];
+  const re = /\n[ \t]*\n/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    indices.push(m.index);
+    // Advance by 1 so overlapping boundaries are also recorded.
+    re.lastIndex = m.index + 1;
+  }
+  return indices;
+}
+
+/** First boundary index >= `start`, or -1 (binary search). */
+function firstBoundaryAtOrAfter(boundaries: number[], start: number): number {
+  let lo = 0;
+  let hi = boundaries.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if ((boundaries[mid] as number) < start) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo < boundaries.length ? (boundaries[lo] as number) : -1;
+}
+
+/** Index of the bracket closing the one at `open`, or -1. Honors nesting and backslash escapes. Bounded by `limit` when given. */
+function matchingBracket(
+  text: string,
+  open: number,
+  openCh: string,
+  closeCh: string,
+  limit: number = text.length,
+): number {
+  const end = Math.min(limit, text.length);
   let depth = 0;
-  for (let i = open; i < text.length; i++) {
+  for (let i = open; i < end; i++) {
     const ch = text[i];
     if (ch === "\\") {
       i++;
@@ -231,7 +392,15 @@ function matchingBracket(text: string, open: number, openCh: string, closeCh: st
  * "[word]" with no destination is ordinary text and stays, and an
  * escaped bracket ("\[") never opens a link.
  */
-function stripMarkdownLinks(text: string): string {
+function stripMarkdownLinks(text: string, definedRefs: Set<string> = new Set<string>()): string {
+  const boundaries = paragraphBoundaries(text);
+  let cachedLineEnd = -1;
+  const lineEndFrom = (pos: number): number => {
+    if (cachedLineEnd !== -1 && pos <= cachedLineEnd) return cachedLineEnd;
+    const idx = text.indexOf("\n", pos);
+    cachedLineEnd = idx === -1 ? text.length : idx;
+    return cachedLineEnd;
+  };
   let out = "";
   let i = 0;
   while (i < text.length) {
@@ -248,15 +417,10 @@ function stripMarkdownLinks(text: string): string {
       continue;
     }
     const open = isImage ? i + 1 : i;
-    let closeBracket = matchingBracket(text, open, "[", "]");
-    // A link never spans a paragraph boundary: a "]" in a later
-    // paragraph does not close this bracket.
-    if (closeBracket !== -1) {
-      const boundary = paragraphBoundaryAfter(text, open);
-      if (boundary !== -1 && boundary < closeBracket) {
-        closeBracket = -1;
-      }
-    }
+    // A link never spans a paragraph boundary: bound the bracket scan.
+    const boundary = firstBoundaryAtOrAfter(boundaries, open);
+    const bracketLimit = boundary === -1 ? text.length : boundary;
+    const closeBracket = matchingBracket(text, open, "[", "]", bracketLimit);
     if (closeBracket === -1) {
       out += text[i];
       i++;
@@ -264,17 +428,47 @@ function stripMarkdownLinks(text: string): string {
     }
     // Recurse into the label: a linked image ("[![alt](img)](page)")
     // carries a whole image inside its link text.
-    const label = stripMarkdownLinks(text.slice(open + 1, closeBracket));
+    const label = stripMarkdownLinks(text.slice(open + 1, closeBracket), definedRefs);
     const after = closeBracket + 1;
     if (text[after] === "(") {
-      // The destination scan is bounded by the current line (which
-      // also stops it crossing a paragraph boundary): a ")" on a
-      // later line does not terminate a destination cut off mid-URL,
-      // so the bounded fallback below runs instead and the following
-      // lines — paragraph breaks included — survive intact.
-      const lineEnd = text.indexOf("\n", after);
-      const limit = lineEnd === -1 ? text.length : lineEnd;
-      const closeParen = matchingBracket(text, after, "(", ")");
+      const limit = lineEndFrom(after);
+      // Angle-bracket destination: may contain unbalanced parens/spaces.
+      let angleHandled = false;
+      {
+        let p = after + 1;
+        while (p < limit && (text[p] === " " || text[p] === "\t")) p++;
+        if (p < limit && text[p] === "<") {
+          const gt = text.indexOf(">", p + 1);
+          if (gt !== -1 && gt < limit) {
+            let q = gt + 1;
+            while (q < limit && (text[q] === " " || text[q] === "\t")) q++;
+            let malformed = false;
+            if (q < limit && (text[q] === '"' || text[q] === "'")) {
+              const quote = text[q] as string;
+              const endQuote = text.indexOf(quote, q + 1);
+              if (endQuote === -1 || endQuote >= limit) malformed = true;
+              else {
+                q = endQuote + 1;
+                while (q < limit && (text[q] === " " || text[q] === "\t")) q++;
+              }
+            } else if (q < limit && text[q] === "(") {
+              const endParen = text.indexOf(")", q + 1);
+              if (endParen === -1 || endParen >= limit) malformed = true;
+              else {
+                q = endParen + 1;
+                while (q < limit && (text[q] === " " || text[q] === "\t")) q++;
+              }
+            }
+            if (!malformed && q < limit && text[q] === ")") {
+              out += label;
+              i = q + 1;
+              angleHandled = true;
+            }
+          }
+        }
+      }
+      if (angleHandled) continue;
+      const closeParen = matchingBracket(text, after, "(", ")", limit);
       if (closeParen !== -1 && closeParen < limit) {
         out += label;
         i = closeParen + 1;
@@ -289,13 +483,20 @@ function stripMarkdownLinks(text: string): string {
       continue;
     }
     if (text[after] === "[") {
-      const closeRef = matchingBracket(text, after, "[", "]");
-      const boundary = paragraphBoundaryAfter(text, after);
-      if (closeRef !== -1 && (boundary === -1 || closeRef < boundary)) {
+      const refBoundary = firstBoundaryAtOrAfter(boundaries, after);
+      const refLimit = refBoundary === -1 ? text.length : refBoundary;
+      const closeRef = matchingBracket(text, after, "[", "]", refLimit);
+      if (closeRef !== -1) {
         out += label;
         i = closeRef + 1;
         continue;
       }
+    }
+    // Shortcut reference: a bare bracket whose label has a definition.
+    if (definedRefs.has(normalizeLinkLabel(label))) {
+      out += label;
+      i = closeBracket + 1;
+      continue;
     }
     // Not a link after all ("[Note]: …", "the [Obedience] principle").
     // Consume the whole matched bracket range using the label already
@@ -328,16 +529,21 @@ export function toPlainText(raw: string): string {
   // protectEscapedPunctuation above): the escapes are restored at the
   // very end, after entity decoding and whitespace normalization.
   text = protectEscapedPunctuation(text);
+  const codeSpans: string[] = [];
+  text = protectCodeSpans(text, codeSpans);
+  // HTML comments are not content; remove them (code spans already
+  // protected, so comments inside code spans survive literally).
+  text = text.replace(/<!--[\s\S]*?-->/g, "");
   // Footnote reference markers are pure clutter in a result card; drop
   // the whole <sup>…</sup> span, link syntax inside included. Only the
   // footnote form ("<sup>[1](#fn-1)</sup>") goes: any other superscript
   // (an exponent, an ordinal suffix like "19<sup>th</sup>") is content,
   // and the generic tag strip below keeps its text.
   text = text.replace(/<sup\b[^>]*>\s*\[[^\]]*\]\(#fn-[^)\s]*\)\s*<\/sup\s*>/gi, "");
-  // Autolinks (<https://…>, <someone@example.org>) would otherwise be
-  // eaten as HTML tags.
-  text = text.replace(/<(https?:\/\/[^>\s]+)>/g, "$1");
-  text = text.replace(/<([\w.+-]+@[\w-]+(?:\.[\w-]+)+)>/g, "$1");
+  // Autolinks are unwrapped after stripMarkdownLinks below, not here:
+  // unwrapping here would also unwrap an angle-bracket link
+  // destination ("[Read](<https://…a)b>)"), destroying its ">" so the
+  // link scanner could no longer find the destination's end.
   // Reference definitions are pure syntax once references resolve;
   // drop the whole line — but only lines that are valid definitions
   // (a bracketed label, a destination, an optional quoted title) with
@@ -347,6 +553,15 @@ export function toPlainText(raw: string): string {
   // colon ("[Note]: Remember to pray…") is content, not a definition,
   // and stays. Footnote definitions ("[^1]: …") carry prose after the
   // colon by design, so they get their own rule.
+  const definedRefs = new Set<string>();
+  {
+    const defRe =
+      /^ {0,3}\[([^\]]+)\]:[ \t]*(?:<[^>\n]*>|\S+)(?:[ \t]+(?:"[^"\n]*"|'[^'\n]*'|\([^()\n]*\)))?[ \t]*$/gm;
+    let dm: RegExpExecArray | null;
+    while ((dm = defRe.exec(text)) !== null) {
+      if (dm[1] !== undefined) definedRefs.add(normalizeLinkLabel(dm[1]));
+    }
+  }
   text = text.replace(
     /^ {0,3}\[[^\]]+\]:[ \t]*(?:<[^>\n]*>|\S+)(?:[ \t]+(?:"[^"\n]*"|'[^'\n]*'|\([^()\n]*\)))?[ \t]*$/gm,
     "",
@@ -361,12 +576,19 @@ export function toPlainText(raw: string): string {
   // all left the raw "[text](…)" syntax on live search cards (#74
   // manual pass on fb81f6d: Hunter chapter audio links, chapter
   // images). See stripMarkdownLinks below.
-  text = stripMarkdownLinks(text);
+  text = stripMarkdownLinks(text, definedRefs);
+  // Autolinks (<https://…>, <someone@example.org>) would otherwise be
+  // eaten as HTML tags by the generic tag strip below.
+  text = text.replace(/<(https?:\/\/[^>\s]+)>/g, "$1");
+  text = text.replace(/<([\w.+-]+@[\w-]+(?:\.[\w-]+)+)>/g, "$1");
   // Line-break and block-closing tags separate words: turn them into
   // whitespace before stripping, or "<p>Faith</p><p>hope</p>" would
   // come out as "Faithhope".
   text = text.replace(/<br\b[^>]*>/gi, "\n");
-  text = text.replace(/<\/(?:p|div|li|ul|ol|h[1-6]|blockquote|tr|td|th|section|article)\s*>/gi, "\n");
+  text = text.replace(
+    /<\/(?:p|div|li|ul|ol|h[1-6]|blockquote|tr|td|th|section|article)\s*>/gi,
+    "\n",
+  );
   // Any remaining HTML tags go, keeping the text they wrapped.
   text = text.replace(/<\/?[a-zA-Z][^>]*>/g, "");
   // Markdown line structure: headings and blockquotes keep their words.
@@ -409,7 +631,9 @@ export function toPlainText(raw: string): string {
         return HTML_ENTITIES[entity] ?? entity;
       }
       const codePoint = Number.parseInt(decimal ?? hex, decimal !== undefined ? 10 : 16);
-      return codePoint >= 1 && codePoint <= 0x10ffff && !(codePoint >= 0xd800 && codePoint <= 0xdfff)
+      return codePoint >= 1 &&
+        codePoint <= 0x10ffff &&
+        !(codePoint >= 0xd800 && codePoint <= 0xdfff)
         ? String.fromCodePoint(codePoint)
         : entity;
     },
@@ -422,7 +646,9 @@ export function toPlainText(raw: string): string {
   // characters are literal text and must not be reinterpreted as
   // markup, entities ("\&amp;" is the literal text "&amp;"), or
   // whitespace by any pass above.
-  return restoreEscapedPunctuation(text.trim());
+  // Code spans restore first: their contents may contain escape
+  // placeholders, which restoreEscapedPunctuation then restores.
+  return restoreEscapedPunctuation(restoreCodeSpans(text.trim(), codeSpans));
 }
 
 function buildVerse(reference: string, text: string, obj: Record<string, unknown>): Verse | null {
@@ -613,11 +839,7 @@ export class GospelEngineDataSource implements ScriptureDataSource {
           return verses;
         }
       } catch (error) {
-        if (
-          isDefinitiveReference &&
-          error instanceof ScriptureApiError &&
-          error.status === 400
-        ) {
+        if (isDefinitiveReference && error instanceof ScriptureApiError && error.status === 400) {
           return [];
         }
         // Fall through to semantic search.
