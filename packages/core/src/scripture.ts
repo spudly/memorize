@@ -848,6 +848,36 @@ function searchResultId(obj: Record<string, unknown>): string | null {
  * result list are duplicate React keys, whose reconciliation is
  * undefined and left stale cards on screen (#79).
  */
+/**
+ * Whether two Verse objects are the same memorization item, for
+ * library membership and store deduplication. Id equality is the
+ * primary test, but id alone is not a stable identity across every
+ * boundary this app crosses:
+ *
+ * - Verses saved before #79 carry legacy title-slug ids (both
+ *   "Charity Never Faileth" talks saved as `charity-never-faileth`),
+ *   while the same result now arrives with its document id
+ *   (`talks-3161`). No source identity was stored with the legacy
+ *   entry, so the id can never be rewritten on load.
+ * - A {@link withUniqueIds} suffix is a list-local rendering key, not
+ *   a saved identity: the chunk saved as `…-2` in one response is the
+ *   canonical `…` in a later response that returns it alone, and a
+ *   reordered response can hand the suffix to a different chunk.
+ *
+ * Reference + text is the strongest identity the stored data itself
+ * carries, and it distinguishes the cases the id change must not
+ * merge: distinct documents that share a title have different texts
+ * (different talks, different snippets), and distinct chunks of one
+ * document have different texts. Two results with the same reference
+ * AND the same text are the same passage by any measure the app has.
+ */
+export function isSameVerse(a: Verse, b: Verse): boolean {
+  if (a.id === b.id) {
+    return true;
+  }
+  return a.reference === b.reference && a.text === b.text;
+}
+
 export function withUniqueIds(verses: Verse[]): Verse[] {
   const reserved = new Set(verses.map((verse) => verse.id));
   const assigned = new Set<string>();

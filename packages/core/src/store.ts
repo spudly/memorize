@@ -6,6 +6,7 @@ import {
   type Verse,
 } from "@memorize/types";
 import { applyReview, markMemorized, nextReviewDate } from "./schedule";
+import { isSameVerse } from "./scripture";
 import { LocalStore, type KeyValueStorage } from "./storage";
 
 export interface MemorizeState {
@@ -79,7 +80,12 @@ export function createMemorizeStore(storage: KeyValueStorage): MemorizeStore {
 
   const actions: MemorizeActions = {
     addVerse(verse: Verse): void {
-      if (findVerse(verse.id)) {
+      // Dedupe on verse identity, not id alone: a result whose id
+      // changed across the #79 fix (legacy title-slug -> document id)
+      // or whose list-local suffix differs from the saved copy's
+      // (see isSameVerse) is the same item, and re-adding it must not
+      // create a second learning entry with separate progress.
+      if (data.verses.some((entry) => isSameVerse(entry.verse, verse))) {
         return;
       }
       const now = new Date();

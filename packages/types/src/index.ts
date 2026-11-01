@@ -5,7 +5,10 @@ export interface Verse {
    * `ether-12-27` (kept for scripture search hits too, so search and
    * `/api/get` agree); non-scripture full-library search results
    * instead carry their engine document identity, e.g. `talks-3161`,
-   * because titles repeat across documents (#79).
+   * because titles repeat across documents (#79). Duplicate results
+   * within one list get a list-local `-2`/`-3` suffix so rendered
+   * keys stay unique; that suffix is not a stable saved identity —
+   * membership/dedupe use `isSameVerse` (id, or reference + text).
    */
   id: string;
   /** Human-readable reference, e.g. `Ether 12:27`. */

@@ -1,6 +1,7 @@
 import {
   DemoDataSource,
   GospelEngineDataSource,
+  isSameVerse,
   mapGetResponse,
   mapSearchItem,
   parseReference,
@@ -490,6 +491,61 @@ describe("full-library search result identity (#79)", () => {
     stubFetch(() => ({ ok: true, status: 200, body: SAMPLE_SEARCH_RESPONSE }));
     const results = await source().search("charity");
     expect(results.map((v) => v.id)).toEqual(["moroni-7-47"]);
+  });
+});
+
+describe("isSameVerse identity across id schemes (#79)", () => {
+  const allredText = "Plead for a desire to be filled with the gift of charity.";
+
+  it("matches a legacy title-slug save to its document-id result by reference + text", () => {
+    expect(
+      isSameVerse(
+        { id: "charity-never-faileth", reference: "Charity Never Faileth", text: allredText },
+        { id: "talks-3161", reference: "Charity Never Faileth", text: allredText },
+      ),
+    ).toBe(true);
+  });
+
+  it("does not match a distinct same-titled document (different text)", () => {
+    expect(
+      isSameVerse(
+        { id: "charity-never-faileth", reference: "Charity Never Faileth", text: allredText },
+        {
+          id: "talks-3086",
+          reference: "Charity Never Faileth",
+          text: "Charity is not a single act or a single virtue.",
+        },
+      ),
+    ).toBe(false);
+  });
+
+  it("matches a chunk across list-local renumbering (subset and reordered responses)", () => {
+    const chunk = { reference: "Charity Never Faileth", text: "Second chunk of the same talk." };
+    expect(
+      isSameVerse(
+        { ...chunk, id: "charity-never-faileth-2" },
+        { ...chunk, id: "charity-never-faileth" },
+      ),
+    ).toBe(true);
+    expect(
+      isSameVerse(
+        { ...chunk, id: "charity-never-faileth-2" },
+        { ...chunk, id: "charity-never-faileth-3" },
+      ),
+    ).toBe(true);
+  });
+
+  it("does not match a different chunk of the same document", () => {
+    expect(
+      isSameVerse(
+        {
+          id: "charity-never-faileth-2",
+          reference: "Charity Never Faileth",
+          text: "Second chunk.",
+        },
+        { id: "charity-never-faileth", reference: "Charity Never Faileth", text: "First chunk." },
+      ),
+    ).toBe(false);
   });
 });
 

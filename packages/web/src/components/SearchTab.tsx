@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Alert, Button, Card, EmptyState, SearchField, Spinner, Text } from "@spudly/ui";
+import { isSameVerse } from "@memorize/core";
 import type { MemorizeStore, ScriptureDataSource, Verse } from "@memorize/core";
 
 interface Props {
@@ -21,7 +22,12 @@ export default function SearchTab({ store, dataSource, usingDemo }: Props) {
   // verse that is already in the library (the store dedupes re-adds)
   // shows "Added" from the start instead of an Add button that appears
   // to do nothing (#56 item 5).
-  const libraryIds = new Set(store.getState().data.verses.map((entry) => entry.verse.id));
+  // Membership is by verse identity, not id alone (isSameVerse): a
+  // verse saved before #79 under a legacy title-slug id, or a chunk
+  // whose list-local suffix changed between searches, is already in
+  // the library even though this result's id differs from the saved
+  // copy's id.
+  const libraryVerses = store.getState().data.verses.map((entry) => entry.verse);
 
   const runSearch = async (): Promise<void> => {
     setBusy(true);
@@ -48,9 +54,7 @@ export default function SearchTab({ store, dataSource, usingDemo }: Props) {
       <SearchField
         value={query}
         onChangeText={setQuery}
-        placeholder={
-          usingDemo ? "e.g. Ether 12:27 or “weakness”" : "e.g. Ether 12:27 or “charity”"
-        }
+        placeholder={usingDemo ? "e.g. Ether 12:27 or “weakness”" : "e.g. Ether 12:27 or “charity”"}
         onKeyDown={(e) => {
           if (e.key === "Enter") {
             void runSearch();
@@ -69,7 +73,7 @@ export default function SearchTab({ store, dataSource, usingDemo }: Props) {
         <Card key={v.id}>
           <Text variant="body">{v.reference}</Text>
           <Text variant="verse">{v.text}</Text>
-          {libraryIds.has(v.id) ? (
+          {libraryVerses.some((saved) => isSameVerse(saved, v)) ? (
             <Button size="sm" variant="secondary" disabled>
               Added
             </Button>
