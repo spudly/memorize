@@ -551,24 +551,31 @@ function stripMarkdownLinks(text: string, definedRefs: Set<string> = new Set<str
       // ("[![Elaine L. Ja") the outer "[" is literal text handled on
       // its own iteration, and the image's "![" must still drop
       // together.
-      let parenDepth = 0;
-      let hasUnmatchedCloseParen = false;
-      for (let p = open + 1; p < text.length; p++) {
-        if (text[p] === "(") parenDepth++;
-        else if (text[p] === ")") {
-          parenDepth--;
-          if (parenDepth < 0) {
-            hasUnmatchedCloseParen = true;
-            break;
-          }
-        }
-      }
-      const isTrailingFragment =
+      // The cheap guards run first: only the final "[" of the input
+      // can pass them (any earlier one has a "[" after it), so the
+      // parenthesis scan below runs at most once per call — scanning
+      // every unmatched bracket's suffix would be quadratic on a run
+      // of "["s.
+      const isTrailingFragmentShape =
         text.indexOf("[", open + 1) === -1 &&
         text.indexOf("]", open + 1) === -1 &&
         text.indexOf("\n", open + 1) === -1 &&
-        !hasUnmatchedCloseParen &&
         text[open - 1] !== "[";
+      let hasUnmatchedCloseParen = false;
+      if (isTrailingFragmentShape) {
+        let parenDepth = 0;
+        for (let p = open + 1; p < text.length; p++) {
+          if (text[p] === "(") parenDepth++;
+          else if (text[p] === ")") {
+            parenDepth--;
+            if (parenDepth < 0) {
+              hasUnmatchedCloseParen = true;
+              break;
+            }
+          }
+        }
+      }
+      const isTrailingFragment = isTrailingFragmentShape && !hasUnmatchedCloseParen;
       if (isTrailingFragment) {
         i = open + 1;
         continue;
