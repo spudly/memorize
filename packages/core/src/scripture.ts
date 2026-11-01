@@ -581,7 +581,7 @@ function stripMarkdownLinks(text: string, definedRefs: Set<string> = new Set<str
         // here too, or a mid-text literal bracket would be misread
         // as a truncated fragment.
         hasHtmlLineBreak =
-          /<(?:br|\/(?:p|div|li|ul|ol|h[1-6]|blockquote|tr|td|th|section|article))\b/i.test(
+          /<(?:br\b[^>]*>|\/(?:p|div|li|ul|ol|h[1-6]|blockquote|tr|td|th|section|article)\s*>)/i.test(
             text.slice(open + 1),
           );
       }

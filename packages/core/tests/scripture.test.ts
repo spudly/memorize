@@ -741,6 +741,11 @@ describe("toPlainText truncated-link cases (#76)", () => {
     // An HTML line break counts too: the link scanner runs before
     // the HTML pass turns <br> into "\n".
     expect(mapOne("Faith [hope<br>charity")).toBe("Faith [hope\ncharity");
+    // But only a complete tag counts — the HTML pass requires the
+    // closing ">", so an excerpt cut inside the tag itself ("<br"
+    // with no ">") is still a truncated fragment and its dangling
+    // bracket drops.
+    expect(mapOne("See [Faith<br")).toBe("See Faith<br");
   });
 
   it("keeps literal bracket notation in complete text", () => {
