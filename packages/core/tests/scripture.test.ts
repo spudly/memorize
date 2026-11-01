@@ -454,6 +454,12 @@ describe("toPlainText numeric-operator cases (#74)", () => {
       "The lot measured 2*3*4 cubits and was very wide",
     );
   });
+
+  it("unwraps emphasis adjacent to digits when it is not an operator", () => {
+    expect(mapOne("1*st*")).toBe("1st");
+    expect(mapOne("1**st**")).toBe("1st");
+    expect(mapOne("**3** Nephi")).toBe("3 Nephi");
+  });
 });
 
 describe("toPlainText Copilot-round cases (#74)", () => {
