@@ -183,17 +183,16 @@ describe("GospelEngineDataSource", () => {
     expect(results[0]?.reference).toBe("Moroni 7:47");
   });
 
-  it("falls back to /api/search when /api/get finds nothing (404)", async () => {
+  it("returns no results when a reference-shaped query finds nothing (404) (#70)", async () => {
     const calls = stubFetch((url) =>
       url.includes("/api/get")
         ? { ok: false, status: 404, body: {} }
         : { ok: true, status: 200, body: SAMPLE_SEARCH_RESPONSE },
     );
-    const results = await source().search("Ether 12:27");
-    expect(calls).toHaveLength(2);
+    const results = await source().search("Hezekiah 99:99");
+    expect(calls).toHaveLength(1);
     expect(calls[0]).toContain("/api/get");
-    expect(calls[1]).toContain("/api/search");
-    expect(results[0]?.reference).toBe("Moroni 7:47");
+    expect(results).toEqual([]);
   });
 
   it("falls back to /api/search when /api/get errors", async () => {

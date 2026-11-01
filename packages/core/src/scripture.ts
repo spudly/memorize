@@ -37,8 +37,9 @@ const BOOK_ALIASES: Record<string, string> = {
  * "1 Nephi 3:7", "Proverbs 3:5-6", "Alma 32", "D&C 18:10") — return the
  * canonical reference to look up. Otherwise return null: the query is a
  * keyword/topic search. Detection is structural (trailing chapter[:verse]
- * numbers after book text), so a miss costs one /api/get round-trip and
- * the caller falls back to semantic search.
+ * numbers after book text), so a miss costs one /api/get round-trip; the
+ * caller returns no results on a miss and falls back to semantic search
+ * only when the lookup itself errors.
  */
 export function parseReference(query: string): string | null {
   const collapsed = query.trim().replace(/\s+/g, " ");
@@ -233,15 +234,15 @@ export class GospelEngineDataSource implements ScriptureDataSource {
     // Reference-shaped queries ("Ether 12:27") go to /api/get first:
     // /api/search is semantic search over the whole library (talks,
     // manuals, study aids included) and buries the exact verse in
-    // loosely related results. On any miss — no match, lookup error —
-    // fall back to semantic search so nothing that worked before breaks.
+    // loosely related results. A definitive miss (lookupReference maps
+    // a 404 to []) returns no results: falling back to semantic search
+    // would silently ignore the chapter/verse the user typed and
+    // return keyword matches for the book name alone (#70). Only a
+    // lookup *error* still falls back to semantic search.
     const reference = parseReference(query);
     if (reference !== null) {
       try {
-        const verses = await this.lookupReference(reference);
-        if (verses.length > 0) {
-          return verses;
-        }
+        return await this.lookupReference(reference);
       } catch {
         // Fall through to semantic search.
       }
