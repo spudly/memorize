@@ -795,6 +795,52 @@ export function toPlainText(raw: string): string {
   return restoreEscapedPunctuation(restoreCodeSpans(text.trim(), codeSpans));
 }
 
+/**
+ * The id for a full-library (/api/search) result, derived from the
+ * engine's document identity (`source_type` + `source_id`, both present
+ * on every live search item — verified against the production proxy on
+ * 2026-11-01) instead of its title. Distinct documents routinely share
+ * a title: a `charity` search returns two different talks both titled
+ * "Charity Never Faileth" (Silvia H. Allred, 2011 and Thomas S. Monson,
+ * 2010). Deriving the id from the title collapsed both to
+ * `charity-never-faileth`, so the result list carried duplicate React
+ * keys — reconciliation with duplicate keys left one of the two cards
+ * mounted stale across later searches and tab switches (#79) — and the
+ * store, which dedupes by id, treated the two talks as one verse.
+ * Returns null when the item carries no source identity (the /api/get
+ * shapes, whose items are identified by their reference instead).
+ */
+function searchResultId(obj: Record<string, unknown>): string | null {
+  const sourceId = obj["source_id"];
+  if (
+    typeof sourceId !== "number" &&
+    !(typeof sourceId === "string" && sourceId.trim().length > 0)
+  ) {
+    return null;
+  }
+  const sourceType = firstString(obj, ["source_type"]) ?? "library";
+  return normalizeReference(`${sourceType} ${String(sourceId).trim()}`);
+}
+
+/**
+ * Guarantee unique ids within one result list, suffixing repeats
+ * (`-2`, `-3`, …) after the first occurrence. The first occurrence
+ * always keeps the canonical id, so ordinary lists are untouched.
+ * This is the backstop for shapes {@link searchResultId} cannot
+ * disambiguate — e.g. several chunks of one document returned under a
+ * single shared reference/title — because duplicate ids in a rendered
+ * result list are duplicate React keys, whose reconciliation is
+ * undefined and left stale cards on screen (#79).
+ */
+export function withUniqueIds(verses: Verse[]): Verse[] {
+  const seen = new Map<string, number>();
+  return verses.map((verse) => {
+    const count = (seen.get(verse.id) ?? 0) + 1;
+    seen.set(verse.id, count);
+    return count === 1 ? verse : { ...verse, id: `${verse.id}-${count}` };
+  });
+}
+
 function buildVerse(reference: string, text: string, obj: Record<string, unknown>): Verse | null {
   const plain = toPlainText(text);
   // Non-blank source markup can convert to nothing at all (an
@@ -804,7 +850,11 @@ function buildVerse(reference: string, text: string, obj: Record<string, unknown
   if (plain.length === 0) {
     return null;
   }
-  const verse: Verse = { id: normalizeReference(reference), reference, text: plain };
+  const verse: Verse = {
+    id: searchResultId(obj) ?? normalizeReference(reference),
+    reference,
+    text: plain,
+  };
   const book = firstString(obj, ["book", "book_name"]);
   if (book !== undefined) {
     verse.book = book;
@@ -822,9 +872,11 @@ function buildVerse(reference: string, text: string, obj: Record<string, unknown
 /**
  * Map one raw search-result item to a Verse.
  *
- * The gospel-engine response shape is UNVERIFIED (the API requires a key we
- * don't have yet), so this tries the most likely field names and returns null
- * when nothing matches. See docs/api-notes.md.
+ * The /api/get shape is verified and the /api/search shape was verified
+ * against the production proxy on 2026-11-01 (items carry `title`,
+ * `snippet`, `source_type`, `source_id`); the field fallbacks stay
+ * defensive and this returns null when nothing matches. See
+ * docs/api-notes.md.
  */
 export function mapSearchItem(raw: unknown): Verse | null {
   const obj = asRecord(raw);
@@ -918,7 +970,7 @@ export function mapChapterResponse(data: unknown): Verse | null {
 export function mapGetResponse(data: unknown): Verse[] {
   const items = resultItems(data);
   if (items) {
-    return items.map(mapSearchItem).filter((v): v is Verse => v !== null);
+    return withUniqueIds(items.map(mapSearchItem).filter((v): v is Verse => v !== null));
   }
   const chapter = mapChapterResponse(data);
   if (chapter) {
@@ -1008,7 +1060,7 @@ export class GospelEngineDataSource implements ScriptureDataSource {
         "Unexpected search response shape. See packages/core/docs/api-notes.md to verify the field mapping.",
       );
     }
-    return items.map(mapSearchItem).filter((v): v is Verse => v !== null);
+    return withUniqueIds(items.map(mapSearchItem).filter((v): v is Verse => v !== null));
   }
 
   /**

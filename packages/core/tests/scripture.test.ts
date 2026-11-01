@@ -2,6 +2,7 @@ import {
   DemoDataSource,
   GospelEngineDataSource,
   mapGetResponse,
+  mapSearchItem,
   parseReference,
   ScriptureApiError,
 } from "../src/scripture";
@@ -336,6 +337,104 @@ describe("GospelEngineDataSource", () => {
   it("getVerse throws a 404 ScriptureApiError when the reference is unknown", async () => {
     stubFetch(() => ({ ok: false, status: 404, body: {} }));
     await expect(source().getVerse("Ether 99:99")).rejects.toBeInstanceOf(ScriptureApiError);
+  });
+});
+
+/**
+ * Live /api/search shape, captured from the production proxy
+ * (memorize-ivory.vercel.app/api/search?q=charity) on 2026-11-01:
+ * items carry `title` + `snippet` (no `reference`/`text`) and a unique
+ * `source_type` + `source_id` document identity. Two DIFFERENT talks
+ * in the real result set share the title "Charity Never Faileth" —
+ * the exact pair behind #79's stale card.
+ */
+const SAMPLE_LIVE_SEARCH_RESPONSE = {
+  mode: "hybrid",
+  query: "charity",
+  results: [
+    {
+      source_type: "talks",
+      source_id: 3161,
+      title: "Charity Never Faileth",
+      snippet:
+        "First Counselor in the Relief Society General Presidency\n\nPlead for a desire to be filled with the gift of charity.",
+      speaker: "Silvia H. Allred",
+      year: 2011,
+    },
+    {
+      source_type: "talks",
+      source_id: 3086,
+      title: "Charity Never Faileth",
+      snippet: "President of the Church\n\nCharity is not a single act or a single virtue.",
+      speaker: "Thomas S. Monson",
+      year: 2010,
+    },
+    {
+      source_type: "study_aids",
+      source_id: 2824,
+      title: "Charity",
+      snippet: "Charity is the pure love of Christ.",
+    },
+  ],
+};
+
+describe("full-library search result identity (#79)", () => {
+  const source = () => new GospelEngineDataSource("https://engine.example", "stdy_test");
+
+  it("gives same-titled results distinct ids from their source identity", async () => {
+    stubFetch(() => ({ ok: true, status: 200, body: SAMPLE_LIVE_SEARCH_RESPONSE }));
+    const results = await source().search("charity");
+    expect(results).toHaveLength(3);
+    expect(results.map((v) => v.reference)).toEqual([
+      "Charity Never Faileth",
+      "Charity Never Faileth",
+      "Charity",
+    ]);
+    const ids = results.map((v) => v.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids).toEqual(["talks-3161", "talks-3086", "study-aids-2824"]);
+  });
+
+  it("keeps every result when the engine repeats one reference (chunk shape)", async () => {
+    stubFetch(() => ({
+      ok: true,
+      status: 200,
+      body: {
+        results: [
+          { reference: "Charity Never Faileth", text: "First chunk of the talk." },
+          { reference: "Charity Never Faileth", text: "Second chunk of the same talk." },
+          { reference: "Charity Never Faileth", text: "Third chunk of the same talk." },
+        ],
+      },
+    }));
+    const results = await source().search("charity");
+    expect(results).toHaveLength(3);
+    const ids = results.map((v) => v.id);
+    // Duplicate ids are duplicate React keys in the result list — the
+    // stale-card defect. The first keeps the canonical id; repeats are
+    // suffixed, never dropped and never duplicated.
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids).toEqual([
+      "charity-never-faileth",
+      "charity-never-faileth-2",
+      "charity-never-faileth-3",
+    ]);
+  });
+
+  it("suffixes duplicate references in a /api/get verses array the same way", () => {
+    const verses = mapGetResponse({
+      verses: [
+        { reference: "Ether 12:27", text: "First copy." },
+        { reference: "Ether 12:27", text: "Second copy." },
+      ],
+    });
+    expect(verses.map((v) => v.id)).toEqual(["ether-12-27", "ether-12-27-2"]);
+  });
+
+  it("leaves reference-slug ids untouched when ids are already unique", async () => {
+    stubFetch(() => ({ ok: true, status: 200, body: SAMPLE_SEARCH_RESPONSE }));
+    const results = await source().search("charity");
+    expect(results.map((v) => v.id)).toEqual(["moroni-7-47"]);
   });
 });
 
@@ -707,5 +806,66 @@ describe("toPlainText round-5 cases (#74)", () => {
     // hide the boundary from the bracket matcher.
     const input = "Faith [hope\\\n\nlove](https://x) end";
     expect(mapOne(input)).toBe(input);
+  });
+});
+
+describe("mapSearchItem verse identity (#79)", () => {
+  // Verified live /api/search shape (2026-11-01, see docs/api-notes.md):
+  // items carry source_type/source_id/title/snippet — no reference or
+  // text field — and titles are NOT unique across documents: a
+  // `charity` search returns two different "Charity Never Faileth"
+  // talks. Deriving the Verse id from the title made those results
+  // share one id, and the web list keys cards by id — duplicate React
+  // keys orphaned a card's DOM node, which then persisted across
+  // later searches and other tabs until reload.
+  const allredTalk = {
+    source_type: "talks",
+    source_id: 3161,
+    title: "Charity Never Faileth",
+    speaker: "Silvia H. Allred",
+    snippet: "Plead for a desire to be filled with the gift of charity.",
+  };
+  const otherTalkSameTitle = {
+    source_type: "talks",
+    source_id: 2044,
+    title: "Charity Never Faileth",
+    speaker: "Another Speaker",
+    snippet: "A different talk that happens to share the title.",
+  };
+
+  it("gives same-title search results distinct ids from their document identity", () => {
+    const a = mapSearchItem(allredTalk);
+    const b = mapSearchItem(otherTalkSameTitle);
+    expect(a).not.toBeNull();
+    expect(b).not.toBeNull();
+    expect(a?.reference).toBe("Charity Never Faileth");
+    expect(b?.reference).toBe("Charity Never Faileth");
+    expect(a?.id).toBe("talks-3161");
+    expect(b?.id).toBe("talks-2044");
+    expect(a?.id).not.toBe(b?.id);
+  });
+
+  it("keeps the reference-slug id for items without document identity", () => {
+    const verse = mapSearchItem({
+      reference: "Moroni 7:47",
+      text: "But charity is the pure love of Christ.",
+    });
+    expect(verse?.id).toBe("moroni-7-47");
+  });
+
+  it("returns unique ids for a full search response of same-title results", async () => {
+    stubFetch((url) =>
+      url.includes("/api/search")
+        ? {
+            ok: true,
+            status: 200,
+            body: { results: [allredTalk, otherTalkSameTitle] },
+          }
+        : { ok: false, status: 404, body: {} },
+    );
+    const source = new GospelEngineDataSource("https://example.test", "key");
+    const results = await source.search("charity");
+    expect(results).toHaveLength(2);
+    expect(new Set(results.map((v) => v.id)).size).toBe(2);
   });
 });

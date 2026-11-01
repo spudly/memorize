@@ -1,6 +1,11 @@
 /** A single scripture verse that can be memorized. */
 export interface Verse {
-  /** Normalized reference slug, e.g. `ether-12-27`. */
+  /**
+   * Unique id: the normalized reference slug for scriptures, e.g.
+   * `ether-12-27`; full-library search results instead carry their
+   * engine document identity, e.g. `talks-3161`, because titles repeat
+   * across documents (#79).
+   */
   id: string;
   /** Human-readable reference, e.g. `Ether 12:27`. */
   reference: string;

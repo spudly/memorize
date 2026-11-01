@@ -8,7 +8,8 @@ Default base URL: `https://engine.ibeco.me`
 
 > The /api/get shape below is **VERIFIED** (live sample captured 2026-10-16,
 > pinned as a fixture in `tests/scripture.test.ts`). The /api/search shape
-> is still unverified; its mapper stays defensive.
+> was **VERIFIED** on 2026-11-01 against the production proxy (see Search
+> below); its mapper stays defensive.
 
 ## Getting a key
 
@@ -29,6 +30,15 @@ reference typed into it returns mostly unrelated material. That is why
 `GospelEngineDataSource.search()` routes reference-shaped queries to
 /api/get first (see `parseReference`) and only uses /api/search for
 keywords or as a fallback when the lookup misses.
+
+Live shape (verified 2026-11-01, `GET /api/search?q=charity` through the
+production proxy): `{ mode, query, results: [...] }` where each item
+carries `source_type`, `source_id`, `title`, `snippet`, `file_path`,
+`web_url`, `score`, and for talks `speaker` / `year` / `month` — there is
+no `reference` or `text` field. Titles are NOT unique across documents
+(a `charity` search returns two different "Charity Never Faileth"
+talks), so the Verse `id` for a search item is derived from
+`source_type` + `source_id`, never from the title alone (#79).
 
 The mapper accepts either a top-level JSON array or an object with a
 `results` / `items` / `verses` / `data` array. Each item is read with these
@@ -114,7 +124,8 @@ client runtime.
 
 1. ~~The /api/get response shape and parameter name~~ — done 2026-10-16
    (see above; fixture in `tests/scripture.test.ts`).
-2. The real field names for reference/text in /api/search results.
+2. ~~The real field names for reference/text in /api/search results~~ — done
+   2026-11-01 (see above; fixture in `tests/scripture.test.ts`).
 3. Pagination / result limits on search (the app currently takes the first page).
 4. Rate limits (600 requests/minute per token per the project README; the
    client surfaces HTTP 429 as a `ScriptureApiError` with `status` set).
