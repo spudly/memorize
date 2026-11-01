@@ -266,15 +266,18 @@ function restoreEscapedPunctuation(text: string): string {
  * Drop replacement-character corruption from engine text (#77):
  * U+FFFD itself, plus unpaired surrogates, which render as U+FFFD.
  * Well-formed surrogate pairs (real astral characters in engine
- * text, e.g. the 🎧 audio marker) are untouched. Applied to the raw
- * input in toPlainText and again to code-span content when it is
- * restored — span content bypasses the main cleanup behind its
- * placeholder, so it needs the same treatment on the way back.
+ * text, e.g. the 🎧 audio marker) are untouched. The surrogates go
+ * FIRST: dropping U+FFFD first could fuse two unpaired halves that
+ * happened to surround one ("\uD83D\uFFFD\uDE00") into a fabricated
+ * character (😀) neither half ever formed. Applied in toPlainText
+ * once code spans are captured, and again to code-span content when
+ * it is restored — span content bypasses the main cleanup behind
+ * its placeholder, so it needs the same treatment on the way back.
  */
 function dropReplacementArtifacts(text: string): string {
   return text
-    .replace(/\uFFFD/g, "")
-    .replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, "");
+    .replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, "")
+    .replace(/\uFFFD/g, "");
 }
 
 // Private-use placeholder pair for protected code spans. The values
@@ -665,6 +668,14 @@ function stripMarkdownLinks(text: string, definedRefs: Set<string> = new Set<str
  */
 export function toPlainText(raw: string): string {
   let text = raw.replace(/\r\n?/g, "\n");
+  // Protect code spans FIRST: backslash escapes are not interpreted
+  // inside a code span, so span content must be captured before
+  // escape protection runs — otherwise "\*faith\*" inside backticks
+  // came back as "*faith*", its literal backslashes eaten by the
+  // escape placeholders. The span scanner is itself escape-aware, so
+  // an escaped backtick outside a span still never opens one.
+  const codeSpans: string[] = [];
+  text = protectCodeSpans(text, codeSpans);
   // Replacement characters are corruption, never content (#77). The
   // engine builds search snippets by slicing source text at a byte
   // limit (upstream gospel-engine `snippet`); when the cut falls
@@ -675,17 +686,13 @@ export function toPlainText(raw: string): string {
   // render. Unpaired surrogates render as U+FFFD too (a UTF-16 slice
   // through an astral character leaves one behind), so they go as
   // well; well-formed surrogate pairs (real emoji in engine text,
-  // e.g. the 🎧 audio marker) are untouched. This runs first so the
+  // e.g. the 🎧 audio marker) are untouched. This runs AFTER code
+  // spans are captured, so span content keeps its artifacts until
+  // restoreCodeSpans cleans it the same way — a span that held only
+  // corruption then empties entirely instead of leaving a pair of
+  // stray backticks behind — and before every markup pass, so the
   // whitespace normalization below tidies any gap a drop leaves.
   text = dropReplacementArtifacts(text);
-  // Protect code spans FIRST: backslash escapes are not interpreted
-  // inside a code span, so span content must be captured before
-  // escape protection runs — otherwise "\*faith\*" inside backticks
-  // came back as "*faith*", its literal backslashes eaten by the
-  // escape placeholders. The span scanner is itself escape-aware, so
-  // an escaped backtick outside a span still never opens one.
-  const codeSpans: string[] = [];
-  text = protectCodeSpans(text, codeSpans);
   // Protect backslash-escaped punctuation for the whole cleanup (see
   // protectEscapedPunctuation above): the escapes are restored at the
   // very end, after entity decoding and whitespace normalization.

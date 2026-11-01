@@ -797,3 +797,31 @@ describe("toPlainText replacement-character round-2 cases (#77)", () => {
     expect(mapOne("`🎧 Listen` now")).toBe("🎧 Listen now");
   });
 });
+
+describe("toPlainText replacement-character round-3 cases (#77)", () => {
+  const mapOne = (text: string) => mapGetResponse({ reference: "Talk excerpt", text })[0]?.text;
+
+  it("never fuses two unpaired surrogate halves around a dropped U+FFFD into a character", () => {
+    // Dropping U+FFFD first would join "\uD83D" and "\uDE00" into a
+    // fabricated 😀; unpaired surrogates are dropped first instead.
+    expect(mapOne("Faith \uD83D\uFFFD\uDE00 hope")).toBe("Faith hope");
+    expect(mapGetResponse({ reference: "Talk excerpt", text: "\uD83D\uFFFD\uDE00" })).toEqual([]);
+  });
+
+  it("drops a code span whose whole content is replacement corruption", () => {
+    // The cleanup runs after code spans are captured, so the span's
+    // content is cleaned at restore time and an emptied span leaves
+    // no stray backticks behind.
+    expect(mapGetResponse({ reference: "Talk excerpt", text: "`\uFFFD`" })).toEqual([]);
+    expect(mapGetResponse({ reference: "Talk excerpt", text: "`\uD83D\uFFFD\uDE00`" })).toEqual([]);
+    expect(mapOne("Faith`\uFFFD` hope")).toBe("Faith hope");
+  });
+
+  it("keeps the backslash behavior when a backslash precedes U+FFFD", () => {
+    // The escape-aware code-span scanner pairs the backslash with
+    // the U+FFFD after it; moving the cleanup behind that scan must
+    // not change the outcome (a lone backslash stays, as it does for
+    // any non-punctuation escape).
+    expect(mapOne("Faith \\\uFFFD hope")).toBe("Faith \\ hope");
+  });
+});
