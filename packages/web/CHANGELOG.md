@@ -1,5 +1,38 @@
 # @memorize/web
 
+## 1.1.2
+
+### Patch Changes
+
+- 6763990: Fix the production web build serving the built-in demo set to visitors
+  without a local API key (#63): the Vercel deployment now compiles with
+  VITE_USE_GOSPEL_PROXY=1 (committed .env.production, which Vite reads at
+  build time, plus build-time env in vercel.json), so production search
+  goes through the same-origin edge proxy to the full library and the
+  Search tab no longer shows the demo notice in that state.
+- d63d305: Fix full-library search returning keyword results for a nonsense
+  reference (#70): a reference-shaped query naming an explicit verse
+  (e.g. "Hezekiah 99:99") whose exact lookup finds nothing now returns
+  no results instead of falling back to semantic search, which silently
+  ignored the chapter/verse and matched the book name alone.
+  Chapter-only references to a nonexistent chapter of a known book
+  (e.g. "Ether 16") also return no results on a miss. Chapter-only
+  queries that name no known book ("lesson 3") or end in a year-like
+  4-digit number ("general conference 2024") are keyword searches and
+  keep the semantic fallback, as do lookup errors other than a 400.
+- fe75991: Fix full-library search cards rendering raw markdown/HTML markup in
+  result text (#74): text mapped from the gospel engine is now converted
+  to readable plain text in @memorize/core — markdown images keep their
+  alt text, footnote `<sup>` markers and empty anchor tags are dropped,
+  headings/emphasis/links keep their words, remaining HTML tags are
+  stripped, and common entities are decoded. Scripture verse text, which
+  is already plain, passes through unchanged.
+- Updated dependencies [6763990]
+- Updated dependencies [d63d305]
+- Updated dependencies [fe75991]
+  - @memorize/core@1.1.2
+  - @memorize/types@1.1.2
+
 ## 1.1.1
 
 ### Patch Changes
