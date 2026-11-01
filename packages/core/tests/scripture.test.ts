@@ -869,3 +869,21 @@ describe("toPlainText replacement-character round-4 cases (#77)", () => {
     expect(mapOne("` \uFFFD ` and faith")).toBe("and faith");
   });
 });
+
+describe("toPlainText replacement-character round-5 cases (#77)", () => {
+  const mapOne = (text: string) => mapGetResponse({ reference: "Talk excerpt", text })[0]?.text;
+
+  it("does not let replacement-artifact cleanup forge a code-span placeholder", () => {
+    // The U+FFFD between the literal marker and the digit is dropped
+    // by the cleanup, joining "\uE066" + "0" + "\uE067" into a
+    // placeholder-shaped sequence after the markers were chosen.
+    expect(mapOne("`Faith` and \uE066\uFFFD0\uE067 end")).toBe("Faith and \uE0660\uE067 end");
+  });
+
+  it("does not let an encoded replacement character forge a code-span placeholder", () => {
+    // "&#65533;" decodes to nothing, so decoding joins the encoded
+    // markers and the digit the same way.
+    expect(mapOne("`Faith` and &#57446;&#65533;0&#57447; end")).toBe("Faith and \uE0660\uE067 end");
+    expect(mapOne("`Faith` and &#xE066;&#xFFFD;0&#xE067; end")).toBe("Faith and \uE0660\uE067 end");
+  });
+});

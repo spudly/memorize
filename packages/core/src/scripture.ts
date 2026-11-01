@@ -289,12 +289,13 @@ function dropReplacementArtifacts(text: string): string {
  * span's content ("`Faith` and \uE0660\uE067 end" came out as
  * "Faith and Faith end"). So the pair is selected for each input:
  * the first candidate whose "<start><digits><end>" pattern appears
- * neither in the text itself nor in the text with its numeric
- * entities decoded (an entity like "&#57446;" decodes to U+E066
- * later in the pipeline and must not be able to forge a placeholder
- * either). Candidates sit in the private-use area clear of the
- * escape placeholders above (U+E000–U+E01F), starting at the
- * historical U+E066/U+E067 so ordinary text is unchanged.
+ * in none of the text's raw, entity-decoded, or artifact-cleaned
+ * forms (an entity like "&#57446;" decodes to U+E066 later in the
+ * pipeline, and dropping a U+FFFD can join a split sequence, so a
+ * placeholder those passes could produce is a collision too).
+ * Candidates sit in the private-use area clear of the escape
+ * placeholders above (U+E000–U+E01F), starting at the historical
+ * U+E066/U+E067 so ordinary text is unchanged.
  */
 type CodeSpanMarkers = {
   start: string;
@@ -306,21 +307,39 @@ function codeSpanMarkerPattern(start: string, end: string): RegExp {
 }
 
 function chooseCodeSpanMarkers(text: string): CodeSpanMarkers {
-  // Probe both the raw text and its numeric-entity-decoded form:
-  // decoding runs later in toPlainText, after spans are protected,
-  // so a placeholder the decoder could produce is a collision too.
-  const decodedProbe = text.replace(
-    /&#(\d+);|&#x([0-9a-fA-F]+);/g,
-    (entity, decimal: string | undefined, hex: string | undefined) => {
-      const codePoint = Number.parseInt(decimal ?? hex ?? "", decimal !== undefined ? 10 : 16);
-      return codePoint >= 1 &&
-        codePoint <= 0x10ffff &&
-        !(codePoint >= 0xd800 && codePoint <= 0xdfff)
-        ? String.fromCodePoint(codePoint)
-        : entity;
-    },
-  );
-  const probe = `${text}\n${decodedProbe}`;
+  // Probe the raw text, its numeric-entity-decoded form, and the
+  // artifact-cleaned forms of both. Decoding and the replacement-
+  // artifact cleanup both run later in toPlainText, after spans are
+  // protected, and each can CREATE a placeholder-shaped sequence
+  // that the raw text does not contain: dropping a U+FFFD joins a
+  // literal "\uE066" + "0" + "\uE067" split by one, and an encoded
+  // U+FFFD ("&#65533;") decodes to nothing, joining encoded markers
+  // the same way. The probe decoder therefore mirrors the real one,
+  // including its U+FFFD-to-nothing rule.
+  const decodeProbe = (value: string): string =>
+    value.replace(
+      /&#(\d+);|&#x([0-9a-fA-F]+);/g,
+      (entity, decimal: string | undefined, hex: string | undefined) => {
+        const codePoint = Number.parseInt(decimal ?? hex ?? "", decimal !== undefined ? 10 : 16);
+        if (codePoint === 0xfffd) {
+          return "";
+        }
+        return codePoint >= 1 &&
+          codePoint <= 0x10ffff &&
+          !(codePoint >= 0xd800 && codePoint <= 0xdfff)
+          ? String.fromCodePoint(codePoint)
+          : entity;
+      },
+    );
+  const decodedProbe = decodeProbe(text);
+  const cleanedProbe = dropReplacementArtifacts(text);
+  const probe = [
+    text,
+    decodedProbe,
+    cleanedProbe,
+    dropReplacementArtifacts(decodedProbe),
+    decodeProbe(cleanedProbe),
+  ].join("\n");
   for (let code = 0xe066; code <= 0xf8fd; code += 2) {
     const start = String.fromCharCode(code);
     const end = String.fromCharCode(code + 1);
