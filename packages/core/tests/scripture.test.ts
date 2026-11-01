@@ -709,3 +709,34 @@ describe("toPlainText round-5 cases (#74)", () => {
     expect(mapOne(input)).toBe(input);
   });
 });
+
+describe("toPlainText truncated-link cases (#76)", () => {
+  const mapOne = (text: string) => mapGetResponse({ reference: "Talk excerpt", text })[0]?.text;
+
+  it("drops the dangling bracket when an excerpt truncates a link mid-label", () => {
+    // The "Faith" guide card's "See also" line, as seen in the PR #75
+    // manual preview pass: the excerpt cut "[Obedience](…)" off
+    // before its closing syntax, leaving a lone "[" in the card.
+    expect(
+      mapOne(
+        "- See also Assurance; Baptism, Qualifications for; Believe; Confidence; Faithful; Faithfulness; [Obedi",
+      ),
+    ).toBe(
+      "- See also Assurance; Baptism, Qualifications for; Believe; Confidence; Faithful; Faithfulness; Obedi",
+    );
+    expect(mapOne("See also [Obedi")).toBe("See also Obedi");
+  });
+
+  it("drops the dangling image bracket when an excerpt truncates an image mid-alt", () => {
+    expect(mapOne("Portrait: ![Elaine L. Ja")).toBe("Portrait: Elaine L. Ja");
+  });
+
+  it("drops a lone trailing bracket at the input edge", () => {
+    expect(mapOne("Faith; [")).toBe("Faith;");
+  });
+
+  it("keeps unmatched brackets that are not a trailing fragment", () => {
+    // The fragment continues onto another line: not an excerpt cut.
+    expect(mapOne("Faith [hope\ncharity")).toBe("Faith [hope\ncharity");
+  });
+});

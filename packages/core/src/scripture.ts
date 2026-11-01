@@ -496,7 +496,10 @@ function parenDepthEnd(text: string, open: number, limit: number): number {
  * and the prose after the line is untouched. Reference-style
  * ("[text][ref]") forms keep their text the same way, a bare
  * "[word]" with no destination is ordinary text and stays, and an
- * escaped bracket ("\[") never opens a link.
+ * escaped bracket ("\[") never opens a link. A link an excerpt
+ * truncated mid-label at the end of the input ("…; [Obedi") loses
+ * only its dangling bracket: the partial label stays as plain text
+ * (#76).
  */
 function stripMarkdownLinks(text: string, definedRefs: Set<string> = new Set<string>()): string {
   const boundaries = paragraphBoundaries(text);
@@ -528,6 +531,25 @@ function stripMarkdownLinks(text: string, definedRefs: Set<string> = new Set<str
     // already guarantees the match (if any) stays inside one.
     const closeBracket = matches.get(open) ?? -1;
     if (closeBracket === -1) {
+      // Truncated excerpt edge (#76): an unmatched "[" whose fragment
+      // runs to the end of the input — no closing bracket, no line
+      // break, and no further bracket after it — is a link an excerpt
+      // cut off mid-syntax ("…; Faithfulness; [Obedi"). Drop the
+      // dangling bracket (and the "!" of a truncated image) and keep
+      // the partial label as plain text, so a card never renders raw
+      // bracket syntax. Unmatched brackets anywhere else are literal
+      // text and stay: the guards keep a run of "["s untouched (each
+      // one is either followed by another "[" or preceded by one) and
+      // keep any "[" whose text continues onto another line.
+      const isTrailingFragment =
+        text.indexOf("[", open + 1) === -1 &&
+        text.indexOf("]", open + 1) === -1 &&
+        text.indexOf("\n", open + 1) === -1 &&
+        text[i - 1] !== "[";
+      if (isTrailingFragment) {
+        i = open + 1;
+        continue;
+      }
       out += text[i];
       i++;
       continue;
