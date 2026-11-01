@@ -202,9 +202,12 @@ export function toPlainText(raw: string): string {
   // Emphasis and code markers keep the words they wrap. Delimiters
   // must hug non-whitespace content, so literal operators in ordinary
   // text (e.g. "2 * 3 * 4") are not mistaken for emphasis.
-  text = text.replace(/(\*\*|__)(?!\s)([\s\S]*?)(?<!\s)\1/g, "$2");
+  // Asterisk pairs flanked by digits are arithmetic, not emphasis
+  // ("2*3*4", "2**3**4"): the digit lookarounds keep those intact
+  // while spaced or letter-flanked emphasis still unwraps.
+  text = text.replace(/(?<!\d)(\*\*|__)(?!\s)([\s\S]*?)(?<!\s)\1(?!\d)/g, "$2");
   text = text.replace(/~~(?!\s)([\s\S]*?)(?<!\s)~~/g, "$1");
-  text = text.replace(/\*(?!\s)([^*\n]+?)(?<!\s)\*/g, "$1");
+  text = text.replace(/(?<!\d)(?<!\*)\*(?!\s)([^*\n]+?)(?<!\s)\*(?!\d)(?!\*)/g, "$1");
   text = text.replace(/(?<![\w])_(?!\s)([^_\n]+?)(?<!\s)_(?![\w])/g, "$1");
   text = text.replace(/`([^`\n]+)`/g, "$1");
   // Decode entities only after Markdown cleanup: decoded characters

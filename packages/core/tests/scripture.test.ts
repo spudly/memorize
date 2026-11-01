@@ -443,3 +443,15 @@ describe("toPlainText literal-text cases (#74)", () => {
     expect(mapOne("Fish &#38; chips")).toBe("Fish & chips");
   });
 });
+
+describe("toPlainText numeric-operator cases (#74)", () => {
+  const mapOne = (text: string) => mapGetResponse({ reference: "Talk excerpt", text })[0]?.text;
+
+  it("preserves asterisk operators between digits", () => {
+    expect(mapOne("2*3*4")).toBe("2*3*4");
+    expect(mapOne("2**3**4")).toBe("2**3**4");
+    expect(mapOne("The lot measured 2*3*4 cubits and was *very* wide")).toBe(
+      "The lot measured 2*3*4 cubits and was very wide",
+    );
+  });
+});
