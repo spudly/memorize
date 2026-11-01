@@ -234,16 +234,22 @@ export class GospelEngineDataSource implements ScriptureDataSource {
     // Reference-shaped queries ("Ether 12:27") go to /api/get first:
     // /api/search is semantic search over the whole library (talks,
     // manuals, study aids included) and buries the exact verse in
-    // loosely related results. A definitive miss (lookupReference maps
-    // a 404 to []) returns no results: falling back to semantic search
-    // would silently ignore the chapter/verse the user typed and
-    // return keyword matches for the book name alone (#70). Only a
-    // lookup *error* still falls back to semantic search.
+    // loosely related results. A definitive miss returns no results:
+    // falling back to semantic search would silently ignore the
+    // chapter/verse the user typed and return keyword matches for the
+    // book name alone (#70). A miss is either an empty lookup result
+    // (lookupReference maps a 404 to []) or a 400 from the engine,
+    // which is how it reports an unresolvable reference. Only other
+    // lookup errors (5xx, unreachable) still fall back to semantic
+    // search.
     const reference = parseReference(query);
     if (reference !== null) {
       try {
         return await this.lookupReference(reference);
-      } catch {
+      } catch (error) {
+        if (error instanceof ScriptureApiError && error.status === 400) {
+          return [];
+        }
         // Fall through to semantic search.
       }
     }
