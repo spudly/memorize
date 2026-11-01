@@ -62,30 +62,44 @@ const KNOWN_BOOK_NAMES: Set<string> = new Set(
     // Doctrine and Covenants / Pearl of Great Price
     "Doctrine and Covenants", "Moses", "Abraham", "Joseph Smith—Matthew",
     "Joseph Smith—History", "Articles of Faith",
-  ].map((name) => name.toLowerCase()),
+  ].map((name) => name.toLowerCase().replace(/[—–]/g, "-")),
 );
 
-// The engine also accepts spoken ordinals ("First Nephi" for "1 Nephi");
-// add those forms for every numbered book so the known-book check sees
-// them too.
+// The engine also accepts spoken ordinals ("First Nephi", "1st Nephi"
+// for "1 Nephi"); add those forms for every numbered book so the
+// known-book check sees them too.
 const ORDINAL_WORDS: Record<string, string> = {
   "1": "first",
   "2": "second",
   "3": "third",
   "4": "fourth",
 };
+const ORDINAL_SUFFIXES: Record<string, string> = {
+  "1": "st",
+  "2": "nd",
+  "3": "rd",
+  "4": "th",
+};
 for (const name of [...KNOWN_BOOK_NAMES]) {
   const numbered = /^([1-4]) (.+)$/.exec(name);
-  const word = numbered?.[1] ? ORDINAL_WORDS[numbered[1]] : undefined;
-  if (numbered?.[2] && word) {
-    KNOWN_BOOK_NAMES.add(`${word} ${numbered[2]}`);
+  const digit = numbered?.[1];
+  const rest = numbered?.[2];
+  const word = digit ? ORDINAL_WORDS[digit] : undefined;
+  const suffix = digit ? ORDINAL_SUFFIXES[digit] : undefined;
+  if (rest && word) {
+    KNOWN_BOOK_NAMES.add(`${word} ${rest}`);
+  }
+  if (rest && suffix && digit) {
+    KNOWN_BOOK_NAMES.add(`${digit}${suffix} ${rest}`);
   }
 }
 
 /** The book part of a canonical reference built by parseReference. */
 function referenceBookName(reference: string): string {
   const match = /^(.+?) \d+(?::\d+(?:\s*[-–]\s*\d+)?)?$/.exec(reference);
-  return (match?.[1] ?? reference).toLowerCase();
+  // Normalize dash variants so "Joseph Smith-History" matches the
+  // em-dash form in the known-book set (and vice versa).
+  return (match?.[1] ?? reference).toLowerCase().replace(/[—–]/g, "-");
 }
 
 /**

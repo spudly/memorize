@@ -291,6 +291,30 @@ describe("GospelEngineDataSource", () => {
     expect(results).toEqual([]);
   });
 
+  it("returns no results for a chapter-only miss under an ordinal-suffix book name (404) (#70)", async () => {
+    const calls = stubFetch((url) =>
+      url.includes("/api/get")
+        ? { ok: false, status: 404, body: {} }
+        : { ok: true, status: 200, body: SAMPLE_SEARCH_RESPONSE },
+    );
+    const results = await source().search("1st Nephi 99");
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toContain("/api/get");
+    expect(results).toEqual([]);
+  });
+
+  it("returns no results for a chapter-only miss under a hyphenated book name (400) (#70)", async () => {
+    const calls = stubFetch((url) =>
+      url.includes("/api/get")
+        ? { ok: false, status: 400, body: {} }
+        : { ok: true, status: 200, body: SAMPLE_SEARCH_RESPONSE },
+    );
+    const results = await source().search("Joseph Smith-History 99");
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toContain("/api/get");
+    expect(results).toEqual([]);
+  });
+
   it("falls back to /api/search when /api/get errors", async () => {
     const calls = stubFetch((url) =>
       url.includes("/api/get")
