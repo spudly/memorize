@@ -280,15 +280,99 @@ function dropReplacementArtifacts(text: string): string {
     .replace(/\uFFFD/g, "");
 }
 
-// Private-use placeholder pair for protected code spans. The values
-// sit clear of the escape placeholders above (U+E000–U+E01F) and of
-// the previously used U+E060/U+E061, which engine text can carry
-// literally: a literal "\uE0600\uE061" sequence was read back as
-// "span 0" at restore time and replaced with that span's content.
-const CODE_SPAN_START = "\uE066";
-const CODE_SPAN_END = "\uE067";
+/**
+ * Placeholder pair for protected code spans, chosen per input. Any
+ * FIXED pair can collide with literal engine text: the previously
+ * used U+E060/U+E061 pair was itself a regression fix for an earlier
+ * pair, and a literal "\uE0660\uE067" sequence in source text was
+ * read back as "span 0" at restore time and replaced with that
+ * span's content ("`Faith` and \uE0660\uE067 end" came out as
+ * "Faith and Faith end"). So the pair is selected for each input:
+ * the first candidate whose "<start><digits><end>" pattern appears
+ * neither in the text itself nor in the text with its numeric
+ * entities decoded (an entity like "&#57446;" decodes to U+E066
+ * later in the pipeline and must not be able to forge a placeholder
+ * either). Candidates sit in the private-use area clear of the
+ * escape placeholders above (U+E000–U+E01F), starting at the
+ * historical U+E066/U+E067 so ordinary text is unchanged.
+ */
+type CodeSpanMarkers = {
+  start: string;
+  end: string;
+};
 
-function protectCodeSpans(text: string, spans: string[]): string {
+function codeSpanMarkerPattern(start: string, end: string): RegExp {
+  return new RegExp(`${start}\\d+${end}`);
+}
+
+function chooseCodeSpanMarkers(text: string): CodeSpanMarkers {
+  // Probe both the raw text and its numeric-entity-decoded form:
+  // decoding runs later in toPlainText, after spans are protected,
+  // so a placeholder the decoder could produce is a collision too.
+  const decodedProbe = text.replace(
+    /&#(\d+);|&#x([0-9a-fA-F]+);/g,
+    (entity, decimal: string | undefined, hex: string | undefined) => {
+      const codePoint = Number.parseInt(decimal ?? hex ?? "", decimal !== undefined ? 10 : 16);
+      return codePoint >= 1 &&
+        codePoint <= 0x10ffff &&
+        !(codePoint >= 0xd800 && codePoint <= 0xdfff)
+        ? String.fromCodePoint(codePoint)
+        : entity;
+    },
+  );
+  const probe = `${text}\n${decodedProbe}`;
+  for (let code = 0xe066; code <= 0xf8fd; code += 2) {
+    const start = String.fromCharCode(code);
+    const end = String.fromCharCode(code + 1);
+    if (!codeSpanMarkerPattern(start, end).test(probe)) {
+      return { start, end };
+    }
+  }
+  for (let code = 0xe020; code < 0xe066; code += 2) {
+    const start = String.fromCharCode(code);
+    const end = String.fromCharCode(code + 1);
+    if (!codeSpanMarkerPattern(start, end).test(probe)) {
+      return { start, end };
+    }
+  }
+  // Every single-character pair occurs in the input (a pathological
+  // text carrying thousands of placeholder-shaped sequences): grow
+  // the markers until they cannot occur — a marker pair longer than
+  // the text itself never does.
+  for (let length = 2; ; length++) {
+    const start = "\uE066".repeat(length);
+    const end = "\uE067".repeat(length);
+    if (!codeSpanMarkerPattern(start, end).test(probe)) {
+      return { start, end };
+    }
+  }
+}
+
+/**
+ * Unwrap code spans whose content the replacement-artifact cleanup
+ * reduces to nothing or to whitespace alone. Their placeholders
+ * otherwise survive until restoreCodeSpans — after whitespace
+ * normalization and trimming — so a corruption-only span left stray
+ * whitespace behind: "`\uFFFD` `\uFFFD`" restored to a single space
+ * and "` \uFFFD `" to two, and buildVerse kept both as blank cards
+ * because the restored text is nonempty. Unwrapping here, before
+ * normalization, feeds the cleaned content ("" or the whitespace
+ * that survives) into the normal whitespace pass, which tidies the
+ * gap exactly as it does for corruption dropped outside a span.
+ * Spans with any non-whitespace cleaned content stay protected.
+ */
+function unwrapEmptiedCodeSpans(text: string, spans: string[], markers: CodeSpanMarkers): string {
+  let out = text;
+  spans.forEach((span, idx) => {
+    const cleaned = dropReplacementArtifacts(span);
+    if (cleaned.trim().length === 0) {
+      out = out.split(`${markers.start}${idx}${markers.end}`).join(cleaned);
+    }
+  });
+  return out;
+}
+
+function protectCodeSpans(text: string, spans: string[], markers: CodeSpanMarkers): string {
   let out = "";
   let i = 0;
   while (i < text.length) {
@@ -339,18 +423,21 @@ function protectCodeSpans(text: string, spans: string[]): string {
     const content = text.slice(runEnd, closeStart);
     const idx = spans.length;
     spans.push(content);
-    out += `${CODE_SPAN_START}${idx}${CODE_SPAN_END}`;
+    out += `${markers.start}${idx}${markers.end}`;
     i = closeEnd;
   }
   return out;
 }
 
-function restoreCodeSpans(text: string, spans: string[]): string {
-  return text.replace(/\uE066(\d+)\uE067/g, (_m, idxStr: string) => {
-    const idx = Number.parseInt(idxStr, 10);
-    const span = spans[idx];
-    return span === undefined ? _m : dropReplacementArtifacts(span);
-  });
+function restoreCodeSpans(text: string, spans: string[], markers: CodeSpanMarkers): string {
+  return text.replace(
+    new RegExp(`${markers.start}(\\d+)${markers.end}`, "g"),
+    (_m, idxStr: string) => {
+      const idx = Number.parseInt(idxStr, 10);
+      const span = spans[idx];
+      return span === undefined ? _m : dropReplacementArtifacts(span);
+    },
+  );
 }
 
 function normalizeLinkLabel(label: string): string {
@@ -675,7 +762,8 @@ export function toPlainText(raw: string): string {
   // escape placeholders. The span scanner is itself escape-aware, so
   // an escaped backtick outside a span still never opens one.
   const codeSpans: string[] = [];
-  text = protectCodeSpans(text, codeSpans);
+  const codeSpanMarkers = chooseCodeSpanMarkers(text);
+  text = protectCodeSpans(text, codeSpans, codeSpanMarkers);
   // Replacement characters are corruption, never content (#77). The
   // engine builds search snippets by slicing source text at a byte
   // limit (upstream gospel-engine `snippet`); when the cut falls
@@ -693,6 +781,11 @@ export function toPlainText(raw: string): string {
   // stray backticks behind — and before every markup pass, so the
   // whitespace normalization below tidies any gap a drop leaves.
   text = dropReplacementArtifacts(text);
+  // Spans that the same cleanup empties (or leaves whitespace-only)
+  // are unwrapped now, before whitespace normalization, so they
+  // cannot restore to stray whitespace after the trim (see
+  // unwrapEmptiedCodeSpans above).
+  text = unwrapEmptiedCodeSpans(text, codeSpans, codeSpanMarkers);
   // Protect backslash-escaped punctuation for the whole cleanup (see
   // protectEscapedPunctuation above): the escapes are restored at the
   // very end, after entity decoding and whitespace normalization.
@@ -842,7 +935,7 @@ export function toPlainText(raw: string): string {
   // Code spans restore first: their contents are literal (they were
   // captured before escape protection ran), and restoring them
   // before the escape placeholders keeps the two from interfering.
-  return restoreEscapedPunctuation(restoreCodeSpans(text.trim(), codeSpans));
+  return restoreEscapedPunctuation(restoreCodeSpans(text.trim(), codeSpans, codeSpanMarkers));
 }
 
 function buildVerse(reference: string, text: string, obj: Record<string, unknown>): Verse | null {

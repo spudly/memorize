@@ -784,8 +784,9 @@ describe("toPlainText replacement-character round-2 cases (#77)", () => {
     // The code-span placeholder pair used to be U+E060/U+E061: a
     // literal "\uE0600\uE061" sequence in engine text was then read
     // back as "span 0" at restore time and replaced with the span's
-    // content ("Faith and Faith end"). The markers now sit at
-    // U+E066/U+E067, clear of that literal sequence.
+    // content ("Faith and Faith end"). The markers are now chosen
+    // per input starting at U+E066/U+E067, clear of that literal
+    // sequence (round 4 covers literals matching the active pair).
     expect(mapOne("`Faith` and \uE0600\uE061 end")).toBe("Faith and \uE0600\uE061 end");
   });
 
@@ -823,5 +824,48 @@ describe("toPlainText replacement-character round-3 cases (#77)", () => {
     // not change the outcome (a lone backslash stays, as it does for
     // any non-punctuation escape).
     expect(mapOne("Faith \\\uFFFD hope")).toBe("Faith \\ hope");
+  });
+});
+
+describe("toPlainText replacement-character round-4 cases (#77)", () => {
+  const mapOne = (text: string) => mapGetResponse({ reference: "Talk excerpt", text })[0]?.text;
+
+  it("does not mistake a literal sequence matching the active placeholder pair for a code span", () => {
+    // The placeholder pair is chosen per input, so a literal
+    // "\uE0660\uE067" sequence — the pair earlier rounds settled on —
+    // stays literal text instead of being replaced with span 0's
+    // content ("Faith and Faith end").
+    expect(mapOne("`Faith` and \uE0660\uE067 end")).toBe("Faith and \uE0660\uE067 end");
+    expect(mapOne("Faith \uE0660\uE067 end")).toBe("Faith \uE0660\uE067 end");
+  });
+
+  it("keeps choosing collision-free placeholders when several pairs occur literally", () => {
+    // Both the first candidate pair (U+E066/U+E067) and the next
+    // (U+E068/U+E069) occur as literal placeholder-shaped sequences,
+    // so a later candidate must be used and both literals survive.
+    expect(mapOne("`Faith` and \uE0660\uE067 plus \uE0680\uE069 end")).toBe(
+      "Faith and \uE0660\uE067 plus \uE0680\uE069 end",
+    );
+  });
+
+  it("does not let a numeric entity forge a code-span placeholder", () => {
+    // "&#57446;" / "&#57447;" are U+E066 / U+E067 in decimal: they
+    // decode after spans are protected, so the marker choice must
+    // have accounted for the decoded form too.
+    expect(mapOne("`Faith` and &#57446;0&#57447; end")).toBe("Faith and \uE0660\uE067 end");
+    expect(mapOne("`Faith` and &#xE066;0&#xE067; end")).toBe("Faith and \uE0660\uE067 end");
+  });
+
+  it("treats code spans that clean to whitespace as no result", () => {
+    // The placeholders used to restore after whitespace
+    // normalization and trimming, so these restored to one or two
+    // spaces and buildVerse kept them as blank cards.
+    expect(mapGetResponse({ reference: "Talk excerpt", text: "`\uFFFD` `\uFFFD`" })).toEqual([]);
+    expect(mapGetResponse({ reference: "Talk excerpt", text: "` \uFFFD `" })).toEqual([]);
+  });
+
+  it("tidies the gap a code span leaves when its content cleans away", () => {
+    expect(mapOne("Faith `\uFFFD` hope")).toBe("Faith hope");
+    expect(mapOne("` \uFFFD ` and faith")).toBe("and faith");
   });
 });
