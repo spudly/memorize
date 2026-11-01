@@ -163,6 +163,100 @@ const HTML_ENTITIES: Record<string, string> = {
   "&nbsp;": " ",
 };
 
+/** Index of the bracket closing the one at `open`, or -1. Honors nesting and backslash escapes. */
+function matchingBracket(text: string, open: number, openCh: string, closeCh: string): number {
+  let depth = 0;
+  for (let i = open; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === "\\") {
+      i++;
+    } else if (ch === openCh) {
+      depth++;
+    } else if (ch === closeCh) {
+      depth--;
+      if (depth === 0) {
+        return i;
+      }
+    }
+  }
+  return -1;
+}
+
+/**
+ * Replace Markdown images and links with their alt/link text.
+ *
+ * Inline destinations are scanned with a paren-depth counter, so
+ * parentheses nested any number of levels deep stay inside the
+ * destination instead of ending it early. Two failure shapes from
+ * live engine text get a bounded fallback when no balanced close
+ * exists on the line: an unbalanced "(" in the destination (the
+ * link's own closing paren was already spent as an inner close) ends
+ * at the first ")" on the line, and a destination cut off mid-URL
+ * ends at the line's end — in both cases the readable label survives
+ * and the prose after the line is untouched. Reference-style
+ * ("[text][ref]") forms keep their text the same way, a bare
+ * "[word]" with no destination is ordinary text and stays, and an
+ * escaped bracket ("\[") never opens a link.
+ */
+function stripMarkdownLinks(text: string): string {
+  let out = "";
+  let i = 0;
+  while (i < text.length) {
+    // An escaped character is literal text, never markup.
+    if (text[i] === "\\" && i + 1 < text.length) {
+      out += text.slice(i, i + 2);
+      i += 2;
+      continue;
+    }
+    const isImage = text[i] === "!" && text[i + 1] === "[";
+    if (!isImage && text[i] !== "[") {
+      out += text[i];
+      i++;
+      continue;
+    }
+    const open = isImage ? i + 1 : i;
+    const closeBracket = matchingBracket(text, open, "[", "]");
+    if (closeBracket === -1) {
+      out += text[i];
+      i++;
+      continue;
+    }
+    // Recurse into the label: a linked image ("[![alt](img)](page)")
+    // carries a whole image inside its link text.
+    const label = stripMarkdownLinks(text.slice(open + 1, closeBracket));
+    const after = closeBracket + 1;
+    if (text[after] === "(") {
+      const closeParen = matchingBracket(text, after, "(", ")");
+      if (closeParen !== -1) {
+        out += label;
+        i = closeParen + 1;
+        continue;
+      }
+      // Unbalanced or cut-off destination: drop the destination
+      // fragment up to the first ")" on this line, or to the line's
+      // end when there is none, and keep only the label.
+      const lineEnd = text.indexOf("\n", after);
+      const limit = lineEnd === -1 ? text.length : lineEnd;
+      const firstClose = text.indexOf(")", after);
+      out += label;
+      i = firstClose !== -1 && firstClose < limit ? firstClose + 1 : limit;
+      continue;
+    }
+    if (text[after] === "[") {
+      const closeRef = matchingBracket(text, after, "[", "]");
+      if (closeRef !== -1) {
+        out += label;
+        i = closeRef + 1;
+        continue;
+      }
+    }
+    // Not a link after all ("[Note]: …", "the [Obedience] principle").
+    out += text[i];
+    i++;
+  }
+  return out;
+}
+
 /**
  * Convert engine source text to readable plain text (#74).
  *
@@ -202,15 +296,16 @@ export function toPlainText(raw: string): string {
     "",
   );
   text = text.replace(/^[ \t]*\[\^[^\]]+\]:.*$/gm, "");
-  // Markdown images keep their alt text as the readable caption; this
-  // must run before the link rule, which would leave a stray "!".
-  // Destinations may contain one level of balanced parentheses
-  // ("image_(small).png"), so the destination pattern allows them.
-  text = text.replace(/!\[([^\]]*)\]\((?:[^()]|\([^()]*\))*\)/g, "$1");
-  text = text.replace(/!\[([^\]]*)\]\[[^\]]*\]/g, "$1");
-  // Markdown links (inline and reference style) keep their link text.
-  text = text.replace(/\[([^\]]+)\]\((?:[^()]|\([^()]*\))*\)/g, "$1");
-  text = text.replace(/\[([^\]]+)\]\[[^\]]*\]/g, "$1");
+  // Markdown images and links (inline and reference style) keep only
+  // their alt/link text; empty-text forms ("[](06_lecture_6.md)") drop
+  // entirely. A scanner, not a regex: real engine destinations defeat
+  // the "(one level of balanced parens)" pattern — URLs with parens
+  // nested two deep, an unbalanced "(" that makes the closing paren
+  // read as an inner group close, and destinations cut off mid-URL
+  // all left the raw "[text](…)" syntax on live search cards (#74
+  // manual pass on fb81f6d: Hunter chapter audio links, chapter
+  // images). See stripMarkdownLinks below.
+  text = stripMarkdownLinks(text);
   // Line-break and block-closing tags separate words: turn them into
   // whitespace before stripping, or "<p>Faith</p><p>hope</p>" would
   // come out as "Faithhope".
@@ -237,6 +332,12 @@ export function toPlainText(raw: string): string {
   text = text.replace(/(?<!\*)\*(?!\s)([^*\n]+?)(?<!\s)\*(?!\d)(?!\*)/g, "$1");
   text = text.replace(/(?<![\w])_(?!\s)([^_\n]+?)(?<!\s)_(?![\w])/g, "$1");
   text = text.replace(/`([^`\n]+)`/g, "$1");
+  // Backslash escapes of ASCII punctuation are literal punctuation in
+  // Markdown ("1\. Faith…" on a hymn card kept its backslash): resolve
+  // them only now, after the structural rules, so an escaped character
+  // is never mistaken for markup ("\[" is not a link opener, "\#" is
+  // not a heading) by the passes above.
+  text = text.replace(/\\([!"#$%&'()*+,\-./:;<=>?@\[\\\]^_`{|}~])/g, "$1");
   // Decode entities only after Markdown cleanup: decoded characters
   // are literal text (an encoded "#" is not a heading marker and an
   // encoded "*" is not emphasis), while an escaped "&lt;sup&gt;" still

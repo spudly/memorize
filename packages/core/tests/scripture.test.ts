@@ -513,3 +513,43 @@ describe("toPlainText fb81f6 review-round cases (#74)", () => {
     expect(mapOne("See <https://example.test/x> now.")).toBe("See https://example.test/x now.");
   });
 });
+
+describe("toPlainText manual-pass cases (#74)", () => {
+  const mapOne = (text: string) => mapGetResponse({ reference: "Talk excerpt", text })[0]?.text;
+
+  it("strips links and images whose destinations nest parentheses two deep", () => {
+    expect(mapOne("🎧 [Listen to Audio](https://example.test/a_(b_(c)).mp3)")).toBe("🎧 Listen to Audio");
+    expect(mapOne("![Jesus Christ healing man](https://example.test/imgs/a_(b_(c)).jpg)")).toBe(
+      "Jesus Christ healing man",
+    );
+    expect(mapOne("![family praying](https://example.test/imgs/a_(b_(c)).jpg)")).toBe("family praying");
+  });
+
+  it("strips links whose destination has an unbalanced parenthesis", () => {
+    expect(mapOne("🎧 [Listen to Audio](https://example.test/a_(b.mp3)")).toBe("🎧 Listen to Audio");
+    expect(mapOne("![family praying](https://example.test/imgs/a_(b.jpg)")).toBe("family praying");
+  });
+
+  it("keeps the label when a destination is cut off mid-URL", () => {
+    expect(mapOne("🎧 [Listen to Audio](https://media2.example.test/assets/teachings/2016-01-024-chapter-20-walking-the-saviors-path")).toBe(
+      "🎧 Listen to Audio",
+    );
+    expect(mapOne("[Listen to Audio](https://example.test/cut-off\n\nFollowing prose stays.")).toBe(
+      "Listen to Audio\n\nFollowing prose stays.",
+    );
+  });
+
+  it("drops empty-text links entirely", () => {
+    expect(mapOne("[](06_lecture_6.md)[]()")).toBe("");
+    expect(mapOne("Text [](06_lecture_6.md) more")).toBe("Text more");
+  });
+
+  it("unescapes backslash-escaped punctuation", () => {
+    expect(mapOne("1\\. Faith is knowing the sun will rise")).toBe("1. Faith is knowing the sun will rise");
+    expect(mapOne("\\[Obedience\\] is a gospel principle")).toBe("[Obedience] is a gospel principle");
+  });
+
+  it("leaves bare bracketed words alone", () => {
+    expect(mapOne("the [Obedience] principle")).toBe("the [Obedience] principle");
+  });
+});
