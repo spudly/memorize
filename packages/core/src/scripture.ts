@@ -189,10 +189,23 @@ export function toPlainText(raw: string): string {
   // Markdown links (inline and reference style) keep their link text.
   text = text.replace(/\[([^\]]+)\]\([^)]*\)/g, "$1");
   text = text.replace(/\[([^\]]+)\]\[[^\]]*\]/g, "$1");
+  // Line-break and block-closing tags separate words: turn them into
+  // whitespace before stripping, or "<p>Faith</p><p>hope</p>" would
+  // come out as "Faithhope".
+  text = text.replace(/<br\b[^>]*>/gi, "\n");
+  text = text.replace(/<\/(?:p|div|li|ul|ol|h[1-6]|blockquote|tr|section|article)\s*>/gi, "\n");
   // Any remaining HTML tags go, keeping the text they wrapped.
   text = text.replace(/<\/?[a-zA-Z][^>]*>/g, "");
-  // Decode the common entities after tag stripping, so an escaped
-  // "&lt;sup&gt;" stays literal text instead of becoming a tag.
+  // Decode entities after tag stripping, so an escaped "&lt;sup&gt;"
+  // stays literal text instead of becoming a tag. Numeric entities
+  // (&#8217;, &#x2019;) decode by code point; an out-of-range or
+  // surrogate value is left as-is rather than throwing.
+  text = text.replace(/&#(\d+);|&#x([0-9a-fA-F]+);/g, (entity, decimal, hex) => {
+    const codePoint = Number.parseInt(decimal ?? hex, decimal !== undefined ? 10 : 16);
+    return codePoint >= 1 && codePoint <= 0x10ffff && !(codePoint >= 0xd800 && codePoint <= 0xdfff)
+      ? String.fromCodePoint(codePoint)
+      : entity;
+  });
   text = text.replace(
     /&(?:amp|lt|gt|quot|#39|apos|nbsp);/g,
     (entity) => HTML_ENTITIES[entity] ?? entity,

@@ -394,3 +394,36 @@ describe("toPlainText via mapGetResponse (#74)", () => {
     expect(mapOne(plain)).toBe(plain);
   });
 });
+
+describe("toPlainText review-round cases (#74)", () => {
+  const mapOne = (text: string) =>
+    mapGetResponse({ reference: "Talk excerpt", text })[0]?.text;
+
+  it("keeps words separated across block tags and line breaks", () => {
+    expect(mapOne("<p>Faith</p><p>hope</p>")).toBe("Faith\nhope");
+    expect(mapOne("Faith<br>hope")).toBe("Faith\nhope");
+  });
+
+  it("decodes decimal and hexadecimal numeric entities", () => {
+    expect(mapOne("It&#8217;s charity &#x2014; the pure love")).toBe("It’s charity — the pure love");
+  });
+
+  it("runs the conversion on the /api/search path, not just /api/get", async () => {
+    stubFetch(() => ({
+      ok: true,
+      status: 200,
+      body: {
+        results: [
+          {
+            reference: "Moroni 7:47",
+            text: "![Charity](https://example.test/c) **But charity** is <em>the pure love of Christ</em>.<sup>[1](#fn-1)</sup>",
+          },
+        ],
+      },
+    }));
+    const source = new GospelEngineDataSource("https://engine.example", "stdy_test");
+    const results = await source.search("charity");
+    expect(results).toHaveLength(1);
+    expect(results[0]?.text).toBe("Charity But charity is the pure love of Christ.");
+  });
+});
