@@ -101,7 +101,9 @@ test("keyword search renders results from the /api/search fixture", async ({ pag
   await expect(page.getByText(/But charity is the pure love of Christ/)).toBeVisible();
   // #74 regression: the markup-laden talk result renders cleaned —
   // alt text kept, heading/emphasis markers and the footnote span gone.
-  await expect(page.getByText(/Elaine L. Jack Charity is the pure love of Christ/)).toBeVisible();
+  await expect(
+    page.getByText("Charity Elaine L. Jack Charity is the pure love of Christ.", { exact: true }),
+  ).toBeVisible();
   await expect(page.locator("body")).not.toContainText("![Elaine L. Jack]");
   await expect(page.locator("body")).not.toContainText("<sup>");
   await expect(page.locator("body")).not.toContainText("[1](#fn-1)");

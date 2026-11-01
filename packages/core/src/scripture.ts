@@ -183,9 +183,18 @@ export function toPlainText(raw: string): string {
   text = text.replace(/<sup\b[^>]*>[\s\S]*?<\/sup\s*>/gi, "");
   // Autolinks (<https://…>) would otherwise be eaten as HTML tags.
   text = text.replace(/<(https?:\/\/[^>\s]+)>/g, "$1");
-  // Reference definitions ("[image]: https://…", footnote defs) are
-  // pure syntax once references resolve; drop the whole line.
-  text = text.replace(/^[ \t]*\[[^\]]+\]:[ \t]*\S.*$/gm, "");
+  // Reference definitions are pure syntax once references resolve;
+  // drop the whole line — but only lines that are valid definitions
+  // (a bracketed label, a destination, an optional quoted title).
+  // Ordinary text that merely starts with a bracketed label and a
+  // colon ("[Note]: Remember to pray…") is content, not a definition,
+  // and stays. Footnote definitions ("[^1]: …") carry prose after the
+  // colon by design, so they get their own rule.
+  text = text.replace(
+    /^[ \t]*\[[^\]]+\]:[ \t]*(?:<[^>\n]*>|\S+)(?:[ \t]+(?:"[^"\n]*"|'[^'\n]*'|\([^()\n]*\)))?[ \t]*$/gm,
+    "",
+  );
+  text = text.replace(/^[ \t]*\[\^[^\]]+\]:.*$/gm, "");
   // Markdown images keep their alt text as the readable caption; this
   // must run before the link rule, which would leave a stray "!".
   // Destinations may contain one level of balanced parentheses

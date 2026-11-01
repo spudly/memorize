@@ -472,6 +472,11 @@ describe("toPlainText Copilot-round cases (#74)", () => {
 
   it("resolves reference-style images and drops reference definitions", () => {
     expect(mapOne("![Faith][image]\n\n[image]: https://example.test/faith.png")).toBe("Faith");
+    expect(mapOne("Text.\n\n[^1]: A footnote definition with prose")).toBe("Text.");
+  });
+
+  it("keeps ordinary text that merely starts with a bracketed label", () => {
+    expect(mapOne("[Note]: Remember to pray and serve.")).toBe("[Note]: Remember to pray and serve.");
   });
 
   it("keeps table cells as separate words", () => {
