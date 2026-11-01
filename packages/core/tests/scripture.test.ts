@@ -738,6 +738,9 @@ describe("toPlainText truncated-link cases (#76)", () => {
   it("keeps unmatched brackets that are not a trailing fragment", () => {
     // The fragment continues onto another line: not an excerpt cut.
     expect(mapOne("Faith [hope\ncharity")).toBe("Faith [hope\ncharity");
+    // An HTML line break counts too: the link scanner runs before
+    // the HTML pass turns <br> into "\n".
+    expect(mapOne("Faith [hope<br>charity")).toBe("Faith [hope\ncharity");
   });
 
   it("keeps literal bracket notation in complete text", () => {

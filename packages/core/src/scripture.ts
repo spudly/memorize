@@ -562,6 +562,7 @@ function stripMarkdownLinks(text: string, definedRefs: Set<string> = new Set<str
         text.indexOf("\n", open + 1) === -1 &&
         text[open - 1] !== "[";
       let hasUnmatchedCloseParen = false;
+      let hasHtmlLineBreak = false;
       if (isTrailingFragmentShape) {
         let parenDepth = 0;
         for (let p = open + 1; p < text.length; p++) {
@@ -574,8 +575,18 @@ function stripMarkdownLinks(text: string, definedRefs: Set<string> = new Set<str
             }
           }
         }
+        // This scanner runs before the HTML pass below converts
+        // line-break and block tags to "\n", so an HTML break in the
+        // fragment ("[hope<br>charity") must count as a line break
+        // here too, or a mid-text literal bracket would be misread
+        // as a truncated fragment.
+        hasHtmlLineBreak =
+          /<(?:br|\/(?:p|div|li|ul|ol|h[1-6]|blockquote|tr|td|th|section|article))\b/i.test(
+            text.slice(open + 1),
+          );
       }
-      const isTrailingFragment = isTrailingFragmentShape && !hasUnmatchedCloseParen;
+      const isTrailingFragment =
+        isTrailingFragmentShape && !hasUnmatchedCloseParen && !hasHtmlLineBreak;
       if (isTrailingFragment) {
         i = open + 1;
         continue;
