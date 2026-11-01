@@ -381,14 +381,23 @@ function chooseCodeSpanMarkers(text: string): CodeSpanMarkers {
  * Spans with any non-whitespace cleaned content stay protected.
  */
 function unwrapEmptiedCodeSpans(text: string, spans: string[], markers: CodeSpanMarkers): string {
-  let out = text;
+  const emptied = new Map<number, string>();
   spans.forEach((span, idx) => {
     const cleaned = dropReplacementArtifacts(span);
     if (cleaned.trim().length === 0) {
-      out = out.split(`${markers.start}${idx}${markers.end}`).join(cleaned);
+      emptied.set(idx, cleaned);
     }
   });
-  return out;
+  if (emptied.size === 0) {
+    return text;
+  }
+  // One pass over the text, not one full-document scan per emptied
+  // span: this pipeline also runs over full chapter text, where a
+  // per-span scan is quadratic in the number of emptied spans.
+  return text.replace(
+    new RegExp(`${markers.start}(\\d+)${markers.end}`, "g"),
+    (match, idxStr: string) => emptied.get(Number.parseInt(idxStr, 10)) ?? match,
+  );
 }
 
 function protectCodeSpans(text: string, spans: string[], markers: CodeSpanMarkers): string {

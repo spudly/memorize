@@ -887,3 +887,20 @@ describe("toPlainText replacement-character round-5 cases (#77)", () => {
     expect(mapOne("`Faith` and &#xE066;&#xFFFD;0&#xE067; end")).toBe("Faith and \uE0660\uE067 end");
   });
 });
+
+describe("toPlainText replacement-character round-6 cases (#77)", () => {
+  const mapOne = (text: string) => mapGetResponse({ reference: "Talk excerpt", text })[0]?.text;
+
+  it("unwraps many emptied spans in one pass, keeping real spans at every index", () => {
+    // Interleave corruption-only spans with real ones past index 9:
+    // the unwrap must match each placeholder's full index, so span
+    // 10+ content survives and every emptied span disappears.
+    const parts: string[] = [];
+    const expected: string[] = [];
+    for (let i = 0; i < 15; i++) {
+      parts.push("`\uFFFD`", `\`word${i}\``);
+      expected.push(`word${i}`);
+    }
+    expect(mapOne(parts.join(" "))).toBe(expected.join(" "));
+  });
+});
