@@ -455,3 +455,25 @@ describe("toPlainText numeric-operator cases (#74)", () => {
     );
   });
 });
+
+describe("toPlainText Copilot-round cases (#74)", () => {
+  const mapOne = (text: string) => mapGetResponse({ reference: "Talk excerpt", text })[0]?.text;
+
+  it("handles destinations with balanced parentheses", () => {
+    expect(mapOne("![Portrait](https://example.test/image_(small).png)")).toBe("Portrait");
+    expect(mapOne("See [the talk](https://example.test/talk_(2024)) today")).toBe("See the talk today");
+  });
+
+  it("resolves reference-style images and drops reference definitions", () => {
+    expect(mapOne("![Faith][image]\n\n[image]: https://example.test/faith.png")).toBe("Faith");
+  });
+
+  it("keeps table cells as separate words", () => {
+    expect(mapOne("<table><tr><td>Faith</td><td>hope</td></tr></table>")).toBe("Faith\nhope");
+  });
+
+  it("decodes entities exactly once", () => {
+    expect(mapOne("&#38;lt;")).toBe("&lt;");
+    expect(mapOne("Fish &amp; chips")).toBe("Fish & chips");
+  });
+});

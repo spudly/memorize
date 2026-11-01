@@ -183,17 +183,23 @@ export function toPlainText(raw: string): string {
   text = text.replace(/<sup\b[^>]*>[\s\S]*?<\/sup\s*>/gi, "");
   // Autolinks (<https://…>) would otherwise be eaten as HTML tags.
   text = text.replace(/<(https?:\/\/[^>\s]+)>/g, "$1");
+  // Reference definitions ("[image]: https://…", footnote defs) are
+  // pure syntax once references resolve; drop the whole line.
+  text = text.replace(/^[ \t]*\[[^\]]+\]:[ \t]*\S.*$/gm, "");
   // Markdown images keep their alt text as the readable caption; this
   // must run before the link rule, which would leave a stray "!".
-  text = text.replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1");
+  // Destinations may contain one level of balanced parentheses
+  // ("image_(small).png"), so the destination pattern allows them.
+  text = text.replace(/!\[([^\]]*)\]\((?:[^()]|\([^()]*\))*\)/g, "$1");
+  text = text.replace(/!\[([^\]]*)\]\[[^\]]*\]/g, "$1");
   // Markdown links (inline and reference style) keep their link text.
-  text = text.replace(/\[([^\]]+)\]\([^)]*\)/g, "$1");
+  text = text.replace(/\[([^\]]+)\]\((?:[^()]|\([^()]*\))*\)/g, "$1");
   text = text.replace(/\[([^\]]+)\]\[[^\]]*\]/g, "$1");
   // Line-break and block-closing tags separate words: turn them into
   // whitespace before stripping, or "<p>Faith</p><p>hope</p>" would
   // come out as "Faithhope".
   text = text.replace(/<br\b[^>]*>/gi, "\n");
-  text = text.replace(/<\/(?:p|div|li|ul|ol|h[1-6]|blockquote|tr|section|article)\s*>/gi, "\n");
+  text = text.replace(/<\/(?:p|div|li|ul|ol|h[1-6]|blockquote|tr|td|th|section|article)\s*>/gi, "\n");
   // Any remaining HTML tags go, keeping the text they wrapped.
   text = text.replace(/<\/?[a-zA-Z][^>]*>/g, "");
   // Markdown line structure: headings and blockquotes keep their words.
@@ -216,15 +222,20 @@ export function toPlainText(raw: string): string {
   // stays literal because HTML tags were stripped above. Numeric
   // entities (&#8217;, &#x2019;) decode by code point; an out-of-range
   // or surrogate value is left as-is rather than throwing.
-  text = text.replace(/&#(\d+);|&#x([0-9a-fA-F]+);/g, (entity, decimal, hex) => {
-    const codePoint = Number.parseInt(decimal ?? hex, decimal !== undefined ? 10 : 16);
-    return codePoint >= 1 && codePoint <= 0x10ffff && !(codePoint >= 0xd800 && codePoint <= 0xdfff)
-      ? String.fromCodePoint(codePoint)
-      : entity;
-  });
+  // One combined pass: decoding numeric and named references in two
+  // passes would reinterpret characters the first pass produced
+  // ("&#38;lt;" must stay the literal text "&lt;", not become "<").
   text = text.replace(
-    /&(?:amp|lt|gt|quot|#39|apos|nbsp);/g,
-    (entity) => HTML_ENTITIES[entity] ?? entity,
+    /&#(\d+);|&#x([0-9a-fA-F]+);|&(?:amp|lt|gt|quot|apos|nbsp);/g,
+    (entity, decimal, hex) => {
+      if (decimal === undefined && hex === undefined) {
+        return HTML_ENTITIES[entity] ?? entity;
+      }
+      const codePoint = Number.parseInt(decimal ?? hex, decimal !== undefined ? 10 : 16);
+      return codePoint >= 1 && codePoint <= 0x10ffff && !(codePoint >= 0xd800 && codePoint <= 0xdfff)
+        ? String.fromCodePoint(codePoint)
+        : entity;
+    },
   );
   // Normalize whitespace: no trailing spaces, no run of blank lines.
   text = text.replace(/[ \t]+/g, " ");
