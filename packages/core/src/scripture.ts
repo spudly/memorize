@@ -32,13 +32,85 @@ const BOOK_ALIASES: Record<string, string> = {
 };
 
 /**
+ * Canonical book names of the standard works (lowercased). Used only to
+ * disambiguate chapter-only queries in GospelEngineDataSource.search:
+ * "Ether 16" names a known book, so a lookup miss is a genuine bad
+ * chapter; "lesson 3" does not, so it stays a keyword search. Verse-
+ * bearing queries need no such check — an explicit chapter:verse is
+ * unambiguously a reference attempt whatever the book part says.
+ */
+const KNOWN_BOOK_NAMES: Set<string> = new Set(
+  [
+    // Old Testament
+    "Genesis", "Exodus", "Leviticus", "Numbers", "Deuteronomy", "Joshua",
+    "Judges", "Ruth", "1 Samuel", "2 Samuel", "1 Kings", "2 Kings",
+    "1 Chronicles", "2 Chronicles", "Ezra", "Nehemiah", "Esther", "Job",
+    "Psalms", "Psalm", "Proverbs", "Ecclesiastes", "Song of Solomon",
+    "Song of Songs", "Isaiah", "Jeremiah", "Lamentations", "Ezekiel",
+    "Daniel", "Hosea", "Joel", "Amos", "Obadiah", "Jonah", "Micah",
+    "Nahum", "Habakkuk", "Zephaniah", "Haggai", "Zechariah", "Malachi",
+    // New Testament
+    "Matthew", "Mark", "Luke", "John", "Acts", "Romans", "1 Corinthians",
+    "2 Corinthians", "Galatians", "Ephesians", "Philippians", "Colossians",
+    "1 Thessalonians", "2 Thessalonians", "1 Timothy", "2 Timothy",
+    "Titus", "Philemon", "Hebrews", "James", "1 Peter", "2 Peter",
+    "1 John", "2 John", "3 John", "Jude", "Revelation",
+    // Book of Mormon
+    "1 Nephi", "2 Nephi", "Jacob", "Enos", "Jarom", "Omni",
+    "Words of Mormon", "Mosiah", "Alma", "Helaman", "3 Nephi", "4 Nephi",
+    "Mormon", "Ether", "Moroni",
+    // Doctrine and Covenants / Pearl of Great Price
+    "Doctrine and Covenants", "Moses", "Abraham", "Joseph Smith—Matthew",
+    "Joseph Smith—History", "Articles of Faith",
+  ].map((name) => name.toLowerCase().replace(/[—–]/g, "-")),
+);
+
+// The engine also accepts spoken ordinals ("First Nephi", "1st Nephi"
+// for "1 Nephi"); add those forms for every numbered book so the
+// known-book check sees them too.
+const ORDINAL_WORDS: Record<string, string> = {
+  "1": "first",
+  "2": "second",
+  "3": "third",
+  "4": "fourth",
+};
+const ORDINAL_SUFFIXES: Record<string, string> = {
+  "1": "st",
+  "2": "nd",
+  "3": "rd",
+  "4": "th",
+};
+for (const name of [...KNOWN_BOOK_NAMES]) {
+  const numbered = /^([1-4]) (.+)$/.exec(name);
+  const digit = numbered?.[1];
+  const rest = numbered?.[2];
+  const word = digit ? ORDINAL_WORDS[digit] : undefined;
+  const suffix = digit ? ORDINAL_SUFFIXES[digit] : undefined;
+  if (rest && word) {
+    KNOWN_BOOK_NAMES.add(`${word} ${rest}`);
+  }
+  if (rest && suffix && digit) {
+    KNOWN_BOOK_NAMES.add(`${digit}${suffix} ${rest}`);
+  }
+}
+
+/** The book part of a canonical reference built by parseReference. */
+function referenceBookName(reference: string): string {
+  const match = /^(.+?) \d+(?::\d+(?:\s*[-–]\s*\d+)?)?$/.exec(reference);
+  // Normalize dash variants so "Joseph Smith-History" matches the
+  // em-dash form in the known-book set (and vice versa).
+  return (match?.[1] ?? reference).toLowerCase().replace(/[—–]/g, "-");
+}
+
+/**
  * If `query` is shaped like a scripture reference — a book name followed by
  * a chapter, with an optional verse or verse range ("Ether 12:27",
  * "1 Nephi 3:7", "Proverbs 3:5-6", "Alma 32", "D&C 18:10") — return the
  * canonical reference to look up. Otherwise return null: the query is a
  * keyword/topic search. Detection is structural (trailing chapter[:verse]
- * numbers after book text), so a miss costs one /api/get round-trip and
- * the caller falls back to semantic search.
+ * numbers after book text), so a miss costs one /api/get round-trip; the
+ * caller returns no results on a miss and falls back to semantic search
+ * only when the lookup itself errors.
  */
 export function parseReference(query: string): string | null {
   const collapsed = query.trim().replace(/\s+/g, " ");
@@ -233,16 +305,41 @@ export class GospelEngineDataSource implements ScriptureDataSource {
     // Reference-shaped queries ("Ether 12:27") go to /api/get first:
     // /api/search is semantic search over the whole library (talks,
     // manuals, study aids included) and buries the exact verse in
-    // loosely related results. On any miss — no match, lookup error —
-    // fall back to semantic search so nothing that worked before breaks.
+    // loosely related results. A definitive miss returns no results:
+    // falling back to semantic search would silently ignore the
+    // chapter/verse the user typed and return keyword matches for the
+    // book name alone (#70). A miss is either an empty lookup result
+    // (lookupReference maps a 404 to []) or a 400 from the engine,
+    // which is how it reports an unresolvable reference. Only other
+    // lookup errors (5xx, unreachable) still fall back to semantic
+    // search. The no-fallback rule covers genuine reference attempts:
+    // an explicit verse (chapter:verse, e.g. "Ether 12:27"), or a
+    // chapter-only reference to a known book whose chapter number is
+    // not year-like (e.g. "Ether 16" — Ether has 15 chapters, so the
+    // miss is definitive). Chapter-only queries that name no known
+    // book ("lesson 3") or end in a 4-digit year ("general conference
+    // 2024") are keyword searches that merely look reference-shaped,
+    // so those keep the semantic fallback on a miss.
     const reference = parseReference(query);
     if (reference !== null) {
+      const chapterMatch = / (\d+)(?::|$)/.exec(reference);
+      const chapter = chapterMatch ? Number(chapterMatch[1]) : null;
+      const isDefinitiveReference =
+        reference.includes(":") ||
+        (chapter !== null && chapter < 1000 && KNOWN_BOOK_NAMES.has(referenceBookName(reference)));
       try {
         const verses = await this.lookupReference(reference);
-        if (verses.length > 0) {
+        if (verses.length > 0 || isDefinitiveReference) {
           return verses;
         }
-      } catch {
+      } catch (error) {
+        if (
+          isDefinitiveReference &&
+          error instanceof ScriptureApiError &&
+          error.status === 400
+        ) {
+          return [];
+        }
         // Fall through to semantic search.
       }
     }
