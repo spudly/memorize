@@ -541,21 +541,33 @@ function stripMarkdownLinks(text: string, definedRefs: Set<string> = new Set<str
       // text and stay: the guards keep a run of "["s untouched (each
       // one is either followed by another "[" or preceded by one),
       // keep any "[" whose text continues onto another line, and keep
-      // any fragment containing a parenthesis — a link label cut
-      // mid-label carries no destination punctuation, while literal
-      // bracket notation in full text (an interval like "[0, 1)")
-      // does, so the full text keeps its bracket. The run guard
+      // any fragment whose parentheses close without opening — a
+      // label cut mid-label can carry "(" (a parenthetical label or
+      // alt text), but only literal notation in full text (an
+      // interval like "[0, 1)") carries a ")" that no "(" in the
+      // fragment opened, so that text keeps its bracket. The run guard
       // checks the character before the bracket itself (`open`), not
       // before the "!" of an image: for a truncated linked image
       // ("[![Elaine L. Ja") the outer "[" is literal text handled on
       // its own iteration, and the image's "![" must still drop
       // together.
+      let parenDepth = 0;
+      let hasUnmatchedCloseParen = false;
+      for (let p = open + 1; p < text.length; p++) {
+        if (text[p] === "(") parenDepth++;
+        else if (text[p] === ")") {
+          parenDepth--;
+          if (parenDepth < 0) {
+            hasUnmatchedCloseParen = true;
+            break;
+          }
+        }
+      }
       const isTrailingFragment =
         text.indexOf("[", open + 1) === -1 &&
         text.indexOf("]", open + 1) === -1 &&
         text.indexOf("\n", open + 1) === -1 &&
-        text.indexOf("(", open + 1) === -1 &&
-        text.indexOf(")", open + 1) === -1 &&
+        !hasUnmatchedCloseParen &&
         text[open - 1] !== "[";
       if (isTrailingFragment) {
         i = open + 1;

@@ -743,9 +743,16 @@ describe("toPlainText truncated-link cases (#76)", () => {
   it("keeps literal bracket notation in complete text", () => {
     // This converter also runs on complete chapter/talk text, where a
     // "[" can be literal notation rather than markup: an interval's
-    // fragment carries a ")", which a truncated link label never
-    // does, so the bracket stays.
+    // fragment carries a ")" that no "(" in the fragment opened, so
+    // the bracket stays.
     expect(mapOne("Value in [0, 1) is valid.")).toBe("Value in [0, 1) is valid.");
+  });
+
+  it("drops the dangling bracket when a truncated label contains a parenthesis", () => {
+    // Labels and alt text can carry parentheses; a "(" the fragment
+    // itself opened does not make the bracket literal.
+    expect(mapOne("See [Faith (part")).toBe("See Faith (part");
+    expect(mapOne("Portrait: ![Elaine L. Jack (speaker")).toBe("Portrait: Elaine L. Jack (speaker");
   });
 
   it("drops a truncated linked image's prefix but keeps the outer literal bracket", () => {
