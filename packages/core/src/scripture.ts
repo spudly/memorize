@@ -241,13 +241,21 @@ export class GospelEngineDataSource implements ScriptureDataSource {
     // (lookupReference maps a 404 to []) or a 400 from the engine,
     // which is how it reports an unresolvable reference. Only other
     // lookup errors (5xx, unreachable) still fall back to semantic
-    // search.
+    // search. The no-fallback rule applies only when the query names
+    // an explicit verse (chapter:verse): a chapter-only trailing
+    // number is ambiguous — keyword searches can end in one, e.g.
+    // "general conference 2024" — so those keep the semantic fallback
+    // on a miss.
     const reference = parseReference(query);
     if (reference !== null) {
+      const hasVerse = reference.includes(":");
       try {
-        return await this.lookupReference(reference);
+        const verses = await this.lookupReference(reference);
+        if (verses.length > 0 || hasVerse) {
+          return verses;
+        }
       } catch (error) {
-        if (error instanceof ScriptureApiError && error.status === 400) {
+        if (hasVerse && error instanceof ScriptureApiError && error.status === 400) {
           return [];
         }
         // Fall through to semantic search.

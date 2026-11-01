@@ -207,6 +207,30 @@ describe("GospelEngineDataSource", () => {
     expect(results).toEqual([]);
   });
 
+  it("falls back to /api/search for a chapter-only reference-shaped keyword query (404)", async () => {
+    const calls = stubFetch((url) =>
+      url.includes("/api/get")
+        ? { ok: false, status: 404, body: {} }
+        : { ok: true, status: 200, body: SAMPLE_SEARCH_RESPONSE },
+    );
+    const results = await source().search("general conference 2024");
+    expect(calls).toHaveLength(2);
+    expect(calls[1]).toContain("/api/search");
+    expect(results[0]?.reference).toBe("Moroni 7:47");
+  });
+
+  it("falls back to /api/search for a chapter-only reference-shaped keyword query (400)", async () => {
+    const calls = stubFetch((url) =>
+      url.includes("/api/get")
+        ? { ok: false, status: 400, body: {} }
+        : { ok: true, status: 200, body: SAMPLE_SEARCH_RESPONSE },
+    );
+    const results = await source().search("general conference 2024");
+    expect(calls).toHaveLength(2);
+    expect(calls[1]).toContain("/api/search");
+    expect(results[0]?.reference).toBe("Moroni 7:47");
+  });
+
   it("falls back to /api/search when /api/get errors", async () => {
     const calls = stubFetch((url) =>
       url.includes("/api/get")
