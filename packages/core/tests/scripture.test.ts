@@ -359,3 +359,38 @@ describe("DemoDataSource", () => {
     expect(results.map((v) => v.reference)).toContain("Ether 12:27");
   });
 });
+
+describe("toPlainText via mapGetResponse (#74)", () => {
+  const mapOne = (text: string) =>
+    mapGetResponse({ reference: "Elaine L. Jack, Relief Society talk", text })[0]?.text;
+
+  it("strips markdown image syntax, keeping the alt text", () => {
+    expect(mapOne("![Elaine L. Jack](https://www.churchofjesuschrist.org/imgs/example) spoke on charity.")).toBe(
+      "Elaine L. Jack spoke on charity.",
+    );
+  });
+
+  it("drops footnote sup markers and empty anchor tags entirely", () => {
+    expect(mapOne("Charity is the pure love of Christ.<sup>[1](#fn-1)</sup>")).toBe(
+      "Charity is the pure love of Christ.",
+    );
+    expect(mapOne('<a id="fn-21"></a>**21.** See Moroni 7.')).toBe("21. See Moroni 7.");
+  });
+
+  it("strips markdown headings, emphasis, and links, keeping the words", () => {
+    expect(mapOne("# **Prayer**")).toBe("Prayer");
+    expect(mapOne("Read [Moroni 7](https://example.test/moroni) on *charity* and _faith_.")).toBe(
+      "Read Moroni 7 on charity and faith.",
+    );
+  });
+
+  it("strips raw HTML tags and decodes common entities", () => {
+    expect(mapOne("<p>Faith &amp; hope &lt;always&gt;</p>")).toBe("Faith & hope <always>");
+  });
+
+  it("leaves plain scripture text unchanged", () => {
+    const plain =
+      "And if men come unto me I will show unto them their weakness. I give unto men weakness that they may be humble;";
+    expect(mapOne(plain)).toBe(plain);
+  });
+});

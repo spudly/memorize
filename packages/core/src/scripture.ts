@@ -153,8 +153,68 @@ function firstString(obj: Record<string, unknown>, keys: string[]): string | und
   return undefined;
 }
 
+const HTML_ENTITIES: Record<string, string> = {
+  "&amp;": "&",
+  "&lt;": "<",
+  "&gt;": ">",
+  "&quot;": '"',
+  "&#39;": "'",
+  "&apos;": "'",
+  "&nbsp;": " ",
+};
+
+/**
+ * Convert engine source text to readable plain text (#74).
+ *
+ * Scripture verses arrive as plain text, but full-library results for
+ * talks, manuals, and study aids carry their source markup inline:
+ * markdown images (`![Elaine L. Jack](https://…)`), footnote markup
+ * (`<sup>[1](#fn-1)</sup>`, `<a id="fn-21"></a>`), markdown headings
+ * (`# Prayer`), emphasis markers, and raw HTML tags. Both apps render
+ * `Verse.text` as-is, so the markup is stripped here, at the single
+ * mapping choke point, keeping the readable words and dropping the
+ * syntax around them. Plain text passes through unchanged apart from
+ * whitespace normalization.
+ */
+export function toPlainText(raw: string): string {
+  let text = raw.replace(/\r\n?/g, "\n");
+  // Footnote reference markers are pure clutter in a result card; drop
+  // the whole <sup>…</sup> span, link syntax inside included.
+  text = text.replace(/<sup\b[^>]*>[\s\S]*?<\/sup\s*>/gi, "");
+  // Autolinks (<https://…>) would otherwise be eaten as HTML tags.
+  text = text.replace(/<(https?:\/\/[^>\s]+)>/g, "$1");
+  // Markdown images keep their alt text as the readable caption; this
+  // must run before the link rule, which would leave a stray "!".
+  text = text.replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1");
+  // Markdown links (inline and reference style) keep their link text.
+  text = text.replace(/\[([^\]]+)\]\([^)]*\)/g, "$1");
+  text = text.replace(/\[([^\]]+)\]\[[^\]]*\]/g, "$1");
+  // Any remaining HTML tags go, keeping the text they wrapped.
+  text = text.replace(/<\/?[a-zA-Z][^>]*>/g, "");
+  // Decode the common entities after tag stripping, so an escaped
+  // "&lt;sup&gt;" stays literal text instead of becoming a tag.
+  text = text.replace(
+    /&(?:amp|lt|gt|quot|#39|apos|nbsp);/g,
+    (entity) => HTML_ENTITIES[entity] ?? entity,
+  );
+  // Markdown line structure: headings and blockquotes keep their words.
+  text = text.replace(/^[ \t]{0,3}#{1,6}[ \t]+/gm, "");
+  text = text.replace(/^[ \t]*>[ \t]?/gm, "");
+  // Emphasis and code markers keep the words they wrap.
+  text = text.replace(/(\*\*|__)([\s\S]*?)\1/g, "$2");
+  text = text.replace(/~~([\s\S]*?)~~/g, "$1");
+  text = text.replace(/\*([^*\n]+)\*/g, "$1");
+  text = text.replace(/(?<![\w])_([^_\n]+)_(?![\w])/g, "$1");
+  text = text.replace(/`([^`\n]+)`/g, "$1");
+  // Normalize whitespace: no trailing spaces, no run of blank lines.
+  text = text.replace(/[ \t]+/g, " ");
+  text = text.replace(/ +\n/g, "\n");
+  text = text.replace(/\n{3,}/g, "\n\n");
+  return text.trim();
+}
+
 function buildVerse(reference: string, text: string, obj: Record<string, unknown>): Verse {
-  const verse: Verse = { id: normalizeReference(reference), reference, text };
+  const verse: Verse = { id: normalizeReference(reference), reference, text: toPlainText(text) };
   const book = firstString(obj, ["book", "book_name"]);
   if (book !== undefined) {
     verse.book = book;
