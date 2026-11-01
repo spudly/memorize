@@ -269,6 +269,14 @@ function protectCodeSpans(text: string, spans: string[]): string {
   let out = "";
   let i = 0;
   while (i < text.length) {
+    // An escaped character is literal text: an escaped backtick
+    // never opens a code span. (Escapes inside a span need no
+    // handling — span content is literal by definition.)
+    if (text[i] === "\\" && i + 1 < text.length) {
+      out += text.slice(i, i + 2);
+      i += 2;
+      continue;
+    }
     if (text[i] !== "`") {
       out += text[i];
       i++;
@@ -338,39 +346,132 @@ function paragraphBoundaries(text: string): number[] {
   return indices;
 }
 
-/** First boundary index >= `start`, or -1 (binary search). */
-function firstBoundaryAtOrAfter(boundaries: number[], start: number): number {
-  let lo = 0;
-  let hi = boundaries.length;
-  while (lo < hi) {
-    const mid = (lo + hi) >> 1;
-    if ((boundaries[mid] as number) < start) lo = mid + 1;
-    else hi = mid;
+/**
+ * Every matched square-bracket pair in `text`, computed in one
+ * stack pass: opening index -> closing index. Honors backslash
+ * escapes, and matches never cross a paragraph boundary (the stack
+ * resets there). Looking matches up in this map replaces rescanning
+ * from every "[": when no closing bracket exists at all, the old
+ * per-"[" rescan advanced one character and rescanned the whole
+ * remainder, which is quadratic work on input like "[[[[…Faith".
+ */
+function bracketMatches(text: string, boundaries: number[]): Map<number, number> {
+  const matches = new Map<number, number>();
+  const boundarySet = new Set(boundaries);
+  const stack: number[] = [];
+  for (let i = 0; i < text.length; i++) {
+    if (boundarySet.has(i)) stack.length = 0;
+    const ch = text[i];
+    if (ch === "\\") {
+      i++;
+    } else if (ch === "[") {
+      stack.push(i);
+    } else if (ch === "]" && stack.length > 0) {
+      matches.set(stack.pop() as number, i);
+    }
   }
-  return lo < boundaries.length ? (boundaries[lo] as number) : -1;
+  return matches;
 }
 
-/** Index of the bracket closing the one at `open`, or -1. Honors nesting and backslash escapes. Bounded by `limit` when given. */
-function matchingBracket(
-  text: string,
-  open: number,
-  openCh: string,
-  closeCh: string,
-  limit: number = text.length,
-): number {
+/**
+ * Index of the ")" closing an inline link whose "(" is at `open`,
+ * or -1 when there is no well-formed close before `limit`. The
+ * destination is scanned with a paren-depth counter (nested parens
+ * stay inside it), and an optional title after the destination is
+ * parsed separately: a quoted title ("…" or '…') may itself contain
+ * parentheses, which belong to the title, not the destination, and a
+ * parenthesized title is skipped as a balanced group. Without the
+ * separate title parse, a title like "Faith ) hope" ended the link
+ * early and leaked the rest of the title into the text.
+ */
+function inlineLinkEnd(text: string, open: number, limit: number): number {
+  let i = open + 1;
+  while (i < limit && (text[i] === " " || text[i] === "\t")) i++;
+  let depth = 0;
+  while (i < limit) {
+    const ch = text[i];
+    if (ch === "\\") {
+      i += 2;
+      continue;
+    }
+    if (ch === "(") {
+      depth++;
+      i++;
+      continue;
+    }
+    if (ch === ")") {
+      if (depth === 0) return i;
+      depth--;
+      i++;
+      continue;
+    }
+    if (ch === " " || ch === "\t") {
+      // The destination ended; only an optional title and the
+      // closing ")" may follow.
+      let j = i;
+      while (j < limit && (text[j] === " " || text[j] === "\t")) j++;
+      if (j >= limit) return -1;
+      const opener = text[j] as string;
+      if (opener === '"' || opener === "'") {
+        let k = j + 1;
+        while (k < limit && text[k] !== opener) {
+          if (text[k] === "\\") k++;
+          k++;
+        }
+        if (k >= limit) return -1;
+        j = k + 1;
+      } else if (opener === "(") {
+        let inner = 0;
+        let k = j;
+        let closed = false;
+        while (k < limit) {
+          const kc = text[k];
+          if (kc === "\\") {
+            k += 2;
+            continue;
+          }
+          if (kc === "(") inner++;
+          else if (kc === ")") {
+            inner--;
+            if (inner === 0) {
+              closed = true;
+              break;
+            }
+          }
+          k++;
+        }
+        if (!closed) return -1;
+        j = k + 1;
+      } else {
+        return -1;
+      }
+      while (j < limit && (text[j] === " " || text[j] === "\t")) j++;
+      return j < limit && text[j] === ")" ? j : -1;
+    }
+    i++;
+  }
+  return -1;
+}
+
+/**
+ * Plain paren-depth scan for an inline link's closing ")": the
+ * fallback when the title-aware scan above cannot parse the shape
+ * (e.g. a parenthesized title containing an unbalanced ")", which
+ * CommonMark titles may not contain but engine text might). Honors
+ * backslash escapes; bounded by `limit`.
+ */
+function parenDepthEnd(text: string, open: number, limit: number): number {
   const end = Math.min(limit, text.length);
   let depth = 0;
   for (let i = open; i < end; i++) {
     const ch = text[i];
     if (ch === "\\") {
       i++;
-    } else if (ch === openCh) {
+    } else if (ch === "(") {
       depth++;
-    } else if (ch === closeCh) {
+    } else if (ch === ")") {
       depth--;
-      if (depth === 0) {
-        return i;
-      }
+      if (depth === 0) return i;
     }
   }
   return -1;
@@ -394,6 +495,7 @@ function matchingBracket(
  */
 function stripMarkdownLinks(text: string, definedRefs: Set<string> = new Set<string>()): string {
   const boundaries = paragraphBoundaries(text);
+  const matches = bracketMatches(text, boundaries);
   let cachedLineEnd = -1;
   const lineEndFrom = (pos: number): number => {
     if (cachedLineEnd !== -1 && pos <= cachedLineEnd) return cachedLineEnd;
@@ -417,10 +519,9 @@ function stripMarkdownLinks(text: string, definedRefs: Set<string> = new Set<str
       continue;
     }
     const open = isImage ? i + 1 : i;
-    // A link never spans a paragraph boundary: bound the bracket scan.
-    const boundary = firstBoundaryAtOrAfter(boundaries, open);
-    const bracketLimit = boundary === -1 ? text.length : boundary;
-    const closeBracket = matchingBracket(text, open, "[", "]", bracketLimit);
+    // A link never spans a paragraph boundary; bracketMatches
+    // already guarantees the match (if any) stays inside one.
+    const closeBracket = matches.get(open) ?? -1;
     if (closeBracket === -1) {
       out += text[i];
       i++;
@@ -468,7 +569,8 @@ function stripMarkdownLinks(text: string, definedRefs: Set<string> = new Set<str
         }
       }
       if (angleHandled) continue;
-      const closeParen = matchingBracket(text, after, "(", ")", limit);
+      const titleAwareEnd = inlineLinkEnd(text, after, limit);
+      const closeParen = titleAwareEnd !== -1 ? titleAwareEnd : parenDepthEnd(text, after, limit);
       if (closeParen !== -1 && closeParen < limit) {
         out += label;
         i = closeParen + 1;
@@ -483,14 +585,24 @@ function stripMarkdownLinks(text: string, definedRefs: Set<string> = new Set<str
       continue;
     }
     if (text[after] === "[") {
-      const refBoundary = firstBoundaryAtOrAfter(boundaries, after);
-      const refLimit = refBoundary === -1 ? text.length : refBoundary;
-      const closeRef = matchingBracket(text, after, "[", "]", refLimit);
+      const closeRef = matches.get(after) ?? -1;
       if (closeRef !== -1) {
-        out += label;
-        i = closeRef + 1;
-        continue;
+        // A reference-style suffix is consumed only when its label
+        // has a definition; an undefined reference is ordinary text,
+        // not a link ("Read [Faith][Hope] today." keeps "Hope").
+        // A collapsed "[]" reference uses the first label.
+        const refLabel = text.slice(after + 1, closeRef);
+        const effectiveLabel =
+          refLabel.trim() === "" ? text.slice(open + 1, closeBracket) : refLabel;
+        if (definedRefs.has(normalizeLinkLabel(effectiveLabel))) {
+          out += label;
+          i = closeRef + 1;
+          continue;
+        }
       }
+      // Undefined reference suffix: fall through and treat the first
+      // bracket on its own (shortcut reference or literal text); the
+      // second bracket is then processed on its own merits.
     }
     // Shortcut reference: a bare bracket whose label has a definition.
     if (definedRefs.has(normalizeLinkLabel(label))) {
@@ -525,12 +637,18 @@ function stripMarkdownLinks(text: string, definedRefs: Set<string> = new Set<str
  */
 export function toPlainText(raw: string): string {
   let text = raw.replace(/\r\n?/g, "\n");
+  // Protect code spans FIRST: backslash escapes are not interpreted
+  // inside a code span, so span content must be captured before
+  // escape protection runs — otherwise "\*faith\*" inside backticks
+  // came back as "*faith*", its literal backslashes eaten by the
+  // escape placeholders. The span scanner is itself escape-aware, so
+  // an escaped backtick outside a span still never opens one.
+  const codeSpans: string[] = [];
+  text = protectCodeSpans(text, codeSpans);
   // Protect backslash-escaped punctuation for the whole cleanup (see
   // protectEscapedPunctuation above): the escapes are restored at the
   // very end, after entity decoding and whitespace normalization.
   text = protectEscapedPunctuation(text);
-  const codeSpans: string[] = [];
-  text = protectCodeSpans(text, codeSpans);
   // HTML comments are not content; remove them (code spans already
   // protected, so comments inside code spans survive literally).
   text = text.replace(/<!--[\s\S]*?-->/g, "");
@@ -559,7 +677,15 @@ export function toPlainText(raw: string): string {
       /^ {0,3}\[([^\]]+)\]:[ \t]*(?:<[^>\n]*>|\S+)(?:[ \t]+(?:"[^"\n]*"|'[^'\n]*'|\([^()\n]*\)))?[ \t]*$/gm;
     let dm: RegExpExecArray | null;
     while ((dm = defRe.exec(text)) !== null) {
-      if (dm[1] !== undefined) definedRefs.add(normalizeLinkLabel(dm[1]));
+      // Footnote definitions ("[^1]: Ibid.") also match defRe when
+      // their body is a single token, but a footnote label is not a
+      // link reference: admitting "^1" would make every "[^1]"
+      // marker resolve as a shortcut reference and leave a stray
+      // "^1" in the card. Footnote definitions are removed by their
+      // own rule below.
+      if (dm[1] !== undefined && !dm[1].startsWith("^")) {
+        definedRefs.add(normalizeLinkLabel(dm[1]));
+      }
     }
   }
   text = text.replace(
@@ -581,13 +707,25 @@ export function toPlainText(raw: string): string {
   // eaten as HTML tags by the generic tag strip below.
   text = text.replace(/<(https?:\/\/[^>\s]+)>/g, "$1");
   text = text.replace(/<([\w.+-]+@[\w-]+(?:\.[\w-]+)+)>/g, "$1");
-  // Line-break and block-closing tags separate words: turn them into
+  // Line-break and block tags separate words: turn them into
   // whitespace before stripping, or "<p>Faith</p><p>hope</p>" would
-  // come out as "Faithhope".
+  // come out as "Faithhope". Opening block tags separate too, not
+  // just closing ones: "<div>Faith<div>hope</div></div>" has no
+  // closing tag between the two words, so closing-only handling
+  // still joined them into "Faithhope". Opening tags become a space
+  // rather than a newline so an adjacent closing tag's newline is
+  // not doubled into a paragraph break.
   text = text.replace(/<br\b[^>]*>/gi, "\n");
   text = text.replace(
     /<\/(?:p|div|li|ul|ol|h[1-6]|blockquote|tr|td|th|section|article)\s*>/gi,
     "\n",
+  );
+  text = text.replace(
+    /<(?:p|div|li|ul|ol|h[1-6]|blockquote|tr|td|th|section|article|table|thead|tbody|pre|figure|figcaption|dl|dt|dd|header|footer|main|nav|aside|form|fieldset|hr)\b[^>]*>/gi,
+    (_tag, offset: number, whole: string) =>
+      // No separator needed right after a newline (e.g. the one a
+      // preceding closing tag just produced): it already separates.
+      offset > 0 && whole[offset - 1] === "\n" ? "" : " ",
   );
   // Any remaining HTML tags go, keeping the text they wrapped.
   text = text.replace(/<\/?[a-zA-Z][^>]*>/g, "");
@@ -646,8 +784,9 @@ export function toPlainText(raw: string): string {
   // characters are literal text and must not be reinterpreted as
   // markup, entities ("\&amp;" is the literal text "&amp;"), or
   // whitespace by any pass above.
-  // Code spans restore first: their contents may contain escape
-  // placeholders, which restoreEscapedPunctuation then restores.
+  // Code spans restore first: their contents are literal (they were
+  // captured before escape protection ran), and restoring them
+  // before the escape placeholders keeps the two from interfering.
   return restoreEscapedPunctuation(restoreCodeSpans(text.trim(), codeSpans));
 }
 

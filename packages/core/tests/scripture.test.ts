@@ -660,3 +660,45 @@ describe("toPlainText round-4 cases (#74)", () => {
     expect(mapOne("the [Obedience] principle")).toBe("the [Obedience] principle");
   });
 });
+
+describe("toPlainText round-5 cases (#74)", () => {
+  const mapOne = (text: string) => mapGetResponse({ reference: "Talk excerpt", text })[0]?.text;
+
+  it("parses a quoted link title separately from the destination", () => {
+    expect(mapOne('[Faith](https://example.test/faith "Faith ) hope")')).toBe("Faith");
+    expect(mapOne('![Faith](https://example.test/faith "Faith ) hope")')).toBe("Faith");
+    expect(mapOne("[Faith](https://example.test/faith 'Faith ) hope')")).toBe("Faith");
+  });
+
+  it("keeps reference-style text whose label has no definition", () => {
+    expect(mapOne("Read [Faith][Hope] today.")).toBe("Read [Faith][Hope] today.");
+    expect(mapOne("Read [Faith][Faith] today.\n\n[Faith]: https://example.test/faith")).toBe(
+      "Read Faith today.",
+    );
+    expect(mapOne("Read [Faith][] today.\n\n[Faith]: https://example.test/faith")).toBe(
+      "Read Faith today.",
+    );
+  });
+
+  it("preserves backslashes inside code spans", () => {
+    expect(mapOne("The code `\\*faith\\*` here")).toBe("The code \\*faith\\* here");
+    // An escaped backtick outside a span is still a literal backtick.
+    expect(mapOne("Faith \\` hope")).toBe("Faith ` hope");
+  });
+
+  it("separates words at opening block tags too", () => {
+    expect(mapOne("<div>Faith<div>hope</div></div>")).toBe("Faith hope");
+    expect(mapOne("Faith<p>hope</p>")).toBe("Faith hope");
+    expect(mapOne("<p>Faith</p><p>hope</p>")).toBe("Faith\nhope");
+  });
+
+  it("does not treat footnote labels as link references", () => {
+    expect(mapOne("Faith[^1]\n\n[^1]: Ibid.")).toBe("Faith[^1]");
+    expect(mapOne("Faith[^2] and hope\n\n[^2]: See Ibid. p. 4")).toBe("Faith[^2] and hope");
+  });
+
+  it("handles many unmatched opening brackets without quadratic rescans", () => {
+    const input = "[".repeat(20000) + "Faith";
+    expect(mapOne(input)).toBe(input);
+  });
+});
