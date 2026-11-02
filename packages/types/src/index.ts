@@ -3,14 +3,18 @@ export interface Verse {
   /**
    * Unique id: the normalized reference slug for scriptures, e.g.
    * `ether-12-27` (kept for scripture search hits too, so search and
-   * `/api/get` agree); non-scripture full-library search results
-   * instead carry their engine document identity, e.g. `talks-3161`,
-   * because titles repeat across documents (#79). Duplicate results
-   * within one list get a content-derived `~<hash>` suffix so
-   * rendered keys stay unique and a chunk's id is stable under
-   * reordering; membership/dedupe use `isSameVerse` (id, or
-   * reference + text) so a chunk returned alone under its canonical
-   * id still matches its saved suffixed copy.
+   * `/api/get` agree). Non-scripture full-library search results are
+   * CHUNKS of a document, and each chunk is its own memorizable item
+   * (Stephen's ruling on #79, 2026-11-01), so their id is the engine
+   * document identity plus a content hash of the chunk itself, e.g.
+   * `talks-3161~<hash>` — never the document id alone, which every
+   * chunk of the document would share: the first chunk in one
+   * response and a different chunk returned alone in a later response
+   * would then carry the same id and be mistaken for one item.
+   * Duplicate results within one list get a further content-derived
+   * suffix from `withUniqueIds` so rendered keys stay unique.
+   * Membership/dedupe use `isSameVerse`, which compares the persisted
+   * {@link Verse.chunkKey} first when both sides carry one.
    */
   id: string;
   /** Human-readable reference, e.g. `Ether 12:27`. */
@@ -19,6 +23,41 @@ export interface Verse {
   text: string;
   book?: string;
   chapter?: string;
+  /**
+   * The engine's document type for a full-library search result
+   * (the item's `source_type`, e.g. `talks`, `scriptures`), persisted
+   * at map time so a saved verse keeps its source identity (#79).
+   * Absent on verses mapped from shapes that carry none (the
+   * `/api/get` verse items, demo verses) and on legacy saves.
+   */
+  sourceType?: string;
+  /**
+   * The engine's document id for a full-library search result (the
+   * item's `source_id`, as a string), persisted alongside
+   * {@link Verse.sourceType}. A document id identifies the DOCUMENT,
+   * never the chunk — see {@link Verse.chunkKey}.
+   */
+  sourceId?: string;
+  /**
+   * Stable identity of THIS memorizable item (one chunk), derived at
+   * map time and persisted with the verse (#79):
+   *
+   * - Library chunk: `<sourceType>:<sourceId>:<textHash>` — the
+   *   document identity plus a hash of the chunk's own text, so two
+   *   chunks of one document are different items, and the same chunk
+   *   keeps its key alone, in a subset, or reordered.
+   * - Scripture passage: `scripture:<reference-slug>` — deliberately
+   *   text-independent, because a search snippet and the full
+   *   `/api/get` text are the same passage with different texts and
+   *   must keep matching (the Ether 12:27 control).
+   * - Anything else: `ref:<reference-slug>:<textHash>`.
+   *
+   * Absent on verses saved before this field existed; `isSameVerse`
+   * bridges those legacy saves by reference + text (and, for a
+   * scripture key, by reference), and the store annotates a legacy
+   * entry with the verified key the first time it matches.
+   */
+  chunkKey?: string;
 }
 
 export type VerseStatus = "learning" | "memorized";

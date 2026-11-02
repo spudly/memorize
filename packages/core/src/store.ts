@@ -80,12 +80,50 @@ export function createMemorizeStore(storage: KeyValueStorage): MemorizeStore {
 
   const actions: MemorizeActions = {
     addVerse(verse: Verse): void {
-      // Dedupe on verse identity, not id alone: a result whose id
-      // changed across the #79 fix (legacy title-slug -> document id)
-      // or whose list-local suffix differs from the saved copy's
-      // (see isSameVerse) is the same item, and re-adding it must not
-      // create a second learning entry with separate progress.
-      if (data.verses.some((entry) => isSameVerse(entry.verse, verse))) {
+      // Dedupe on verse identity, not id alone (see isSameVerse):
+      // each chunk of a document is its own item (#79, Stephen's
+      // ruling), so dedupe compares the persisted per-chunk identity
+      // — a different chunk of an already-saved document is NOT a
+      // duplicate and stays addable below.
+      const matchIndex = data.verses.findIndex((entry) => isSameVerse(entry.verse, verse));
+      if (matchIndex >= 0) {
+        // Legacy reconciliation (#79): a pre-chunkKey save matched by
+        // the bridge in isSameVerse has now been VERIFIED as this
+        // chunk, so persist the incoming verse's source + chunk
+        // identity onto the stored entry — keeping its id and all
+        // progress — instead of leaving it key-less. Later results
+        // then compare chunk keys directly: this same chunk keeps
+        // matching, and a different chunk of the same document (a
+        // changed snippet is a different chunk under the per-chunk
+        // ruling) no longer needs the bridge and stays addable as
+        // its own entry. Fields already on the stored verse are
+        // never overwritten.
+        const entry = data.verses[matchIndex];
+        if (
+          entry &&
+          (verse.chunkKey !== undefined ||
+            verse.sourceType !== undefined ||
+            verse.sourceId !== undefined) &&
+          (entry.verse.chunkKey === undefined ||
+            entry.verse.sourceType === undefined ||
+            entry.verse.sourceId === undefined)
+        ) {
+          const annotated: Verse = { ...entry.verse };
+          if (annotated.chunkKey === undefined && verse.chunkKey !== undefined) {
+            annotated.chunkKey = verse.chunkKey;
+          }
+          if (annotated.sourceType === undefined && verse.sourceType !== undefined) {
+            annotated.sourceType = verse.sourceType;
+          }
+          if (annotated.sourceId === undefined && verse.sourceId !== undefined) {
+            annotated.sourceId = verse.sourceId;
+          }
+          data = {
+            ...data,
+            verses: data.verses.map((v, i) => (i === matchIndex ? { ...v, verse: annotated } : v)),
+          };
+          void persist();
+        }
         return;
       }
       const now = new Date();

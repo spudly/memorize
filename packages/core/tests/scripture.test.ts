@@ -393,7 +393,16 @@ describe("full-library search result identity (#79)", () => {
     ]);
     const ids = results.map((v) => v.id);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(ids).toEqual(["talks-3161", "talks-3086", "study-aids-2824"]);
+    // Ids are chunk-scoped: document identity + the chunk's own text
+    // hash, never the bare document id (#79 per-chunk ruling).
+    expect(ids[0]).toMatch(/^talks-3161~[a-z0-9]+$/);
+    expect(ids[1]).toMatch(/^talks-3086~[a-z0-9]+$/);
+    expect(ids[2]).toMatch(/^study-aids-2824~[a-z0-9]+$/);
+    // The source identity and per-chunk key are persisted on the Verse.
+    expect(results[0]).toMatchObject({ sourceType: "talks", sourceId: "3161" });
+    expect(results[0]?.chunkKey).toMatch(/^talks:3161:[a-z0-9]+$/);
+    expect(results[1]?.chunkKey).toMatch(/^talks:3086:[a-z0-9]+$/);
+    expect(results[0]?.chunkKey).not.toBe(results[1]?.chunkKey);
   });
 
   it("keeps every result when the engine repeats one reference (chunk shape)", async () => {
@@ -571,6 +580,132 @@ describe("isSameVerse identity across id schemes (#79)", () => {
         { id: "charity-never-faileth", reference: "Charity Never Faileth", text: "First chunk." },
       ),
     ).toBe(false);
+  });
+});
+
+describe("per-chunk source identity (#79, Stephen's ruling)", () => {
+  // Two chunks of ONE document (talks-3161), as the engine returns
+  // them in a single response and in later subset responses.
+  const chunkAItem = {
+    source_type: "talks",
+    source_id: 3161,
+    title: "Charity Never Faileth",
+    snippet: "First chunk of the Allred talk.",
+  };
+  const chunkBItem = {
+    source_type: "talks",
+    source_id: 3161,
+    title: "Charity Never Faileth",
+    snippet: "Second chunk of the Allred talk.",
+  };
+
+  it("(a) a chunk returned alone keeps its own identity — not the first chunk's", () => {
+    const a = mapSearchItem(chunkAItem);
+    const b = mapSearchItem(chunkBItem);
+    const bAlone = mapSearchItem(chunkBItem);
+    expect(a).not.toBeNull();
+    expect(b).not.toBeNull();
+    expect(bAlone).not.toBeNull();
+    if (!a || !b || !bAlone) return;
+    // Neither chunk ever carries the bare document id.
+    expect(a.id).toMatch(/^talks-3161~[a-z0-9]+$/);
+    expect(b.id).toMatch(/^talks-3161~[a-z0-9]+$/);
+    expect(a.id).not.toBe(b.id);
+    // B alone is the same item as B in [A, B] — same id, same key —
+    // and is NOT the saved chunk A, despite the shared document id
+    // the old code handed to whichever chunk arrived first.
+    expect(bAlone.id).toBe(b.id);
+    expect(bAlone.chunkKey).toBe(b.chunkKey);
+    expect(isSameVerse(a, bAlone)).toBe(false);
+    expect(isSameVerse(b, bAlone)).toBe(true);
+  });
+
+  it("(b) identity is stable across reordered responses", async () => {
+    const source = () => new GospelEngineDataSource("https://engine.example", "stdy_test");
+    stubFetch(() => ({ ok: true, status: 200, body: { results: [chunkAItem, chunkBItem] } }));
+    const first = await source().search("charity");
+    stubFetch(() => ({ ok: true, status: 200, body: { results: [chunkBItem, chunkAItem] } }));
+    const reordered = await source().search("charity");
+    const byText = (list: typeof first, text: string) => list.find((v) => v.text === text);
+    for (const text of [chunkAItem.snippet, chunkBItem.snippet]) {
+      expect(byText(reordered, text)?.id).toBe(byText(first, text)?.id);
+      expect(byText(reordered, text)?.chunkKey).toBe(byText(first, text)?.chunkKey);
+    }
+    expect(new Set(first.map((v) => v.id)).size).toBe(2);
+    expect(new Set(reordered.map((v) => v.id)).size).toBe(2);
+  });
+
+  it("keeps distinct documents distinct even when title and snippet both match", () => {
+    const snippet = "An identical snippet in two different talks.";
+    const one = mapSearchItem({ ...chunkAItem, snippet });
+    const two = mapSearchItem({
+      source_type: "talks",
+      source_id: 3086,
+      title: "Charity Never Faileth",
+      snippet,
+    });
+    expect(one).not.toBeNull();
+    expect(two).not.toBeNull();
+    if (!one || !two) return;
+    expect(one.reference).toBe(two.reference);
+    expect(one.text).toBe(two.text);
+    expect(one.chunkKey).not.toBe(two.chunkKey);
+    expect(isSameVerse(one, two)).toBe(false);
+  });
+
+  it("(c) Ether 12:27 control: a search snippet still matches its full /api/get text", () => {
+    const snippetHit = mapSearchItem({
+      source_type: "scriptures",
+      source_id: 4360,
+      reference: "Ether 12:27",
+      snippet: "And if men come unto me I will show unto them their weakness.",
+    });
+    const fullVerses = mapGetResponse(SAMPLE_GET_RESPONSE);
+    const full27 = fullVerses[0];
+    const full28 = fullVerses[1];
+    expect(snippetHit).not.toBeNull();
+    expect(full27).not.toBeUndefined();
+    if (!snippetHit || !full27 || !full28) return;
+    // Different texts, same passage: the snippet is a truncated form
+    // of the full verse text, and they must still be the same item.
+    expect(snippetHit.text).not.toBe(full27.text);
+    expect(snippetHit.chunkKey).toBe("scripture:ether-12-27");
+    expect(full27.chunkKey).toBe("scripture:ether-12-27");
+    expect(isSameVerse(snippetHit, full27)).toBe(true);
+    // The neighbouring verse is a different passage and must not match.
+    expect(isSameVerse(snippetHit, full28)).toBe(false);
+  });
+
+  it("(d) bridges a legacy key-less save to the same chunk, and not to a different chunk", () => {
+    const legacy = {
+      id: "charity-never-faileth",
+      reference: "Charity Never Faileth",
+      text: chunkBItem.snippet,
+    };
+    const b = mapSearchItem(chunkBItem);
+    const a = mapSearchItem(chunkAItem);
+    expect(b).not.toBeNull();
+    expect(a).not.toBeNull();
+    if (!a || !b) return;
+    expect(isSameVerse(legacy, b)).toBe(true);
+    expect(isSameVerse(legacy, a)).toBe(false);
+  });
+
+  it("(d) bridges a legacy full-text scripture save to its search snippet by reference", () => {
+    const full27 = mapGetResponse(SAMPLE_GET_RESPONSE)[0];
+    expect(full27).not.toBeUndefined();
+    if (!full27) return;
+    const legacy = { id: full27.id, reference: full27.reference, text: full27.text };
+    const snippetHit = mapSearchItem({
+      source_type: "scriptures",
+      source_id: 4360,
+      reference: "Ether 12:27",
+      snippet: "And if men come unto me I will show unto them their weakness.",
+    });
+    expect(snippetHit).not.toBeNull();
+    if (!snippetHit) return;
+    expect(legacy.text).not.toBe(snippetHit.text);
+    expect(isSameVerse(legacy, snippetHit)).toBe(true);
   });
 });
 
@@ -976,9 +1111,11 @@ describe("mapSearchItem verse identity (#79)", () => {
     expect(b).not.toBeNull();
     expect(a?.reference).toBe("Charity Never Faileth");
     expect(b?.reference).toBe("Charity Never Faileth");
-    expect(a?.id).toBe("talks-3161");
-    expect(b?.id).toBe("talks-2044");
+    expect(a?.id).toMatch(/^talks-3161~[a-z0-9]+$/);
+    expect(b?.id).toMatch(/^talks-2044~[a-z0-9]+$/);
     expect(a?.id).not.toBe(b?.id);
+    expect(a).toMatchObject({ sourceType: "talks", sourceId: "3161" });
+    expect(b).toMatchObject({ sourceType: "talks", sourceId: "2044" });
   });
 
   it("keeps the reference-slug id for items without document identity", () => {
@@ -997,6 +1134,8 @@ describe("mapSearchItem verse identity (#79)", () => {
       snippet: "And if men come unto me I will show unto them their weakness.",
     });
     expect(verse?.id).toBe("ether-12-27");
+    expect(verse).toMatchObject({ sourceType: "scriptures", sourceId: "4360" });
+    expect(verse?.chunkKey).toBe("scripture:ether-12-27");
   });
 
   it("returns unique ids for a full search response of same-title results", async () => {

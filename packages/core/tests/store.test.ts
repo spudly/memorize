@@ -1,4 +1,5 @@
 import type { Verse } from "@memorize/types";
+import { mapSearchItem } from "../src/scripture";
 import { LocalStore, type KeyValueStorage } from "../src/storage";
 import { createMemorizeStore } from "../src/store";
 
@@ -147,6 +148,133 @@ describe("memorize store", () => {
     const verses = store.getState().data.verses;
     expect(verses).toHaveLength(2);
     expect(verses.map((v) => v.verse.text)).toContain(chunkA.text);
+  });
+
+  test("(a) holds both chunks of one document, including one first seen alone", async () => {
+    // [A, B] of talks-3161 are mapped, A is saved; B is then mapped
+    // from a later response returning B alone. B must keep its own
+    // chunk identity and be addable alongside A — under the old
+    // document-id scheme B-alone took the bare `talks-3161` id that
+    // A held in [A, B], and the add was refused as a duplicate.
+    const chunkAItem = {
+      source_type: "talks",
+      source_id: 3161,
+      title: "Charity Never Faileth",
+      snippet: "First chunk of the Allred talk.",
+    };
+    const chunkBItem = {
+      source_type: "talks",
+      source_id: 3161,
+      title: "Charity Never Faileth",
+      snippet: "Second chunk of the Allred talk.",
+    };
+    const chunkA = mapSearchItem(chunkAItem);
+    const chunkBAlone = mapSearchItem(chunkBItem);
+    expect(chunkA).not.toBeNull();
+    expect(chunkBAlone).not.toBeNull();
+    if (!chunkA || !chunkBAlone) return;
+
+    const store = createMemorizeStore(memoryStorage());
+    await store.ready;
+    store.actions.addVerse(chunkA);
+    store.actions.addVerse(chunkBAlone);
+    await flush();
+    expect(store.getState().data.verses).toHaveLength(2);
+    // Re-adding either chunk (freshly mapped, same identity) dedupes.
+    const chunkAAgain = mapSearchItem(chunkAItem);
+    const chunkBAgain = mapSearchItem(chunkBItem);
+    if (chunkAAgain) store.actions.addVerse(chunkAAgain);
+    if (chunkBAgain) store.actions.addVerse(chunkBAgain);
+    await flush();
+    expect(store.getState().data.verses).toHaveLength(2);
+  });
+
+  test("annotates a legacy save with the verified chunk identity on match, preserving progress", async () => {
+    // Copilot's legacy case, under the per-chunk ruling: a key-less
+    // legacy save matches chunk B by reference + text, so B's source
+    // + chunk identity is persisted onto the stored entry (id and
+    // drill progress untouched). A later DIFFERENT chunk of the same
+    // document is then a different item by chunk key — it must be
+    // addable as its own entry, not swallowed by the document id.
+    const storage = memoryStorage();
+    const legacyStore = createMemorizeStore(storage);
+    await legacyStore.ready;
+    const legacy: Verse = {
+      id: "charity-never-faileth",
+      reference: "Charity Never Faileth",
+      text: "Second chunk of the Allred talk.",
+    };
+    legacyStore.actions.addVerse(legacy);
+    legacyStore.actions.setDrillProgress(legacy.id, 2, 1);
+    await flush();
+
+    const chunkB = mapSearchItem({
+      source_type: "talks",
+      source_id: 3161,
+      title: "Charity Never Faileth",
+      snippet: "Second chunk of the Allred talk.",
+    });
+    const chunkA = mapSearchItem({
+      source_type: "talks",
+      source_id: 3161,
+      title: "Charity Never Faileth",
+      snippet: "First chunk of the Allred talk.",
+    });
+    expect(chunkB).not.toBeNull();
+    expect(chunkA).not.toBeNull();
+    if (!chunkA || !chunkB) return;
+
+    const store = createMemorizeStore(storage);
+    await store.ready;
+    store.actions.addVerse(chunkB);
+    await flush();
+    let verses = store.getState().data.verses;
+    expect(verses).toHaveLength(1);
+    expect(verses[0]?.verse.id).toBe("charity-never-faileth");
+    expect(verses[0]?.drillRound).toBe(2);
+    expect(verses[0]?.verse.chunkKey).toBe(chunkB.chunkKey);
+    expect(verses[0]?.verse.sourceType).toBe("talks");
+    expect(verses[0]?.verse.sourceId).toBe("3161");
+
+    // The annotation survived a reload (it was persisted, not just
+    // held in memory), and the other chunk now adds as its own item.
+    const store2 = createMemorizeStore(storage);
+    await store2.ready;
+    expect(store2.getState().data.verses[0]?.verse.chunkKey).toBe(chunkB.chunkKey);
+    store2.actions.addVerse(chunkA);
+    await flush();
+    verses = store2.getState().data.verses;
+    expect(verses).toHaveLength(2);
+    expect(verses.map((v) => v.verse.text)).toContain(chunkA.text);
+  });
+
+  test("(d) a legacy verse without the new fields still loads and matches by reference + text", async () => {
+    const storage = memoryStorage();
+    const legacyStore = createMemorizeStore(storage);
+    await legacyStore.ready;
+    legacyStore.actions.addVerse({
+      id: "charity-never-faileth",
+      reference: "Charity Never Faileth",
+      text: "Plead for a desire to be filled with the gift of charity.",
+    });
+    await flush();
+
+    const store = createMemorizeStore(storage);
+    await store.ready;
+    const loaded = store.getState().data.verses[0]?.verse;
+    expect(loaded?.chunkKey).toBeUndefined();
+    expect(loaded?.sourceId).toBeUndefined();
+    const incoming = mapSearchItem({
+      source_type: "talks",
+      source_id: 3161,
+      title: "Charity Never Faileth",
+      snippet: "Plead for a desire to be filled with the gift of charity.",
+    });
+    expect(incoming).not.toBeNull();
+    if (!incoming) return;
+    store.actions.addVerse(incoming);
+    await flush();
+    expect(store.getState().data.verses).toHaveLength(1);
   });
 
   test("removes a verse", async () => {

@@ -39,10 +39,24 @@ no `reference` or `text` field. Titles are NOT unique across documents
 (a `charity` search returns two different "Charity Never Faileth"
 talks), so the Verse `id` for a non-scripture search item is derived
 from `source_type` + `source_id`, never from the title alone (#79).
+A search item is one CHUNK of its document, and each chunk is its own
+memorizable item (Stephen's ruling on #79, 2026-11-01), so the mapper
+also persists the item's `source_type` / `source_id` on the Verse and
+derives a per-chunk `chunkKey` (`<source_type>:<source_id>:<hash of
+the chunk's text>`); the finished Verse `id` is
+`<source_type>-<source_id>~<chunk text hash>`. The document identity
+alone must never identify a result: a later response returning a
+different chunk of the same document alone would hand it the first
+chunk's id, and the two chunks would be mistaken for one item.
 Scripture hits are the exception: upstream gives them a real
 `reference`, and they keep the reference-slug id (`ether-12-27`) so a
-verse has the same id via search and via `/api/get` — the store
-dedupes saved verses by id alone.
+verse has the same id via search and via `/api/get`; their `chunkKey`
+is `scripture:<reference-slug>` — text-independent on purpose, so a
+search snippet still matches the full `/api/get` text of the same
+passage (Ether 12:27). Verses saved before `chunkKey` existed carry
+no source identity; `isSameVerse` bridges them by reference + text
+(and by reference for scripture passages), and the store annotates a
+legacy entry with the verified identity on its first such match.
 
 The mapper accepts either a top-level JSON array or an object with a
 `results` / `items` / `verses` / `data` array. Each item is read with these

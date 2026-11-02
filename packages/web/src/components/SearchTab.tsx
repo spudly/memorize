@@ -23,10 +23,10 @@ export default function SearchTab({ store, dataSource, usingDemo }: Props) {
   // shows "Added" from the start instead of an Add button that appears
   // to do nothing (#56 item 5).
   // Membership is by verse identity, not id alone (isSameVerse): a
-  // verse saved before #79 under a legacy title-slug id, or a chunk
-  // whose list-local suffix changed between searches, is already in
+  // verse saved before #79 under a legacy title-slug id is already in
   // the library even though this result's id differs from the saved
-  // copy's id.
+  // copy's id, and each chunk of a document is its own item — a
+  // different chunk of a saved document still shows Add.
   const libraryVerses = store.getState().data.verses.map((entry) => entry.verse);
 
   const runSearch = async (): Promise<void> => {
