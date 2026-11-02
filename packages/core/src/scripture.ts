@@ -703,10 +703,25 @@ function stripMarkdownLinks(text: string, definedRefs: Set<string> = new Set<str
       let hasUnmatchedCloseParen = false;
       let hasHtmlLineBreak = false;
       if (isTrailingFragmentShape) {
+        // Escaped parens are protected as placeholders before this
+        // scanner runs (protectEscapedPunctuation), so count the
+        // placeholders as the parens they represent — only here, in
+        // the character used for the depth check; the input stays
+        // protected for the later markup passes. Otherwise a literal
+        // "\)" in interval notation ("[0, 1\)") is invisible to the
+        // scan and its bracket is misread as a truncated fragment,
+        // while an escaped "\(" in a truncated label ("[Faith \(part")
+        // is miscounted the other way.
+        const openParenPlaceholder = String.fromCharCode(
+          ESCAPE_PLACEHOLDER_BASE + ESCAPED_PUNCTUATION.indexOf("("),
+        );
+        const closeParenPlaceholder = String.fromCharCode(
+          ESCAPE_PLACEHOLDER_BASE + ESCAPED_PUNCTUATION.indexOf(")"),
+        );
         let parenDepth = 0;
         for (let p = open + 1; p < text.length; p++) {
-          if (text[p] === "(") parenDepth++;
-          else if (text[p] === ")") {
+          if (text[p] === "(" || text[p] === openParenPlaceholder) parenDepth++;
+          else if (text[p] === ")" || text[p] === closeParenPlaceholder) {
             parenDepth--;
             if (parenDepth < 0) {
               hasUnmatchedCloseParen = true;

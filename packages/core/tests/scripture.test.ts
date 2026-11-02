@@ -757,6 +757,18 @@ describe("toPlainText truncated-link cases (#76)", () => {
     expect(mapOne("Value in [0, 1) is valid.")).toBe("Value in [0, 1) is valid.");
   });
 
+  it("counts escaped parens in the truncated-fragment depth check", () => {
+    // Escaped parens are protected as placeholders before the link
+    // scanner runs; the depth check must count them as parens or the
+    // two cases below resolve inconsistently (Copilot review of the
+    // post-merge head, PR #78). An escaped ")" is still a close no
+    // "(" in the fragment opened, so the literal bracket stays; an
+    // escaped "(" in a truncated label still leaves the bracket
+    // dangling, so it drops like the unescaped case above.
+    expect(mapOne("Value in [0, 1\\) is valid.")).toBe("Value in [0, 1) is valid.");
+    expect(mapOne("See [Faith \\(part")).toBe("See Faith (part");
+  });
+
   it("drops the dangling bracket when a truncated label contains a parenthesis", () => {
     // Labels and alt text can carry parentheses; a "(" the fragment
     // itself opened does not make the bracket literal.
