@@ -6,7 +6,7 @@ import {
   type Verse,
 } from "@memorize/types";
 import { applyReview, markMemorized, nextReviewDate } from "./schedule";
-import { isSameVerse } from "./scripture";
+import { isSameVerse, suppliesMissingVerseIdentity } from "./scripture";
 import { LocalStore, type KeyValueStorage } from "./storage";
 
 export interface MemorizeState {
@@ -99,15 +99,13 @@ export function createMemorizeStore(storage: KeyValueStorage): MemorizeStore {
         // its own entry. Fields already on the stored verse are
         // never overwritten.
         const entry = data.verses[matchIndex];
-        if (
-          entry &&
-          (verse.chunkKey !== undefined ||
-            verse.sourceType !== undefined ||
-            verse.sourceId !== undefined) &&
-          (entry.verse.chunkKey === undefined ||
-            entry.verse.sourceType === undefined ||
-            entry.verse.sourceId === undefined)
-        ) {
+        // Only persist when the incoming verse actually fills a field
+        // the stored verse lacks: a verse that legitimately carries a
+        // chunkKey without source fields (demo verses, /api/get
+        // results) matches itself on re-search, and persisting that
+        // no-op would advance updatedAt — which Drive sync uses to
+        // detect local edits — risking a false sync conflict.
+        if (entry && suppliesMissingVerseIdentity(entry.verse, verse)) {
           const annotated: Verse = { ...entry.verse };
           if (annotated.chunkKey === undefined && verse.chunkKey !== undefined) {
             annotated.chunkKey = verse.chunkKey;

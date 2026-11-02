@@ -397,6 +397,114 @@ describe("memorize store", () => {
     expect(store3.getState().apiKey).toBeNull();
   });
 
+  test("re-adding a chunkKey-only verse does not persist or advance updatedAt", async () => {
+    // Copilot: demo verses and /api/get results legitimately carry a
+    // chunkKey without source fields, so re-searching one used to
+    // enter the reconciliation branch and persist unchanged data —
+    // advancing updatedAt, which Drive sync reads as a local edit.
+    let writes = 0;
+    const inner = memoryStorage();
+    const storage: KeyValueStorage = {
+      getItem: inner.getItem,
+      removeItem: inner.removeItem,
+      setItem: async (key, value) => {
+        writes += 1;
+        await inner.setItem(key, value);
+      },
+    };
+    const store = createMemorizeStore(storage);
+    await store.ready;
+    const getResult = mapSearchItem({
+      reference: "Ether 12:27",
+      text: "And if men come unto me I will show unto them their weakness.",
+    });
+    expect(getResult).not.toBeNull();
+    if (!getResult) return;
+    expect(getResult.chunkKey).toBeDefined();
+    expect(getResult.sourceType).toBeUndefined();
+
+    store.actions.addVerse(getResult);
+    await flush();
+    expect(store.getState().data.verses).toHaveLength(1);
+    const writesAfterAdd = writes;
+    const updatedAtAfterAdd = store.getState().data.updatedAt;
+
+    store.actions.addVerse(getResult);
+    await flush();
+    expect(store.getState().data.verses).toHaveLength(1);
+    expect(writes).toBe(writesAfterAdd);
+    expect(store.getState().data.updatedAt).toBe(updatedAtAfterAdd);
+  });
+
+  test("re-adding an already-complete verse does not persist or advance updatedAt", async () => {
+    // CodeRabbit's SearchTab trace at the store level: a saved verse
+    // that already carries chunkKey + source identity, re-found by
+    // the identical search result, must not trigger a persist.
+    let writes = 0;
+    const inner = memoryStorage();
+    const storage: KeyValueStorage = {
+      getItem: inner.getItem,
+      removeItem: inner.removeItem,
+      setItem: async (key, value) => {
+        writes += 1;
+        await inner.setItem(key, value);
+      },
+    };
+    const store = createMemorizeStore(storage);
+    await store.ready;
+    const chunk = mapSearchItem({
+      source_type: "talks",
+      source_id: 3161,
+      title: "Charity Never Faileth",
+      snippet: "Plead for a desire to be filled with the gift of charity.",
+    });
+    expect(chunk).not.toBeNull();
+    if (!chunk) return;
+
+    store.actions.addVerse(chunk);
+    await flush();
+    const writesAfterAdd = writes;
+    const updatedAtAfterAdd = store.getState().data.updatedAt;
+
+    store.actions.addVerse(chunk);
+    await flush();
+    expect(store.getState().data.verses).toHaveLength(1);
+    expect(writes).toBe(writesAfterAdd);
+    expect(store.getState().data.updatedAt).toBe(updatedAtAfterAdd);
+  });
+
+  test("reconciliation fills a genuinely missing source field and persists it", async () => {
+    // The complement of the two no-persist cases: a saved verse that
+    // carries the chunkKey but no source identity, re-found by a
+    // result with the SAME chunkKey plus the source fields, gains
+    // exactly those fields — persisted, with progress untouched.
+    const storage = memoryStorage();
+    const store = createMemorizeStore(storage);
+    await store.ready;
+    const keyOnly: Verse = {
+      id: "charity-never-faileth",
+      reference: "Charity Never Faileth",
+      text: "Plead for a desire to be filled with the gift of charity.",
+      chunkKey: "talks:3161:abc123",
+    };
+    store.actions.addVerse(keyOnly);
+    store.actions.setDrillProgress(keyOnly.id, 2, 1);
+    await flush();
+
+    store.actions.addVerse({ ...keyOnly, sourceType: "talks", sourceId: "3161" });
+    await flush();
+    const verses = store.getState().data.verses;
+    expect(verses).toHaveLength(1);
+    expect(verses[0]?.verse.sourceType).toBe("talks");
+    expect(verses[0]?.verse.sourceId).toBe("3161");
+    expect(verses[0]?.drillRound).toBe(2);
+
+    const store2 = createMemorizeStore(storage);
+    await store2.ready;
+    expect(store2.getState().data.verses[0]?.verse.sourceType).toBe("talks");
+    expect(store2.getState().data.verses[0]?.verse.sourceId).toBe("3161");
+  });
+
   test("replaceAll swaps in synced data and notifies subscribers", async () => {
     const store = createMemorizeStore(memoryStorage());
     await store.ready;

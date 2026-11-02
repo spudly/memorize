@@ -2,10 +2,12 @@ import {
   DemoDataSource,
   GospelEngineDataSource,
   isSameVerse,
+  mapChapterResponse,
   mapGetResponse,
   mapSearchItem,
   parseReference,
   ScriptureApiError,
+  suppliesMissingVerseIdentity,
 } from "../src/scripture";
 
 /**
@@ -129,12 +131,33 @@ describe("mapGetResponse", () => {
     const verses = mapGetResponse(SAMPLE_CHAPTER_RESPONSE);
     expect(verses).toHaveLength(1);
     expect(verses[0]).toMatchObject({
-      id: "alma-32",
       reference: "Alma 32",
       book: "alma",
       chapter: "32",
       text: "Chapter text stand-in for Alma 32.",
     });
+    // The envelope's identity (source_type "chapters" + chapter.id as
+    // source_id) is persisted like any other library document's, so
+    // the Verse id is chunk-scoped and its chunk key is
+    // `chapters:<id>:<textHash>` — not a source-less `ref:` key.
+    expect(verses[0]?.id).toMatch(/^chapters-901~[a-z0-9]+$/);
+    expect(verses[0]).toMatchObject({ sourceType: "chapters", sourceId: "901" });
+    expect(verses[0]?.chunkKey).toMatch(/^chapters:901:[a-z0-9]+$/);
+  });
+
+  it("gives a chapter Verse the same chunk identity as its /api/search representation", () => {
+    const chapterVerse = mapChapterResponse(SAMPLE_CHAPTER_RESPONSE);
+    const searchVerse = mapSearchItem({
+      source_type: "chapters",
+      source_id: 901,
+      title: "Alma 32",
+      snippet: "Chapter text stand-in for Alma 32.",
+    });
+    expect(chapterVerse).not.toBeNull();
+    expect(searchVerse).not.toBeNull();
+    if (!chapterVerse || !searchVerse) return;
+    expect(chapterVerse.chunkKey).toBe(searchVerse.chunkKey);
+    expect(isSameVerse(chapterVerse, searchVerse)).toBe(true);
   });
 
   it("tolerates a single-object payload", () => {
@@ -1460,3 +1483,36 @@ describe("toPlainText replacement-character round-6 cases (#77)", () => {
   });
 });
 
+describe("suppliesMissingVerseIdentity (#79 review)", () => {
+  const base = { id: "x", reference: "Ether 12:27", text: "And if men come unto me." };
+
+  it("is false when the incoming verse supplies nothing the saved verse lacks", () => {
+    // A chunkKey-only saved verse (demo / /api/get shape) re-found by
+    // the same chunkKey-only result: nothing new to persist.
+    const chunkKeyOnly = { ...base, chunkKey: "scripture:ether-12-27" };
+    expect(suppliesMissingVerseIdentity(chunkKeyOnly, chunkKeyOnly)).toBe(false);
+    // An already-complete saved verse re-found by its own result.
+    const complete = {
+      ...base,
+      chunkKey: "talks:3161:abc",
+      sourceType: "talks",
+      sourceId: "3161",
+    };
+    expect(suppliesMissingVerseIdentity(complete, complete)).toBe(false);
+    // A saved verse missing a field the incoming verse also lacks.
+    expect(suppliesMissingVerseIdentity(chunkKeyOnly, { ...base })).toBe(false);
+  });
+
+  it("is true when the incoming verse fills a genuinely missing field", () => {
+    const chunkKeyOnly = { ...base, chunkKey: "talks:3161:abc" };
+    expect(
+      suppliesMissingVerseIdentity(chunkKeyOnly, {
+        ...chunkKeyOnly,
+        sourceType: "talks",
+        sourceId: "3161",
+      }),
+    ).toBe(true);
+    // A key-less legacy save gains the whole identity.
+    expect(suppliesMissingVerseIdentity(base, { ...base, chunkKey: "talks:3161:abc" })).toBe(true);
+  });
+});

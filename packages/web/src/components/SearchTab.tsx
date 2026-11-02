@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Alert, Button, Card, EmptyState, SearchField, Spinner, Text } from "@spudly/ui";
-import { isSameVerse } from "@memorize/core";
+import { isSameVerse, suppliesMissingVerseIdentity } from "@memorize/core";
 import type { MemorizeStore, ScriptureDataSource, Verse } from "@memorize/core";
 
 interface Props {
@@ -52,13 +52,7 @@ export default function SearchTab({ store, dataSource, usingDemo }: Props) {
           .getState()
           .data.verses.some(
             (entry) =>
-              (entry.verse.chunkKey === undefined ||
-                entry.verse.sourceType === undefined ||
-                entry.verse.sourceId === undefined) &&
-              (result.chunkKey !== undefined ||
-                result.sourceType !== undefined ||
-                result.sourceId !== undefined) &&
-              isSameVerse(entry.verse, result),
+              suppliesMissingVerseIdentity(entry.verse, result) && isSameVerse(entry.verse, result),
           );
         if (needsReconcile) {
           store.actions.addVerse(result);

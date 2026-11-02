@@ -24,6 +24,7 @@ export {
   normalizeReference,
   parseReference,
   ScriptureApiError,
+  suppliesMissingVerseIdentity,
 } from "./scripture";
 
 export {

@@ -1246,6 +1246,27 @@ export function isSameVerse(a: Verse, b: Verse): boolean {
   return a.reference === b.reference && a.text === b.text;
 }
 
+/**
+ * Whether `incoming` supplies at least one persisted identity field
+ * (`chunkKey`, `sourceType`, or `sourceId`) that `saved` is missing —
+ * i.e. whether reconciling `saved` against `incoming` would actually
+ * change `saved`. This is the ONLY condition under which the store's
+ * reconciliation branch (and SearchTab's reconcile-on-search pass)
+ * may persist: verses that legitimately carry a `chunkKey` without
+ * source fields (demo verses, /api/get results) match themselves on
+ * re-search, and persisting that no-op match would advance
+ * `updatedAt` — which Drive sync uses to detect local edits — and
+ * risk a false sync conflict. Both call sites share this helper so
+ * their guards cannot drift apart.
+ */
+export function suppliesMissingVerseIdentity(saved: Verse, incoming: Verse): boolean {
+  return (
+    (saved.chunkKey === undefined && incoming.chunkKey !== undefined) ||
+    (saved.sourceType === undefined && incoming.sourceType !== undefined) ||
+    (saved.sourceId === undefined && incoming.sourceId !== undefined)
+  );
+}
+
 export function withUniqueIds(verses: Verse[]): Verse[] {
   const assigned = new Set<string>();
   return verses.map((verse) => {
@@ -1395,7 +1416,22 @@ export function mapChapterResponse(data: unknown): Verse | null {
   if (reference === undefined) {
     return null;
   }
-  return buildVerse(reference, text, chapter);
+  // The envelope — not the chapter object — carries the document
+  // identity: `source_type` sits on the envelope and the chapter's
+  // own `id` is its `source_id`. Passing only `chapter` to buildVerse
+  // dropped both, so a chapter Verse got a source-less `ref:` chunk
+  // key and could not key-match its /api/search representation
+  // (`chapters:<id>:<textHash>`). Merge the envelope identity in
+  // (the chapter object's own fields win where present); the text
+  // hash and every other field come from the chapter as before.
+  const identified: Record<string, unknown> = { ...chapter };
+  if (identified["source_type"] === undefined) {
+    identified["source_type"] = firstString(obj, ["source_type"]) ?? "chapters";
+  }
+  if (identified["source_id"] === undefined && chapter["id"] !== undefined) {
+    identified["source_id"] = chapter["id"];
+  }
+  return buildVerse(reference, text, identified);
 }
 
 /**
