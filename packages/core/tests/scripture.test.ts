@@ -676,6 +676,26 @@ describe("per-chunk source identity (#79, Stephen's ruling)", () => {
     expect(isSameVerse(one, two)).toBe(false);
   });
 
+  it("keeps hash-colliding chunks of one document distinct (FNV-1a collision)", () => {
+    // Regression (Copilot review on #81): the chunk key's text hash
+    // is 32-bit FNV-1a, and `costarring` / `liquid` genuinely collide
+    // under it (both hash to `q5yxel`), so two chunks of ONE document
+    // built from those snippets share a chunkKey. Key equality alone
+    // marked the second chunk Added and unsaveable; non-scripture
+    // matching now also requires matching text, while a chunk still
+    // matches itself.
+    const colliding = mapSearchItem({ ...chunkAItem, snippet: "costarring" });
+    const other = mapSearchItem({ ...chunkAItem, snippet: "liquid" });
+    expect(colliding).not.toBeNull();
+    expect(other).not.toBeNull();
+    if (!colliding || !other) return;
+    expect(colliding.text).not.toBe(other.text);
+    // The premise: the keys really do collide under the real hash.
+    expect(colliding.chunkKey).toBe(other.chunkKey);
+    expect(isSameVerse(colliding, other)).toBe(false);
+    expect(isSameVerse(colliding, { ...colliding })).toBe(true);
+  });
+
   it("(c) Ether 12:27 control: a search snippet still matches its full /api/get text", () => {
     const snippetHit = mapSearchItem({
       source_type: "scriptures",

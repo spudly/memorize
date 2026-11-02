@@ -1165,36 +1165,20 @@ function textHash(text: string): string {
 }
 
 /**
- * Guarantee unique ids within one result list. The first occurrence
- * of an id keeps the canonical id, so ordinary lists are untouched.
- * A repeat — a shape {@link searchResultId} cannot disambiguate, e.g.
- * several chunks of one document under a single shared
- * reference/title — gets a suffix derived from its own text
- * (`<id>~<hash>`), never from its position: a positional suffix is
- * reassigned to a different chunk when a later response reorders the
- * same results, and a saved chunk's id must stay its own (membership
- * and dedupe compare ids — see {@link isSameVerse}). The `~`
- * separator can never appear in a canonical id
- * ({@link normalizeReference} emits only `[a-z0-9-]`), so a generated
- * suffix cannot collide with another result's own id the way
- * `charity`, `charity`, `charity-2` collided under `-2` suffixing;
- * the counter fallback covers only exact duplicates (same id AND
- * same text — interchangeable items) and hash collisions. Unique
- * ids matter because duplicate ids in a rendered result list are
- * duplicate React keys, whose reconciliation is undefined and left
- * stale cards on screen (#79). This is now only a backstop:
- * library results arrive with chunk-scoped ids already (see
- * {@link buildVerse}), and the suffixing never touches `chunkKey`,
- * so a verse renumbered here keeps its persisted identity for
- * {@link isSameVerse} regardless of the id a given list gave it.
- */
-/**
  * Whether two Verse objects are the same memorization item, for
  * library membership and store deduplication.
  *
  * The persisted per-chunk identity (`chunkKey`, with the engine's
  * `sourceType` / `sourceId` alongside it) is authoritative when both
- * sides carry one: key equality decides, full stop. That is what
+ * sides carry one. For a scripture key — the passage reference, with
+ * no text in it — key equality alone decides. For a content key
+ * (document or reference identity plus a hash of the chunk's own
+ * text), the texts must also match: the hash is 32-bit FNV-1a and
+ * distinct snippets can collide (`costarring` and `liquid` both
+ * hash to `q5yxel`), so key equality alone would equate two
+ * different chunks of one document and make the second unsaveable.
+ * Same key + same text is still the same chunk in every response
+ * shape, so the extra check costs nothing real. That is what
  * keeps the cases apart that id equality and reference + text each
  * got wrong in the #79 review rounds:
  *
@@ -1206,6 +1190,9 @@ function textHash(text: string): string {
  * - Two distinct documents can share a title AND a snippet, so
  *   reference + text equated them. Their chunk keys differ by source
  *   identity, so they stay distinct and both remain addable.
+ * - Two different chunks of ONE document whose texts hash-collide
+ *   share a chunk key; their texts differ, so they stay distinct
+ *   and both remain addable.
  * - A scripture search snippet and the full /api/get text of the
  *   same passage (Ether 12:27) are different texts that must match:
  *   both carry the passage's text-independent `scripture:` key.
@@ -1229,7 +1216,19 @@ export function isSameVerse(a: Verse, b: Verse): boolean {
   const keyA = a.chunkKey;
   const keyB = b.chunkKey;
   if (keyA !== undefined && keyB !== undefined) {
-    return keyA === keyB;
+    if (keyA !== keyB) {
+      return false;
+    }
+    // A scripture key is the passage reference alone, so it stays
+    // text-independent: a search snippet and the full /api/get text
+    // of the same passage are the same item. A content key embeds
+    // only a 32-bit hash of the chunk's text, which can collide
+    // across distinct chunks of one document, so the text itself
+    // must confirm the match.
+    if (keyA.startsWith("scripture:")) {
+      return true;
+    }
+    return a.text === b.text;
   }
   if (keyA !== undefined || keyB !== undefined) {
     const keyed = keyA !== undefined ? a : b;
@@ -1267,6 +1266,30 @@ export function suppliesMissingVerseIdentity(saved: Verse, incoming: Verse): boo
   );
 }
 
+/**
+ * Guarantee unique ids within one result list. The first occurrence
+ * of an id keeps the canonical id, so ordinary lists are untouched.
+ * A repeat — a shape {@link searchResultId} cannot disambiguate, e.g.
+ * several chunks of one document under a single shared
+ * reference/title — gets a suffix derived from its own text
+ * (`<id>~<hash>`), never from its position: a positional suffix is
+ * reassigned to a different chunk when a later response reorders the
+ * same results, and a saved chunk's id must stay its own (membership
+ * and dedupe compare ids — see {@link isSameVerse}). The `~`
+ * separator can never appear in a canonical id
+ * ({@link normalizeReference} emits only `[a-z0-9-]`), so a generated
+ * suffix cannot collide with another result's own id the way
+ * `charity`, `charity`, `charity-2` collided under `-2` suffixing;
+ * the counter fallback covers only exact duplicates (same id AND
+ * same text — interchangeable items) and hash collisions. Unique
+ * ids matter because duplicate ids in a rendered result list are
+ * duplicate React keys, whose reconciliation is undefined and left
+ * stale cards on screen (#79). This is now only a backstop:
+ * library results arrive with chunk-scoped ids already (see
+ * {@link buildVerse}), and the suffixing never touches `chunkKey`,
+ * so a verse renumbered here keeps its persisted identity for
+ * {@link isSameVerse} regardless of the id a given list gave it.
+ */
 export function withUniqueIds(verses: Verse[]): Verse[] {
   const assigned = new Set<string>();
   return verses.map((verse) => {
