@@ -788,6 +788,46 @@ describe("per-chunk source identity (#79, Stephen's ruling)", () => {
     expect(legacy.text).not.toBe(snippetHit.text);
     expect(isSameVerse(legacy, snippetHit)).toBe(true);
   });
+
+  it("(d) bridges a legacy chapter save to a lower-case reference_query with identical text", () => {
+    // Regression (Copilot review on #81): a chapter's chunk key is a
+    // content key (`chapters:<id>:<textHash>`), not a `scripture:`
+    // key, so the one-sided legacy bridge compares reference + text.
+    // A legacy save carries the reference as typed ("Alma 32") while
+    // a later /api/get chapter envelope can supply
+    // `reference_query: "alma 32"`; the raw string comparison failed
+    // despite identical text, so search showed Add and permitted a
+    // second learning entry for the same chapter.
+    const legacy = {
+      id: "alma-32",
+      reference: "Alma 32",
+      text: "Chapter text stand-in for Alma 32.",
+    };
+    const incoming = mapChapterResponse({
+      ...SAMPLE_CHAPTER_RESPONSE,
+      reference_query: "alma 32",
+    });
+    expect(incoming).not.toBeNull();
+    if (!incoming) return;
+    expect(incoming.reference).toBe("alma 32");
+    expect(incoming.text).toBe(legacy.text);
+    expect(isSameVerse(legacy, incoming)).toBe(true);
+    expect(isSameVerse(incoming, legacy)).toBe(true);
+    // Control: the bridge still requires identical text — a
+    // case-differing reference alone does not match a chapter whose
+    // text differs.
+    const differentText = mapChapterResponse({
+      ...SAMPLE_CHAPTER_RESPONSE,
+      reference_query: "alma 32",
+      chapter: {
+        ...SAMPLE_CHAPTER_RESPONSE.chapter,
+        full_content: "A different chapter text.",
+      },
+    });
+    expect(differentText).not.toBeNull();
+    if (!differentText) return;
+    expect(isSameVerse(legacy, differentText)).toBe(false);
+  });
 });
 
 describe("DemoDataSource", () => {

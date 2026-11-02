@@ -1165,6 +1165,21 @@ function textHash(text: string): string {
 }
 
 /**
+ * Whether two references name the same passage/chunk for the
+ * legacy comparisons in {@link isSameVerse}: casing and whitespace
+ * runs are not significant ("Alma 32" vs a later response's
+ * `reference_query: "alma 32"`), while every other character must
+ * match exactly. This is deliberately weaker than
+ * {@link normalizeReference}'s slug form — it does not equate
+ * punctuation differences — and it never replaces the persisted
+ * `chunkKey` identity.
+ */
+function referencesMatch(a: string, b: string): boolean {
+  const normalize = (ref: string): string => ref.trim().replace(/\s+/g, " ").toLowerCase();
+  return normalize(a) === normalize(b);
+}
+
+/**
  * Whether two Verse objects are the same memorization item, for
  * library membership and store deduplication.
  *
@@ -1202,7 +1217,11 @@ function textHash(text: string): string {
  * document id, with no source identity stored). The bridge is the
  * strongest evidence the legacy entry itself carries: reference +
  * text for a chunk, or the passage reference alone for a scripture
- * key (a legacy full-text save must match its search snippet). The
+ * key (a legacy full-text save must match its search snippet).
+ * Reference comparisons in these legacy paths are case- and
+ * whitespace-insensitive (see {@link referencesMatch}): a chapter
+ * saved as "Alma 32" must still match a later response whose
+ * `reference_query` is "alma 32" when the text is identical. The
  * store annotates the legacy entry with the verified key on such a
  * match, so the bridge is needed at most once per entry.
  *
@@ -1237,12 +1256,12 @@ export function isSameVerse(a: Verse, b: Verse): boolean {
     if (key !== undefined && key.startsWith("scripture:")) {
       return scriptureChunkKey(legacy.reference) === key;
     }
-    return legacy.reference === keyed.reference && legacy.text === keyed.text;
+    return referencesMatch(legacy.reference, keyed.reference) && legacy.text === keyed.text;
   }
-  if (a.id === b.id && a.reference === b.reference) {
+  if (a.id === b.id && referencesMatch(a.reference, b.reference)) {
     return true;
   }
-  return a.reference === b.reference && a.text === b.text;
+  return referencesMatch(a.reference, b.reference) && a.text === b.text;
 }
 
 /**
