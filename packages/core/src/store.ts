@@ -6,6 +6,7 @@ import {
   type Verse,
 } from "@memorize/types";
 import { applyReview, markMemorized, nextReviewDate } from "./schedule";
+import { isSameVerse, suppliesMissingVerseIdentity } from "./scripture";
 import { LocalStore, type KeyValueStorage } from "./storage";
 
 export interface MemorizeState {
@@ -79,12 +80,76 @@ export function createMemorizeStore(storage: KeyValueStorage): MemorizeStore {
 
   const actions: MemorizeActions = {
     addVerse(verse: Verse): void {
-      if (findVerse(verse.id)) {
+      // Dedupe on verse identity, not id alone (see isSameVerse):
+      // each chunk of a document is its own item (#79, Stephen's
+      // ruling), so dedupe compares the persisted per-chunk identity
+      // — a different chunk of an already-saved document is NOT a
+      // duplicate and stays addable below.
+      const matchIndex = data.verses.findIndex((entry) => isSameVerse(entry.verse, verse));
+      if (matchIndex >= 0) {
+        // Legacy reconciliation (#79): a pre-chunkKey save matched by
+        // the bridge in isSameVerse has now been VERIFIED as this
+        // chunk, so persist the incoming verse's source + chunk
+        // identity onto the stored entry — keeping its id and all
+        // progress — instead of leaving it key-less. Later results
+        // then compare chunk keys directly: this same chunk keeps
+        // matching, and a different chunk of the same document (a
+        // changed snippet is a different chunk under the per-chunk
+        // ruling) no longer needs the bridge and stays addable as
+        // its own entry. Fields already on the stored verse are
+        // never overwritten.
+        const entry = data.verses[matchIndex];
+        // Only persist when the incoming verse actually fills a field
+        // the stored verse lacks: a verse that legitimately carries a
+        // chunkKey without source fields (demo verses, /api/get
+        // results) matches itself on re-search, and persisting that
+        // no-op would advance updatedAt — which Drive sync uses to
+        // detect local edits — risking a false sync conflict.
+        if (entry && suppliesMissingVerseIdentity(entry.verse, verse)) {
+          const annotated: Verse = { ...entry.verse };
+          if (annotated.chunkKey === undefined && verse.chunkKey !== undefined) {
+            annotated.chunkKey = verse.chunkKey;
+          }
+          if (annotated.sourceType === undefined && verse.sourceType !== undefined) {
+            annotated.sourceType = verse.sourceType;
+          }
+          if (annotated.sourceId === undefined && verse.sourceId !== undefined) {
+            annotated.sourceId = verse.sourceId;
+          }
+          data = {
+            ...data,
+            verses: data.verses.map((v, i) => (i === matchIndex ? { ...v, verse: annotated } : v)),
+          };
+          void persist();
+        }
         return;
+      }
+      // The incoming verse is a distinct item (its chunk identity
+      // matched no saved entry above), but its id can still collide
+      // with a saved entry's id: source-less results carry the bare
+      // reference-slug id, and withUniqueIds only disambiguates
+      // WITHIN one response — chunk A saved from [A, B] holds
+      // `charity-never-faileth` while chunk B returned alone takes
+      // that same bare id despite its different chunkKey. Persist
+      // the new item under an unused id instead: duplicate ids give
+      // library cards duplicate React keys and make id-based
+      // progress updates/removal hit both entries. Existing entries
+      // keep their ids and progress untouched, and the new item's
+      // chunkKey is unchanged, so identity-based membership/dedupe
+      // is unaffected.
+      let verseToAdd = verse;
+      if (data.verses.some((entry) => entry.verse.id === verse.id)) {
+        let suffix = 2;
+        let candidate = `${verse.id}~${suffix}`;
+        while (data.verses.some((entry) => entry.verse.id === candidate)) {
+          suffix += 1;
+          candidate = `${verse.id}~${suffix}`;
+        }
+        verseToAdd = { ...verse, id: candidate };
       }
       const now = new Date();
       const entry: MemorizedVerse = {
-        verse,
+        verse: verseToAdd,
         status: "learning",
         addedAt: now.toISOString(),
         drillRound: 0,

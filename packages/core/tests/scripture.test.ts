@@ -1,10 +1,13 @@
 import {
   DemoDataSource,
   GospelEngineDataSource,
+  isSameVerse,
+  mapChapterResponse,
   mapGetResponse,
   mapSearchItem,
   parseReference,
   ScriptureApiError,
+  suppliesMissingVerseIdentity,
 } from "../src/scripture";
 
 /**
@@ -128,12 +131,33 @@ describe("mapGetResponse", () => {
     const verses = mapGetResponse(SAMPLE_CHAPTER_RESPONSE);
     expect(verses).toHaveLength(1);
     expect(verses[0]).toMatchObject({
-      id: "alma-32",
       reference: "Alma 32",
       book: "alma",
       chapter: "32",
       text: "Chapter text stand-in for Alma 32.",
     });
+    // The envelope's identity (source_type "chapters" + chapter.id as
+    // source_id) is persisted like any other library document's, so
+    // the Verse id is chunk-scoped and its chunk key is
+    // `chapters:<id>:<textHash>` — not a source-less `ref:` key.
+    expect(verses[0]?.id).toMatch(/^chapters-901~[a-z0-9]+$/);
+    expect(verses[0]).toMatchObject({ sourceType: "chapters", sourceId: "901" });
+    expect(verses[0]?.chunkKey).toMatch(/^chapters:901:[a-z0-9]+$/);
+  });
+
+  it("gives a chapter Verse the same chunk identity as its /api/search representation", () => {
+    const chapterVerse = mapChapterResponse(SAMPLE_CHAPTER_RESPONSE);
+    const searchVerse = mapSearchItem({
+      source_type: "chapters",
+      source_id: 901,
+      title: "Alma 32",
+      snippet: "Chapter text stand-in for Alma 32.",
+    });
+    expect(chapterVerse).not.toBeNull();
+    expect(searchVerse).not.toBeNull();
+    if (!chapterVerse || !searchVerse) return;
+    expect(chapterVerse.chunkKey).toBe(searchVerse.chunkKey);
+    expect(isSameVerse(chapterVerse, searchVerse)).toBe(true);
   });
 
   it("tolerates a single-object payload", () => {
@@ -337,6 +361,472 @@ describe("GospelEngineDataSource", () => {
   it("getVerse throws a 404 ScriptureApiError when the reference is unknown", async () => {
     stubFetch(() => ({ ok: false, status: 404, body: {} }));
     await expect(source().getVerse("Ether 99:99")).rejects.toBeInstanceOf(ScriptureApiError);
+  });
+});
+
+/**
+ * Live /api/search shape, captured from the production proxy
+ * (memorize-ivory.vercel.app/api/search?q=charity) on 2026-11-01:
+ * items carry `title` + `snippet` (no `reference`/`text`) and a unique
+ * `source_type` + `source_id` document identity. Two DIFFERENT talks
+ * in the real result set share the title "Charity Never Faileth" —
+ * the exact pair behind #79's stale card.
+ */
+const SAMPLE_LIVE_SEARCH_RESPONSE = {
+  mode: "hybrid",
+  query: "charity",
+  results: [
+    {
+      source_type: "talks",
+      source_id: 3161,
+      title: "Charity Never Faileth",
+      snippet:
+        "First Counselor in the Relief Society General Presidency\n\nPlead for a desire to be filled with the gift of charity.",
+      speaker: "Silvia H. Allred",
+      year: 2011,
+    },
+    {
+      source_type: "talks",
+      source_id: 3086,
+      title: "Charity Never Faileth",
+      snippet: "President of the Church\n\nCharity is not a single act or a single virtue.",
+      speaker: "Thomas S. Monson",
+      year: 2010,
+    },
+    {
+      source_type: "study_aids",
+      source_id: 2824,
+      title: "Charity",
+      snippet: "Charity is the pure love of Christ.",
+    },
+  ],
+};
+
+describe("full-library search result identity (#79)", () => {
+  const source = () => new GospelEngineDataSource("https://engine.example", "stdy_test");
+
+  it("gives same-titled results distinct ids from their source identity", async () => {
+    stubFetch(() => ({ ok: true, status: 200, body: SAMPLE_LIVE_SEARCH_RESPONSE }));
+    const results = await source().search("charity");
+    expect(results).toHaveLength(3);
+    expect(results.map((v) => v.reference)).toEqual([
+      "Charity Never Faileth",
+      "Charity Never Faileth",
+      "Charity",
+    ]);
+    const ids = results.map((v) => v.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    // Ids are chunk-scoped: document identity + the chunk's own text
+    // hash, never the bare document id (#79 per-chunk ruling).
+    expect(ids[0]).toMatch(/^talks-3161~[a-z0-9]+$/);
+    expect(ids[1]).toMatch(/^talks-3086~[a-z0-9]+$/);
+    expect(ids[2]).toMatch(/^study-aids-2824~[a-z0-9]+$/);
+    // The source identity and per-chunk key are persisted on the Verse.
+    expect(results[0]).toMatchObject({ sourceType: "talks", sourceId: "3161" });
+    expect(results[0]?.chunkKey).toMatch(/^talks:3161:[a-z0-9]+$/);
+    expect(results[1]?.chunkKey).toMatch(/^talks:3086:[a-z0-9]+$/);
+    expect(results[0]?.chunkKey).not.toBe(results[1]?.chunkKey);
+  });
+
+  it("keeps every result when the engine repeats one reference (chunk shape)", async () => {
+    stubFetch(() => ({
+      ok: true,
+      status: 200,
+      body: {
+        results: [
+          { reference: "Charity Never Faileth", text: "First chunk of the talk." },
+          { reference: "Charity Never Faileth", text: "Second chunk of the same talk." },
+          { reference: "Charity Never Faileth", text: "Third chunk of the same talk." },
+        ],
+      },
+    }));
+    const results = await source().search("charity");
+    expect(results).toHaveLength(3);
+    const ids = results.map((v) => v.id);
+    // Duplicate ids are duplicate React keys in the result list — the
+    // stale-card defect. The first keeps the canonical id; repeats get
+    // content-derived suffixes, never dropped and never duplicated.
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids[0]).toBe("charity-never-faileth");
+    expect(ids[1]).toMatch(/^charity-never-faileth~[a-z0-9]+$/);
+    expect(ids[2]).toMatch(/^charity-never-faileth~[a-z0-9]+$/);
+  });
+
+  it("gives a repeated-reference chunk the same id when results are reordered", async () => {
+    // Positional suffixes fail this: in [A, B] chunk B is `…-2`, in
+    // [B, A] chunk A is — so a saved B made the unsaved A look Added
+    // and un-addable. Content-derived suffixes keep each chunk's id
+    // attached to the chunk itself. (The first chunk in any list
+    // keeps the canonical id, so the comparison runs with a leading
+    // chunk C in both lists, making A and B repeats in both.)
+    const chunkC = { reference: "Charity Never Faileth", text: "Leading chunk of the talk." };
+    const chunkA = { reference: "Charity Never Faileth", text: "First chunk of the talk." };
+    const chunkB = { reference: "Charity Never Faileth", text: "Second chunk of the same talk." };
+    stubFetch(() => ({ ok: true, status: 200, body: { results: [chunkC, chunkA, chunkB] } }));
+    const first = await source().search("charity");
+    stubFetch(() => ({ ok: true, status: 200, body: { results: [chunkC, chunkB, chunkA] } }));
+    const reordered = await source().search("charity");
+    const idOf = (list: typeof first, text: string) => list.find((v) => v.text === text)?.id;
+    expect(idOf(reordered, chunkA.text)).toBe(idOf(first, chunkA.text));
+    expect(idOf(reordered, chunkB.text)).toBe(idOf(first, chunkB.text));
+    expect(idOf(reordered, chunkA.text)).not.toBe(idOf(first, chunkB.text));
+    expect(new Set(reordered.map((v) => v.id)).size).toBe(3);
+  });
+
+  it("suffixes duplicate references in a /api/get verses array the same way", () => {
+    const verses = mapGetResponse({
+      verses: [
+        { reference: "Ether 12:27", text: "First copy." },
+        { reference: "Ether 12:27", text: "Second copy." },
+      ],
+    });
+    const ids = verses.map((v) => v.id);
+    expect(ids[0]).toBe("ether-12-27");
+    expect(ids[1]).toMatch(/^ether-12-27~[a-z0-9]+$/);
+    expect(new Set(ids).size).toBe(2);
+  });
+
+  it("keeps scripture search hits on their reference-slug id, matching /api/get", async () => {
+    // Upstream search gives scripture hits source_type "scriptures", a
+    // source_id, AND a real reference. The /api/get shape for the same
+    // verse carries no source_id, so its id is the reference slug; a
+    // search hit that took `scriptures-<source_id>` instead would not
+    // dedupe against the saved verse (the store dedupes by id alone).
+    stubFetch(() => ({
+      ok: true,
+      status: 200,
+      body: {
+        results: [
+          {
+            source_type: "scriptures",
+            source_id: 4360,
+            reference: "Ether 12:27",
+            snippet: "And if men come unto me I will show unto them their weakness.",
+          },
+        ],
+      },
+    }));
+    const results = await source().search("weakness");
+    expect(results.map((v) => v.id)).toEqual(["ether-12-27"]);
+    expect(mapGetResponse(SAMPLE_GET_RESPONSE).map((v) => v.id)).toContain("ether-12-27");
+  });
+
+  it("never lets a generated suffix collide with a later result's own id", () => {
+    // Positional `-2` suffixing emitted `charity-2` for the second
+    // `charity`, colliding with the third result's own id. The `~`
+    // separator cannot appear in a canonical slug, so the generated
+    // id is distinct by construction, in either order.
+    const verses = mapGetResponse({
+      verses: [
+        { reference: "Charity", text: "First copy." },
+        { reference: "Charity", text: "Second copy." },
+        { reference: "Charity 2", text: "A different result whose own id is charity-2." },
+      ],
+    });
+    const ids = verses.map((v) => v.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids[0]).toBe("charity");
+    expect(ids[1]).toMatch(/^charity~[a-z0-9]+$/);
+    expect(ids[2]).toBe("charity-2");
+  });
+
+  it("never lets a generated suffix collide with an earlier result's own id", () => {
+    // The suffixed canonical id sits BEFORE the repeated id.
+    const verses = mapGetResponse({
+      verses: [
+        { reference: "Alma 32", text: "First copy." },
+        { reference: "Alma 32 2", text: "A different result whose own id is alma-32-2." },
+        { reference: "Alma 32", text: "Second copy." },
+      ],
+    });
+    const ids = verses.map((v) => v.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids).toEqual(["alma-32", "alma-32-2", expect.stringMatching(/^alma-32~[a-z0-9]+$/)]);
+  });
+
+  it("leaves reference-slug ids untouched when ids are already unique", async () => {
+    stubFetch(() => ({ ok: true, status: 200, body: SAMPLE_SEARCH_RESPONSE }));
+    const results = await source().search("charity");
+    expect(results.map((v) => v.id)).toEqual(["moroni-7-47"]);
+  });
+});
+
+describe("isSameVerse identity across id schemes (#79)", () => {
+  const allredText = "Plead for a desire to be filled with the gift of charity.";
+
+  it("matches a legacy title-slug save to its document-id result by reference + text", () => {
+    expect(
+      isSameVerse(
+        { id: "charity-never-faileth", reference: "Charity Never Faileth", text: allredText },
+        { id: "talks-3161", reference: "Charity Never Faileth", text: allredText },
+      ),
+    ).toBe(true);
+  });
+
+  it("does not match a distinct same-titled document (different text)", () => {
+    expect(
+      isSameVerse(
+        { id: "charity-never-faileth", reference: "Charity Never Faileth", text: allredText },
+        {
+          id: "talks-3086",
+          reference: "Charity Never Faileth",
+          text: "Charity is not a single act or a single virtue.",
+        },
+      ),
+    ).toBe(false);
+  });
+
+  it("matches a chunk across list-local renumbering (subset and reordered responses)", () => {
+    const chunk = { reference: "Charity Never Faileth", text: "Second chunk of the same talk." };
+    expect(
+      isSameVerse(
+        { ...chunk, id: "charity-never-faileth-2" },
+        { ...chunk, id: "charity-never-faileth" },
+      ),
+    ).toBe(true);
+    expect(
+      isSameVerse(
+        { ...chunk, id: "charity-never-faileth-2" },
+        { ...chunk, id: "charity-never-faileth-3" },
+      ),
+    ).toBe(true);
+  });
+
+  it("does not match a different chunk of the same document", () => {
+    expect(
+      isSameVerse(
+        {
+          id: "charity-never-faileth-2",
+          reference: "Charity Never Faileth",
+          text: "Second chunk.",
+        },
+        { id: "charity-never-faileth", reference: "Charity Never Faileth", text: "First chunk." },
+      ),
+    ).toBe(false);
+  });
+});
+
+describe("per-chunk source identity (#79, Stephen's ruling)", () => {
+  // Two chunks of ONE document (talks-3161), as the engine returns
+  // them in a single response and in later subset responses.
+  const chunkAItem = {
+    source_type: "talks",
+    source_id: 3161,
+    title: "Charity Never Faileth",
+    snippet: "First chunk of the Allred talk.",
+  };
+  const chunkBItem = {
+    source_type: "talks",
+    source_id: 3161,
+    title: "Charity Never Faileth",
+    snippet: "Second chunk of the Allred talk.",
+  };
+
+  it("(a) a chunk returned alone keeps its own identity — not the first chunk's", () => {
+    const a = mapSearchItem(chunkAItem);
+    const b = mapSearchItem(chunkBItem);
+    const bAlone = mapSearchItem(chunkBItem);
+    expect(a).not.toBeNull();
+    expect(b).not.toBeNull();
+    expect(bAlone).not.toBeNull();
+    if (!a || !b || !bAlone) return;
+    // Neither chunk ever carries the bare document id.
+    expect(a.id).toMatch(/^talks-3161~[a-z0-9]+$/);
+    expect(b.id).toMatch(/^talks-3161~[a-z0-9]+$/);
+    expect(a.id).not.toBe(b.id);
+    // B alone is the same item as B in [A, B] — same id, same key —
+    // and is NOT the saved chunk A, despite the shared document id
+    // the old code handed to whichever chunk arrived first.
+    expect(bAlone.id).toBe(b.id);
+    expect(bAlone.chunkKey).toBe(b.chunkKey);
+    expect(isSameVerse(a, bAlone)).toBe(false);
+    expect(isSameVerse(b, bAlone)).toBe(true);
+  });
+
+  it("(b) identity is stable across reordered responses", async () => {
+    const source = () => new GospelEngineDataSource("https://engine.example", "stdy_test");
+    stubFetch(() => ({ ok: true, status: 200, body: { results: [chunkAItem, chunkBItem] } }));
+    const first = await source().search("charity");
+    stubFetch(() => ({ ok: true, status: 200, body: { results: [chunkBItem, chunkAItem] } }));
+    const reordered = await source().search("charity");
+    const byText = (list: typeof first, text: string) => list.find((v) => v.text === text);
+    for (const text of [chunkAItem.snippet, chunkBItem.snippet]) {
+      expect(byText(reordered, text)?.id).toBe(byText(first, text)?.id);
+      expect(byText(reordered, text)?.chunkKey).toBe(byText(first, text)?.chunkKey);
+    }
+    expect(new Set(first.map((v) => v.id)).size).toBe(2);
+    expect(new Set(reordered.map((v) => v.id)).size).toBe(2);
+  });
+
+  it("keeps distinct documents distinct even when title and snippet both match", () => {
+    const snippet = "An identical snippet in two different talks.";
+    const one = mapSearchItem({ ...chunkAItem, snippet });
+    const two = mapSearchItem({
+      source_type: "talks",
+      source_id: 3086,
+      title: "Charity Never Faileth",
+      snippet,
+    });
+    expect(one).not.toBeNull();
+    expect(two).not.toBeNull();
+    if (!one || !two) return;
+    expect(one.reference).toBe(two.reference);
+    expect(one.text).toBe(two.text);
+    expect(one.chunkKey).not.toBe(two.chunkKey);
+    expect(isSameVerse(one, two)).toBe(false);
+  });
+
+  it("keeps hash-colliding chunks of one document distinct (FNV-1a collision)", () => {
+    // Regression (Copilot review on #81): the chunk key's text hash
+    // is 32-bit FNV-1a, and `costarring` / `liquid` genuinely collide
+    // under it (both hash to `q5yxel`), so two chunks of ONE document
+    // built from those snippets share a chunkKey. Key equality alone
+    // marked the second chunk Added and unsaveable; non-scripture
+    // matching now also requires matching text, while a chunk still
+    // matches itself.
+    const colliding = mapSearchItem({ ...chunkAItem, snippet: "costarring" });
+    const other = mapSearchItem({ ...chunkAItem, snippet: "liquid" });
+    expect(colliding).not.toBeNull();
+    expect(other).not.toBeNull();
+    if (!colliding || !other) return;
+    expect(colliding.text).not.toBe(other.text);
+    // The premise: the keys really do collide under the real hash.
+    expect(colliding.chunkKey).toBe(other.chunkKey);
+    expect(isSameVerse(colliding, other)).toBe(false);
+    expect(isSameVerse(colliding, { ...colliding })).toBe(true);
+  });
+
+  it("(c) Ether 12:27 control: a search snippet still matches its full /api/get text", () => {
+    const snippetHit = mapSearchItem({
+      source_type: "scriptures",
+      source_id: 4360,
+      reference: "Ether 12:27",
+      snippet: "And if men come unto me I will show unto them their weakness.",
+    });
+    const fullVerses = mapGetResponse(SAMPLE_GET_RESPONSE);
+    const full27 = fullVerses[0];
+    const full28 = fullVerses[1];
+    expect(snippetHit).not.toBeNull();
+    expect(full27).not.toBeUndefined();
+    if (!snippetHit || !full27 || !full28) return;
+    // Different texts, same passage: the snippet is a truncated form
+    // of the full verse text, and they must still be the same item.
+    expect(snippetHit.text).not.toBe(full27.text);
+    expect(snippetHit.chunkKey).toBe("scripture:ether-12-27");
+    expect(full27.chunkKey).toBe("scripture:ether-12-27");
+    expect(isSameVerse(snippetHit, full27)).toBe(true);
+    // The neighbouring verse is a different passage and must not match.
+    expect(isSameVerse(snippetHit, full28)).toBe(false);
+  });
+
+  it("gives explicitly non-scripture results titled like a passage their own chunk keys", () => {
+    // An explicit source type takes precedence over the reference
+    // heuristic: talks TITLED "Ether 12:27" are not the Ether 12:27
+    // passage. Under the old derivation they all shared
+    // `scripture:ether-12-27`, so saving one marked the others (and
+    // the passage itself) as Added and blocked saving them.
+    const talkOne = mapSearchItem({
+      source_type: "talks",
+      source_id: 111,
+      title: "Ether 12:27",
+      snippet: "An identical excerpt appearing in two different talks.",
+    });
+    const talkTwo = mapSearchItem({
+      source_type: "talks",
+      source_id: 222,
+      title: "Ether 12:27",
+      snippet: "An identical excerpt appearing in two different talks.",
+    });
+    const passage = mapSearchItem({
+      source_type: "scriptures",
+      source_id: 4360,
+      reference: "Ether 12:27",
+      snippet: "And if men come unto me I will show unto them their weakness.",
+    });
+    expect(talkOne).not.toBeNull();
+    expect(talkTwo).not.toBeNull();
+    expect(passage).not.toBeNull();
+    if (!talkOne || !talkTwo || !passage) return;
+    expect(passage.chunkKey).toBe("scripture:ether-12-27");
+    expect(talkOne.chunkKey).not.toBe("scripture:ether-12-27");
+    expect(talkTwo.chunkKey).not.toBe("scripture:ether-12-27");
+    // Same title AND same text, different documents: still distinct.
+    expect(talkOne.chunkKey).not.toBe(talkTwo.chunkKey);
+    expect(isSameVerse(talkOne, talkTwo)).toBe(false);
+    expect(isSameVerse(talkOne, passage)).toBe(false);
+    expect(isSameVerse(talkTwo, passage)).toBe(false);
+  });
+
+  it("(d) bridges a legacy key-less save to the same chunk, and not to a different chunk", () => {
+    const legacy = {
+      id: "charity-never-faileth",
+      reference: "Charity Never Faileth",
+      text: chunkBItem.snippet,
+    };
+    const b = mapSearchItem(chunkBItem);
+    const a = mapSearchItem(chunkAItem);
+    expect(b).not.toBeNull();
+    expect(a).not.toBeNull();
+    if (!a || !b) return;
+    expect(isSameVerse(legacy, b)).toBe(true);
+    expect(isSameVerse(legacy, a)).toBe(false);
+  });
+
+  it("(d) bridges a legacy full-text scripture save to its search snippet by reference", () => {
+    const full27 = mapGetResponse(SAMPLE_GET_RESPONSE)[0];
+    expect(full27).not.toBeUndefined();
+    if (!full27) return;
+    const legacy = { id: full27.id, reference: full27.reference, text: full27.text };
+    const snippetHit = mapSearchItem({
+      source_type: "scriptures",
+      source_id: 4360,
+      reference: "Ether 12:27",
+      snippet: "And if men come unto me I will show unto them their weakness.",
+    });
+    expect(snippetHit).not.toBeNull();
+    if (!snippetHit) return;
+    expect(legacy.text).not.toBe(snippetHit.text);
+    expect(isSameVerse(legacy, snippetHit)).toBe(true);
+  });
+
+  it("(d) bridges a legacy chapter save to a lower-case reference_query with identical text", () => {
+    // Regression (Copilot review on #81): a chapter's chunk key is a
+    // content key (`chapters:<id>:<textHash>`), not a `scripture:`
+    // key, so the one-sided legacy bridge compares reference + text.
+    // A legacy save carries the reference as typed ("Alma 32") while
+    // a later /api/get chapter envelope can supply
+    // `reference_query: "alma 32"`; the raw string comparison failed
+    // despite identical text, so search showed Add and permitted a
+    // second learning entry for the same chapter.
+    const legacy = {
+      id: "alma-32",
+      reference: "Alma 32",
+      text: "Chapter text stand-in for Alma 32.",
+    };
+    const incoming = mapChapterResponse({
+      ...SAMPLE_CHAPTER_RESPONSE,
+      reference_query: "alma 32",
+    });
+    expect(incoming).not.toBeNull();
+    if (!incoming) return;
+    expect(incoming.reference).toBe("alma 32");
+    expect(incoming.text).toBe(legacy.text);
+    expect(isSameVerse(legacy, incoming)).toBe(true);
+    expect(isSameVerse(incoming, legacy)).toBe(true);
+    // Control: the bridge still requires identical text — a
+    // case-differing reference alone does not match a chapter whose
+    // text differs.
+    const differentText = mapChapterResponse({
+      ...SAMPLE_CHAPTER_RESPONSE,
+      reference_query: "alma 32",
+      chapter: {
+        ...SAMPLE_CHAPTER_RESPONSE.chapter,
+        full_content: "A different chapter text.",
+      },
+    });
+    expect(differentText).not.toBeNull();
+    if (!differentText) return;
+    expect(isSameVerse(legacy, differentText)).toBe(false);
   });
 });
 
@@ -711,6 +1201,81 @@ describe("toPlainText round-5 cases (#74)", () => {
   });
 });
 
+describe("mapSearchItem verse identity (#79)", () => {
+  // Verified live /api/search shape (2026-11-01, see docs/api-notes.md):
+  // items carry source_type/source_id/title/snippet — no reference or
+  // text field — and titles are NOT unique across documents: a
+  // `charity` search returns two different "Charity Never Faileth"
+  // talks. Deriving the Verse id from the title made those results
+  // share one id, and the web list keys cards by id — duplicate React
+  // keys orphaned a card's DOM node, which then persisted across
+  // later searches and other tabs until reload.
+  const allredTalk = {
+    source_type: "talks",
+    source_id: 3161,
+    title: "Charity Never Faileth",
+    speaker: "Silvia H. Allred",
+    snippet: "Plead for a desire to be filled with the gift of charity.",
+  };
+  const otherTalkSameTitle = {
+    source_type: "talks",
+    source_id: 2044,
+    title: "Charity Never Faileth",
+    speaker: "Another Speaker",
+    snippet: "A different talk that happens to share the title.",
+  };
+
+  it("gives same-title search results distinct ids from their document identity", () => {
+    const a = mapSearchItem(allredTalk);
+    const b = mapSearchItem(otherTalkSameTitle);
+    expect(a).not.toBeNull();
+    expect(b).not.toBeNull();
+    expect(a?.reference).toBe("Charity Never Faileth");
+    expect(b?.reference).toBe("Charity Never Faileth");
+    expect(a?.id).toMatch(/^talks-3161~[a-z0-9]+$/);
+    expect(b?.id).toMatch(/^talks-2044~[a-z0-9]+$/);
+    expect(a?.id).not.toBe(b?.id);
+    expect(a).toMatchObject({ sourceType: "talks", sourceId: "3161" });
+    expect(b).toMatchObject({ sourceType: "talks", sourceId: "2044" });
+  });
+
+  it("keeps the reference-slug id for items without document identity", () => {
+    const verse = mapSearchItem({
+      reference: "Moroni 7:47",
+      text: "But charity is the pure love of Christ.",
+    });
+    expect(verse?.id).toBe("moroni-7-47");
+  });
+
+  it("keeps the reference-slug id for scripture hits that carry a source identity", () => {
+    const verse = mapSearchItem({
+      source_type: "scriptures",
+      source_id: 4360,
+      reference: "Ether 12:27",
+      snippet: "And if men come unto me I will show unto them their weakness.",
+    });
+    expect(verse?.id).toBe("ether-12-27");
+    expect(verse).toMatchObject({ sourceType: "scriptures", sourceId: "4360" });
+    expect(verse?.chunkKey).toBe("scripture:ether-12-27");
+  });
+
+  it("returns unique ids for a full search response of same-title results", async () => {
+    stubFetch((url) =>
+      url.includes("/api/search")
+        ? {
+            ok: true,
+            status: 200,
+            body: { results: [allredTalk, otherTalkSameTitle] },
+          }
+        : { ok: false, status: 404, body: {} },
+    );
+    const source = new GospelEngineDataSource("https://example.test", "key");
+    const results = await source.search("charity");
+    expect(results).toHaveLength(2);
+    expect(new Set(results.map((v) => v.id)).size).toBe(2);
+  });
+});
+
 describe("toPlainText truncated-link cases (#76)", () => {
   const mapOne = (text: string) => mapGetResponse({ reference: "Talk excerpt", text })[0]?.text;
 
@@ -975,5 +1540,39 @@ describe("toPlainText replacement-character round-6 cases (#77)", () => {
       expected.push(`word${i}`);
     }
     expect(mapOne(parts.join(" "))).toBe(expected.join(" "));
+  });
+});
+
+describe("suppliesMissingVerseIdentity (#79 review)", () => {
+  const base = { id: "x", reference: "Ether 12:27", text: "And if men come unto me." };
+
+  it("is false when the incoming verse supplies nothing the saved verse lacks", () => {
+    // A chunkKey-only saved verse (demo / /api/get shape) re-found by
+    // the same chunkKey-only result: nothing new to persist.
+    const chunkKeyOnly = { ...base, chunkKey: "scripture:ether-12-27" };
+    expect(suppliesMissingVerseIdentity(chunkKeyOnly, chunkKeyOnly)).toBe(false);
+    // An already-complete saved verse re-found by its own result.
+    const complete = {
+      ...base,
+      chunkKey: "talks:3161:abc",
+      sourceType: "talks",
+      sourceId: "3161",
+    };
+    expect(suppliesMissingVerseIdentity(complete, complete)).toBe(false);
+    // A saved verse missing a field the incoming verse also lacks.
+    expect(suppliesMissingVerseIdentity(chunkKeyOnly, { ...base })).toBe(false);
+  });
+
+  it("is true when the incoming verse fills a genuinely missing field", () => {
+    const chunkKeyOnly = { ...base, chunkKey: "talks:3161:abc" };
+    expect(
+      suppliesMissingVerseIdentity(chunkKeyOnly, {
+        ...chunkKeyOnly,
+        sourceType: "talks",
+        sourceId: "3161",
+      }),
+    ).toBe(true);
+    // A key-less legacy save gains the whole identity.
+    expect(suppliesMissingVerseIdentity(base, { ...base, chunkKey: "talks:3161:abc" })).toBe(true);
   });
 });

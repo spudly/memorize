@@ -16,6 +16,7 @@ export {
   DemoDataSource,
   DEMO_VERSES,
   GospelEngineDataSource,
+  isSameVerse,
   mapChapterResponse,
   mapGetResponse,
   mapSearchItem,
@@ -23,6 +24,7 @@ export {
   normalizeReference,
   parseReference,
   ScriptureApiError,
+  suppliesMissingVerseIdentity,
 } from "./scripture";
 
 export {
