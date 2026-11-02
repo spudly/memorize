@@ -129,6 +129,12 @@ entering it); network access to the live engine.
 4. **Slow-connection behavior.** Throttle the network (browser devtools)
    and search. **Expected:** the searching indicator shows while waiting;
    the Search button cannot trigger duplicate in-flight searches.
+5. **Consecutive searches leave no stale results (#79).** Search
+   `charity`, note the result cards (both "Charity Never Faileth" talks
+   render as separate cards), then search a different keyword (e.g.
+   `faith`) without reloading. **Expected:** only the new search's
+   results are shown — no card from the previous search persists in
+   the list or reappears after switching tabs and back.
 
 **Run when:** `packages/web/src/components/SearchTab.tsx`,
 `packages/web/api/**` (the edge proxy), `packages/web/src/lib/gospel.ts`,

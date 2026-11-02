@@ -1044,6 +1044,290 @@ export function toPlainText(raw: string): string {
   return restoreEscapedPunctuation(restoreCodeSpans(text.trim(), codeSpans, codeSpanMarkers));
 }
 
+/**
+ * The id for a full-library (/api/search) result, derived from the
+ * engine's document identity (`source_type` + `source_id`, both present
+ * on every live search item — verified against the production proxy on
+ * 2026-11-01) instead of its title. Distinct documents routinely share
+ * a title: a `charity` search returns two different talks both titled
+ * "Charity Never Faileth" (Silvia H. Allred, 2011 and Thomas S. Monson,
+ * 2010). Deriving the id from the title collapsed both to
+ * `charity-never-faileth`, so the result list carried duplicate React
+ * keys — reconciliation with duplicate keys left one of the two cards
+ * mounted stale across later searches and tab switches (#79) — and the
+ * store, which dedupes by id, treated the two talks as one verse.
+ * Returns null when the item carries no source identity (the /api/get
+ * shapes, whose items are identified by their reference instead), and
+ * for scripture hits that carry a reference: upstream search gives
+ * scripture hits `source_type: "scriptures"` plus a real `reference`
+ * (gospel-engine internal/search), so the same verse must keep its
+ * reference-slug id here — `/api/get` identifies it that way, and the
+ * store dedupes saved verses by id alone. A `scriptures-<source_id>`
+ * id would make an already-saved verse look addable a second time.
+ * For non-scripture results this returns only the DOCUMENT part of
+ * the Verse id; {@link buildVerse} appends the chunk's own text hash
+ * so the finished id identifies the chunk, not just the document.
+ */
+function searchResultId(obj: Record<string, unknown>): string | null {
+  if (
+    firstString(obj, ["source_type"]) === "scriptures" &&
+    firstString(obj, ["reference", "ref", "citation"]) !== undefined
+  ) {
+    return null;
+  }
+  const identity = sourceIdentity(obj);
+  if (!identity) {
+    return null;
+  }
+  return normalizeReference(`${identity.type} ${identity.id}`);
+}
+
+/**
+ * The engine's document identity on a raw result item (`source_type`
+ * + `source_id`), or null when the item carries none. This identifies
+ * the DOCUMENT a chunk came from; it is persisted on the Verse
+ * (`sourceType` / `sourceId`) so identity decisions never have to be
+ * guessed back from the Verse id's shape (#79 review rounds).
+ */
+function sourceIdentity(obj: Record<string, unknown>): { type: string; id: string } | null {
+  const sourceId = obj["source_id"];
+  if (
+    typeof sourceId !== "number" &&
+    !(typeof sourceId === "string" && sourceId.trim().length > 0)
+  ) {
+    return null;
+  }
+  return {
+    type: firstString(obj, ["source_type"]) ?? "library",
+    id: String(sourceId).trim(),
+  };
+}
+
+/** The `scripture:<slug>` chunk key for a passage reference, if it parses as one. */
+function scriptureChunkKey(reference: string): string | null {
+  const parsed = parseReference(reference);
+  return parsed === null ? null : `scripture:${normalizeReference(parsed)}`;
+}
+
+/**
+ * Derive a Verse's persisted per-chunk identity (see the `chunkKey`
+ * doc on the Verse type). Stephen's ruling on #79 (2026-11-01): each
+ * chunk of a document stays its own memorizable item, so a library
+ * chunk's key binds the document identity to a hash of the chunk's
+ * OWN text — stable when the chunk returns alone, in a subset, or
+ * reordered, and different for every other chunk of the document.
+ * A scripture passage is the one text-independent case: its key is
+ * its reference, because a search snippet and the full /api/get text
+ * of the same passage (Ether 12:27) are different texts for the same
+ * item and must match. An explicit `source_type` takes precedence:
+ * only `scriptures` marks a passage, so a non-scripture result that
+ * merely happens to be TITLED like a passage (a talk titled
+ * "Ether 12:27") keeps its content-keyed identity and never collides
+ * with the passage itself. Only when no source type is present does
+ * the heuristic apply — an upstream `verse` field, or a verse-level
+ * (chapter:verse) reference; chapter-only and title references fall
+ * through to the content-keyed forms so distinct chunks of a manual
+ * or talk never collapse into one item.
+ */
+function deriveChunkKey(
+  reference: string,
+  plainText: string,
+  obj: Record<string, unknown>,
+  identity: { type: string; id: string } | null,
+): string {
+  const explicitType = firstString(obj, ["source_type"]);
+  const isScripturePassage =
+    explicitType !== undefined
+      ? explicitType === "scriptures"
+      : identity?.type === "scriptures" ||
+        obj["verse"] !== undefined ||
+        (parseReference(reference)?.includes(":") ?? false);
+  if (isScripturePassage) {
+    const key = scriptureChunkKey(reference);
+    if (key !== null) {
+      return key;
+    }
+  }
+  if (identity) {
+    return `${identity.type}:${identity.id}:${textHash(plainText)}`;
+  }
+  return `ref:${normalizeReference(reference)}:${textHash(plainText)}`;
+}
+
+/** Deterministic 32-bit FNV-1a hash of a verse's text, base-36. */
+function textHash(text: string): string {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+/**
+ * Whether two references name the same passage/chunk for the
+ * legacy comparisons in {@link isSameVerse}: casing and whitespace
+ * runs are not significant ("Alma 32" vs a later response's
+ * `reference_query: "alma 32"`), while every other character must
+ * match exactly. This is deliberately weaker than
+ * {@link normalizeReference}'s slug form — it does not equate
+ * punctuation differences — and it never replaces the persisted
+ * `chunkKey` identity.
+ */
+function referencesMatch(a: string, b: string): boolean {
+  const normalize = (ref: string): string => ref.trim().replace(/\s+/g, " ").toLowerCase();
+  return normalize(a) === normalize(b);
+}
+
+/**
+ * Whether two Verse objects are the same memorization item, for
+ * library membership and store deduplication.
+ *
+ * The persisted per-chunk identity (`chunkKey`, with the engine's
+ * `sourceType` / `sourceId` alongside it) is authoritative when both
+ * sides carry one. For a scripture key — the passage reference, with
+ * no text in it — key equality alone decides. For a content key
+ * (document or reference identity plus a hash of the chunk's own
+ * text), the texts must also match: the hash is 32-bit FNV-1a and
+ * distinct snippets can collide (`costarring` and `liquid` both
+ * hash to `q5yxel`), so key equality alone would equate two
+ * different chunks of one document and make the second unsaveable.
+ * Same key + same text is still the same chunk in every response
+ * shape, so the extra check costs nothing real. That is what
+ * keeps the cases apart that id equality and reference + text each
+ * got wrong in the #79 review rounds:
+ *
+ * - Two chunks of one document share the document id — in [A, B] the
+ *   first chunk held it bare and the second a `~<hash>` suffix, and
+ *   B returned alone took the bare id, so id equality equated A and
+ *   B. Their chunk keys differ (document identity + each chunk's own
+ *   text hash), in every response shape.
+ * - Two distinct documents can share a title AND a snippet, so
+ *   reference + text equated them. Their chunk keys differ by source
+ *   identity, so they stay distinct and both remain addable.
+ * - Two different chunks of ONE document whose texts hash-collide
+ *   share a chunk key; their texts differ, so they stay distinct
+ *   and both remain addable.
+ * - A scripture search snippet and the full /api/get text of the
+ *   same passage (Ether 12:27) are different texts that must match:
+ *   both carry the passage's text-independent `scripture:` key.
+ *
+ * When only one side carries a key, the other is a legacy save (made
+ * before the field existed — its id may be a title slug or a bare
+ * document id, with no source identity stored). The bridge is the
+ * strongest evidence the legacy entry itself carries: reference +
+ * text for a chunk, or the passage reference alone for a scripture
+ * key (a legacy full-text save must match its search snippet).
+ * Reference comparisons in these legacy paths are case- and
+ * whitespace-insensitive (see {@link referencesMatch}): a chapter
+ * saved as "Alma 32" must still match a later response whose
+ * `reference_query` is "alma 32" when the text is identical. The
+ * store annotates the legacy entry with the verified key on such a
+ * match, so the bridge is needed at most once per entry.
+ *
+ * When neither side carries a key (legacy saves, demo verses, and
+ * hand-built verses), fall back to the pre-key tests: same id + same
+ * reference (a passage re-encountered under a different text form),
+ * or same reference + same text (the same chunk re-encountered under
+ * a renumbered list-local id).
+ */
+export function isSameVerse(a: Verse, b: Verse): boolean {
+  const keyA = a.chunkKey;
+  const keyB = b.chunkKey;
+  if (keyA !== undefined && keyB !== undefined) {
+    if (keyA !== keyB) {
+      return false;
+    }
+    // A scripture key is the passage reference alone, so it stays
+    // text-independent: a search snippet and the full /api/get text
+    // of the same passage are the same item. A content key embeds
+    // only a 32-bit hash of the chunk's text, which can collide
+    // across distinct chunks of one document, so the text itself
+    // must confirm the match.
+    if (keyA.startsWith("scripture:")) {
+      return true;
+    }
+    return a.text === b.text;
+  }
+  if (keyA !== undefined || keyB !== undefined) {
+    const keyed = keyA !== undefined ? a : b;
+    const legacy = keyA !== undefined ? b : a;
+    const key = keyA !== undefined ? keyA : keyB;
+    if (key !== undefined && key.startsWith("scripture:")) {
+      return scriptureChunkKey(legacy.reference) === key;
+    }
+    return referencesMatch(legacy.reference, keyed.reference) && legacy.text === keyed.text;
+  }
+  if (a.id === b.id && referencesMatch(a.reference, b.reference)) {
+    return true;
+  }
+  return referencesMatch(a.reference, b.reference) && a.text === b.text;
+}
+
+/**
+ * Whether `incoming` supplies at least one persisted identity field
+ * (`chunkKey`, `sourceType`, or `sourceId`) that `saved` is missing —
+ * i.e. whether reconciling `saved` against `incoming` would actually
+ * change `saved`. This is the ONLY condition under which the store's
+ * reconciliation branch (and SearchTab's reconcile-on-search pass)
+ * may persist: verses that legitimately carry a `chunkKey` without
+ * source fields (demo verses, /api/get results) match themselves on
+ * re-search, and persisting that no-op match would advance
+ * `updatedAt` — which Drive sync uses to detect local edits — and
+ * risk a false sync conflict. Both call sites share this helper so
+ * their guards cannot drift apart.
+ */
+export function suppliesMissingVerseIdentity(saved: Verse, incoming: Verse): boolean {
+  return (
+    (saved.chunkKey === undefined && incoming.chunkKey !== undefined) ||
+    (saved.sourceType === undefined && incoming.sourceType !== undefined) ||
+    (saved.sourceId === undefined && incoming.sourceId !== undefined)
+  );
+}
+
+/**
+ * Guarantee unique ids within one result list. The first occurrence
+ * of an id keeps the canonical id, so ordinary lists are untouched.
+ * A repeat — a shape {@link searchResultId} cannot disambiguate, e.g.
+ * several chunks of one document under a single shared
+ * reference/title — gets a suffix derived from its own text
+ * (`<id>~<hash>`), never from its position: a positional suffix is
+ * reassigned to a different chunk when a later response reorders the
+ * same results, and a saved chunk's id must stay its own (membership
+ * and dedupe compare ids — see {@link isSameVerse}). The `~`
+ * separator can never appear in a canonical id
+ * ({@link normalizeReference} emits only `[a-z0-9-]`), so a generated
+ * suffix cannot collide with another result's own id the way
+ * `charity`, `charity`, `charity-2` collided under `-2` suffixing;
+ * the counter fallback covers only exact duplicates (same id AND
+ * same text — interchangeable items) and hash collisions. Unique
+ * ids matter because duplicate ids in a rendered result list are
+ * duplicate React keys, whose reconciliation is undefined and left
+ * stale cards on screen (#79). This is now only a backstop:
+ * library results arrive with chunk-scoped ids already (see
+ * {@link buildVerse}), and the suffixing never touches `chunkKey`,
+ * so a verse renumbered here keeps its persisted identity for
+ * {@link isSameVerse} regardless of the id a given list gave it.
+ */
+export function withUniqueIds(verses: Verse[]): Verse[] {
+  const assigned = new Set<string>();
+  return verses.map((verse) => {
+    if (!assigned.has(verse.id)) {
+      assigned.add(verse.id);
+      return verse;
+    }
+    const base = `${verse.id}~${textHash(verse.text)}`;
+    let candidate = base;
+    let suffix = 2;
+    while (assigned.has(candidate)) {
+      candidate = `${base}~${suffix}`;
+      suffix += 1;
+    }
+    assigned.add(candidate);
+    return { ...verse, id: candidate };
+  });
+}
+
 function buildVerse(reference: string, text: string, obj: Record<string, unknown>): Verse | null {
   const plain = toPlainText(text);
   // Non-blank source markup can convert to nothing at all (an
@@ -1053,7 +1337,25 @@ function buildVerse(reference: string, text: string, obj: Record<string, unknown
   if (plain.length === 0) {
     return null;
   }
-  const verse: Verse = { id: normalizeReference(reference), reference, text: plain };
+  const identity = sourceIdentity(obj);
+  const documentId = searchResultId(obj);
+  // A library result's id is chunk-scoped (`<documentId>~<textHash>`):
+  // the bare document id is shared by every chunk of the document, so
+  // a chunk must not carry it alone — whichever chunk a response
+  // happened to return first (or alone) would take it, and a saved
+  // chunk could not be told from a different one (#79). Scripture
+  // passages and source-less shapes keep the reference-slug id, which
+  // is already unique per passage.
+  const verse: Verse = {
+    id: documentId !== null ? `${documentId}~${textHash(plain)}` : normalizeReference(reference),
+    reference,
+    text: plain,
+    chunkKey: deriveChunkKey(reference, plain, obj, identity),
+  };
+  if (identity) {
+    verse.sourceType = identity.type;
+    verse.sourceId = identity.id;
+  }
   const book = firstString(obj, ["book", "book_name"]);
   if (book !== undefined) {
     verse.book = book;
@@ -1071,9 +1373,11 @@ function buildVerse(reference: string, text: string, obj: Record<string, unknown
 /**
  * Map one raw search-result item to a Verse.
  *
- * The gospel-engine response shape is UNVERIFIED (the API requires a key we
- * don't have yet), so this tries the most likely field names and returns null
- * when nothing matches. See docs/api-notes.md.
+ * The /api/get shape is verified and the /api/search shape was verified
+ * against the production proxy on 2026-11-01 (items carry `title`,
+ * `snippet`, `source_type`, `source_id`); the field fallbacks stay
+ * defensive and this returns null when nothing matches. See
+ * docs/api-notes.md.
  */
 export function mapSearchItem(raw: unknown): Verse | null {
   const obj = asRecord(raw);
@@ -1154,7 +1458,22 @@ export function mapChapterResponse(data: unknown): Verse | null {
   if (reference === undefined) {
     return null;
   }
-  return buildVerse(reference, text, chapter);
+  // The envelope — not the chapter object — carries the document
+  // identity: `source_type` sits on the envelope and the chapter's
+  // own `id` is its `source_id`. Passing only `chapter` to buildVerse
+  // dropped both, so a chapter Verse got a source-less `ref:` chunk
+  // key and could not key-match its /api/search representation
+  // (`chapters:<id>:<textHash>`). Merge the envelope identity in
+  // (the chapter object's own fields win where present); the text
+  // hash and every other field come from the chapter as before.
+  const identified: Record<string, unknown> = { ...chapter };
+  if (identified["source_type"] === undefined) {
+    identified["source_type"] = firstString(obj, ["source_type"]) ?? "chapters";
+  }
+  if (identified["source_id"] === undefined && chapter["id"] !== undefined) {
+    identified["source_id"] = chapter["id"];
+  }
+  return buildVerse(reference, text, identified);
 }
 
 /**
@@ -1167,7 +1486,7 @@ export function mapChapterResponse(data: unknown): Verse | null {
 export function mapGetResponse(data: unknown): Verse[] {
   const items = resultItems(data);
   if (items) {
-    return items.map(mapSearchItem).filter((v): v is Verse => v !== null);
+    return withUniqueIds(items.map(mapSearchItem).filter((v): v is Verse => v !== null));
   }
   const chapter = mapChapterResponse(data);
   if (chapter) {
@@ -1257,7 +1576,7 @@ export class GospelEngineDataSource implements ScriptureDataSource {
         "Unexpected search response shape. See packages/core/docs/api-notes.md to verify the field mapping.",
       );
     }
-    return items.map(mapSearchItem).filter((v): v is Verse => v !== null);
+    return withUniqueIds(items.map(mapSearchItem).filter((v): v is Verse => v !== null));
   }
 
   /**
@@ -1335,6 +1654,9 @@ export const DEMO_VERSES: Verse[] = DEMO_VERSE_TUPLES.map(([reference, text]) =>
   id: normalizeReference(reference),
   reference,
   text,
+  // Every demo verse is a scripture passage, so it carries the same
+  // text-independent passage key a live scripture result gets (#79).
+  chunkKey: `scripture:${normalizeReference(reference)}`,
 }));
 
 /**
