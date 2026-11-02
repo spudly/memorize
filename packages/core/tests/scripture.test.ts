@@ -1015,3 +1015,197 @@ describe("mapSearchItem verse identity (#79)", () => {
     expect(new Set(results.map((v) => v.id)).size).toBe(2);
   });
 });
+
+describe("toPlainText replacement-character cases (#77)", () => {
+  const mapOne = (text: string) => mapGetResponse({ reference: "Talk excerpt", text })[0]?.text;
+
+  it("drops the replacement characters an engine excerpt leaves at its truncation point", () => {
+    // The "Chapter 2: Pray Always" card from the PR #75 manual pass:
+    // the engine builds search snippets by slicing the source text at
+    // a byte limit, cutting a multibyte character (the dash in the
+    // page range after "46") in two; its JSON encoder turns each
+    // leftover byte into U+FFFD, and the snippet's own "…" follows.
+    expect(
+      mapOne(
+        "“Chapter 2: Pray Always,” Teachings of Presidents of the Church: Ezra Taft Benson (2014), 46\uFFFD\uFFFD…",
+      ),
+    ).toBe(
+      "“Chapter 2: Pray Always,” Teachings of Presidents of the Church: Ezra Taft Benson (2014), 46…",
+    );
+  });
+
+  it("drops replacement characters from search-result snippets", () => {
+    // Search cards map through mapSearchItem's snippet field, the
+    // field the engine's byte-sliced excerpt arrives in.
+    expect(
+      mapSearchItem({
+        reference: "Chapter 2: Pray Always",
+        snippet: "Ezra Taft Benson (2014), 46\uFFFD\uFFFD…",
+      })?.text,
+    ).toBe("Ezra Taft Benson (2014), 46…");
+  });
+
+  it("drops a single replacement character and tidies the gap it leaves", () => {
+    expect(mapOne("Faith \uFFFD hope")).toBe("Faith hope");
+    expect(mapOne("\uFFFDFaith and hope\uFFFD")).toBe("Faith and hope");
+  });
+
+  it("drops unpaired surrogates, which render as replacement characters", () => {
+    // A lone surrogate half (e.g. from a UTF-16 slice through an
+    // astral character) displays as U+FFFD in the card.
+    expect(mapOne("Faith\uD83D hope")).toBe("Faith hope");
+    expect(mapOne("Faith hope\uDC00")).toBe("Faith hope");
+  });
+
+  it("keeps valid astral characters intact", () => {
+    // Engine text carries real emoji (e.g. the 🎧 audio marker):
+    // a well-formed surrogate pair is content, not corruption.
+    expect(mapOne("🎧 Listen to Audio")).toBe("🎧 Listen to Audio");
+  });
+
+  it("treats text that is only replacement characters as no result", () => {
+    expect(mapGetResponse({ reference: "Talk excerpt", text: "\uFFFD\uFFFD" })).toEqual([]);
+  });
+});
+
+describe("toPlainText replacement-character round-2 cases (#77)", () => {
+  const mapOne = (text: string) => mapGetResponse({ reference: "Talk excerpt", text })[0]?.text;
+
+  it("drops replacement characters reintroduced by numeric entity decoding", () => {
+    // The first-pass cleanup runs before entity decoding, so an
+    // encoded U+FFFD (&#65533; / &#xFFFD;) used to survive decoding
+    // and render in the card after all.
+    expect(mapOne("Faith &#65533; hope")).toBe("Faith hope");
+    expect(mapOne("Faith &#xFFFD; hope")).toBe("Faith hope");
+    expect(mapOne("&#65533; &amp; faith")).toBe("& faith");
+  });
+
+  it("treats entity-only replacement characters as no result", () => {
+    expect(mapGetResponse({ reference: "Talk excerpt", text: "&#65533;" })).toEqual([]);
+    expect(mapGetResponse({ reference: "Talk excerpt", text: "&#xFFFD;" })).toEqual([]);
+  });
+
+  it("does not mistake literal private-use markers in source text for a code-span placeholder", () => {
+    // The code-span placeholder pair used to be U+E060/U+E061: a
+    // literal "\uE0600\uE061" sequence in engine text was then read
+    // back as "span 0" at restore time and replaced with the span's
+    // content ("Faith and Faith end"). The markers are now chosen
+    // per input starting at U+E066/U+E067, clear of that literal
+    // sequence (round 4 covers literals matching the active pair).
+    expect(mapOne("`Faith` and \uE0600\uE061 end")).toBe("Faith and \uE0600\uE061 end");
+  });
+
+  it("keeps code-span content free of replacement artifacts", () => {
+    // Span content is restored after the main cleanup, so it is
+    // cleaned again at restore time; a well-formed pair survives.
+    expect(mapOne("`Faith\uD83D` hope")).toBe("Faith hope");
+    expect(mapOne("`Faith\uFFFD` hope")).toBe("Faith hope");
+    expect(mapOne("`🎧 Listen` now")).toBe("🎧 Listen now");
+  });
+});
+
+describe("toPlainText replacement-character round-3 cases (#77)", () => {
+  const mapOne = (text: string) => mapGetResponse({ reference: "Talk excerpt", text })[0]?.text;
+
+  it("never fuses two unpaired surrogate halves around a dropped U+FFFD into a character", () => {
+    // Dropping U+FFFD first would join "\uD83D" and "\uDE00" into a
+    // fabricated 😀; unpaired surrogates are dropped first instead.
+    expect(mapOne("Faith \uD83D\uFFFD\uDE00 hope")).toBe("Faith hope");
+    expect(mapGetResponse({ reference: "Talk excerpt", text: "\uD83D\uFFFD\uDE00" })).toEqual([]);
+  });
+
+  it("drops a code span whose whole content is replacement corruption", () => {
+    // The cleanup runs after code spans are captured, so the span's
+    // content is cleaned at restore time and an emptied span leaves
+    // no stray backticks behind.
+    expect(mapGetResponse({ reference: "Talk excerpt", text: "`\uFFFD`" })).toEqual([]);
+    expect(mapGetResponse({ reference: "Talk excerpt", text: "`\uD83D\uFFFD\uDE00`" })).toEqual([]);
+    expect(mapOne("Faith`\uFFFD` hope")).toBe("Faith hope");
+  });
+
+  it("keeps the backslash behavior when a backslash precedes U+FFFD", () => {
+    // The escape-aware code-span scanner pairs the backslash with
+    // the U+FFFD after it; moving the cleanup behind that scan must
+    // not change the outcome (a lone backslash stays, as it does for
+    // any non-punctuation escape).
+    expect(mapOne("Faith \\\uFFFD hope")).toBe("Faith \\ hope");
+  });
+});
+
+describe("toPlainText replacement-character round-4 cases (#77)", () => {
+  const mapOne = (text: string) => mapGetResponse({ reference: "Talk excerpt", text })[0]?.text;
+
+  it("does not mistake a literal sequence matching the active placeholder pair for a code span", () => {
+    // The placeholder pair is chosen per input, so a literal
+    // "\uE0660\uE067" sequence — the pair earlier rounds settled on —
+    // stays literal text instead of being replaced with span 0's
+    // content ("Faith and Faith end").
+    expect(mapOne("`Faith` and \uE0660\uE067 end")).toBe("Faith and \uE0660\uE067 end");
+    expect(mapOne("Faith \uE0660\uE067 end")).toBe("Faith \uE0660\uE067 end");
+  });
+
+  it("keeps choosing collision-free placeholders when several pairs occur literally", () => {
+    // Both the first candidate pair (U+E066/U+E067) and the next
+    // (U+E068/U+E069) occur as literal placeholder-shaped sequences,
+    // so a later candidate must be used and both literals survive.
+    expect(mapOne("`Faith` and \uE0660\uE067 plus \uE0680\uE069 end")).toBe(
+      "Faith and \uE0660\uE067 plus \uE0680\uE069 end",
+    );
+  });
+
+  it("does not let a numeric entity forge a code-span placeholder", () => {
+    // "&#57446;" / "&#57447;" are U+E066 / U+E067 in decimal: they
+    // decode after spans are protected, so the marker choice must
+    // have accounted for the decoded form too.
+    expect(mapOne("`Faith` and &#57446;0&#57447; end")).toBe("Faith and \uE0660\uE067 end");
+    expect(mapOne("`Faith` and &#xE066;0&#xE067; end")).toBe("Faith and \uE0660\uE067 end");
+  });
+
+  it("treats code spans that clean to whitespace as no result", () => {
+    // The placeholders used to restore after whitespace
+    // normalization and trimming, so these restored to one or two
+    // spaces and buildVerse kept them as blank cards.
+    expect(mapGetResponse({ reference: "Talk excerpt", text: "`\uFFFD` `\uFFFD`" })).toEqual([]);
+    expect(mapGetResponse({ reference: "Talk excerpt", text: "` \uFFFD `" })).toEqual([]);
+  });
+
+  it("tidies the gap a code span leaves when its content cleans away", () => {
+    expect(mapOne("Faith `\uFFFD` hope")).toBe("Faith hope");
+    expect(mapOne("` \uFFFD ` and faith")).toBe("and faith");
+  });
+});
+
+describe("toPlainText replacement-character round-5 cases (#77)", () => {
+  const mapOne = (text: string) => mapGetResponse({ reference: "Talk excerpt", text })[0]?.text;
+
+  it("does not let replacement-artifact cleanup forge a code-span placeholder", () => {
+    // The U+FFFD between the literal marker and the digit is dropped
+    // by the cleanup, joining "\uE066" + "0" + "\uE067" into a
+    // placeholder-shaped sequence after the markers were chosen.
+    expect(mapOne("`Faith` and \uE066\uFFFD0\uE067 end")).toBe("Faith and \uE0660\uE067 end");
+  });
+
+  it("does not let an encoded replacement character forge a code-span placeholder", () => {
+    // "&#65533;" decodes to nothing, so decoding joins the encoded
+    // markers and the digit the same way.
+    expect(mapOne("`Faith` and &#57446;&#65533;0&#57447; end")).toBe("Faith and \uE0660\uE067 end");
+    expect(mapOne("`Faith` and &#xE066;&#xFFFD;0&#xE067; end")).toBe("Faith and \uE0660\uE067 end");
+  });
+});
+
+describe("toPlainText replacement-character round-6 cases (#77)", () => {
+  const mapOne = (text: string) => mapGetResponse({ reference: "Talk excerpt", text })[0]?.text;
+
+  it("unwraps many emptied spans in one pass, keeping real spans at every index", () => {
+    // Interleave corruption-only spans with real ones past index 9:
+    // the unwrap must match each placeholder's full index, so span
+    // 10+ content survives and every emptied span disappears.
+    const parts: string[] = [];
+    const expected: string[] = [];
+    for (let i = 0; i < 15; i++) {
+      parts.push("`\uFFFD`", `\`word${i}\``);
+      expected.push(`word${i}`);
+    }
+    expect(mapOne(parts.join(" "))).toBe(expected.join(" "));
+  });
+});
