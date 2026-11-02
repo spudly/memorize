@@ -635,7 +635,10 @@ function parenDepthEnd(text: string, open: number, limit: number): number {
  * and the prose after the line is untouched. Reference-style
  * ("[text][ref]") forms keep their text the same way, a bare
  * "[word]" with no destination is ordinary text and stays, and an
- * escaped bracket ("\[") never opens a link.
+ * escaped bracket ("\[") never opens a link. A link an excerpt
+ * truncated mid-label at the end of the input ("…; [Obedi") loses
+ * only its dangling bracket: the partial label stays as plain text
+ * (#76).
  */
 function stripMarkdownLinks(text: string, definedRefs: Set<string> = new Set<string>()): string {
   const boundaries = paragraphBoundaries(text);
@@ -667,6 +670,81 @@ function stripMarkdownLinks(text: string, definedRefs: Set<string> = new Set<str
     // already guarantees the match (if any) stays inside one.
     const closeBracket = matches.get(open) ?? -1;
     if (closeBracket === -1) {
+      // Truncated excerpt edge (#76): an unmatched "[" whose fragment
+      // runs to the end of the input — no closing bracket, no line
+      // break, and no further bracket after it — is a link an excerpt
+      // cut off mid-syntax ("…; Faithfulness; [Obedi"). Drop the
+      // dangling bracket (and the "!" of a truncated image) and keep
+      // the partial label as plain text, so a card never renders raw
+      // bracket syntax. Unmatched brackets anywhere else are literal
+      // text and stay: the guards keep a run of "["s untouched (each
+      // one is either followed by another "[" or preceded by one),
+      // keep any "[" whose text continues onto another line, and keep
+      // any fragment whose parentheses close without opening — a
+      // label cut mid-label can carry "(" (a parenthetical label or
+      // alt text), but only literal notation in full text (an
+      // interval like "[0, 1)") carries a ")" that no "(" in the
+      // fragment opened, so that text keeps its bracket. The run guard
+      // checks the character before the bracket itself (`open`), not
+      // before the "!" of an image: for a truncated linked image
+      // ("[![Elaine L. Ja") the outer "[" is literal text handled on
+      // its own iteration, and the image's "![" must still drop
+      // together.
+      // The cheap guards run first: only the final "[" of the input
+      // can pass them (any earlier one has a "[" after it), so the
+      // parenthesis scan below runs at most once per call — scanning
+      // every unmatched bracket's suffix would be quadratic on a run
+      // of "["s.
+      const isTrailingFragmentShape =
+        text.indexOf("[", open + 1) === -1 &&
+        text.indexOf("]", open + 1) === -1 &&
+        text.indexOf("\n", open + 1) === -1 &&
+        text[open - 1] !== "[";
+      let hasUnmatchedCloseParen = false;
+      let hasHtmlLineBreak = false;
+      if (isTrailingFragmentShape) {
+        // Escaped parens are protected as placeholders before this
+        // scanner runs (protectEscapedPunctuation), so count the
+        // placeholders as the parens they represent — only here, in
+        // the character used for the depth check; the input stays
+        // protected for the later markup passes. Otherwise a literal
+        // "\)" in interval notation ("[0, 1\)") is invisible to the
+        // scan and its bracket is misread as a truncated fragment,
+        // while an escaped "\(" in a truncated label ("[Faith \(part")
+        // is miscounted the other way.
+        const openParenPlaceholder = String.fromCharCode(
+          ESCAPE_PLACEHOLDER_BASE + ESCAPED_PUNCTUATION.indexOf("("),
+        );
+        const closeParenPlaceholder = String.fromCharCode(
+          ESCAPE_PLACEHOLDER_BASE + ESCAPED_PUNCTUATION.indexOf(")"),
+        );
+        let parenDepth = 0;
+        for (let p = open + 1; p < text.length; p++) {
+          if (text[p] === "(" || text[p] === openParenPlaceholder) parenDepth++;
+          else if (text[p] === ")" || text[p] === closeParenPlaceholder) {
+            parenDepth--;
+            if (parenDepth < 0) {
+              hasUnmatchedCloseParen = true;
+              break;
+            }
+          }
+        }
+        // This scanner runs before the HTML pass below converts
+        // line-break and block tags to "\n", so an HTML break in the
+        // fragment ("[hope<br>charity") must count as a line break
+        // here too, or a mid-text literal bracket would be misread
+        // as a truncated fragment.
+        hasHtmlLineBreak =
+          /<(?:br\b[^>]*>|\/(?:p|div|li|ul|ol|h[1-6]|blockquote|tr|td|th|section|article)\s*>)/i.test(
+            text.slice(open + 1),
+          );
+      }
+      const isTrailingFragment =
+        isTrailingFragmentShape && !hasUnmatchedCloseParen && !hasHtmlLineBreak;
+      if (isTrailingFragment) {
+        i = open + 1;
+        continue;
+      }
       out += text[i];
       i++;
       continue;

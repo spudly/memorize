@@ -711,6 +711,79 @@ describe("toPlainText round-5 cases (#74)", () => {
   });
 });
 
+describe("toPlainText truncated-link cases (#76)", () => {
+  const mapOne = (text: string) => mapGetResponse({ reference: "Talk excerpt", text })[0]?.text;
+
+  it("drops the dangling bracket when an excerpt truncates a link mid-label", () => {
+    // The "Faith" guide card's "See also" line, as seen in the PR #75
+    // manual preview pass: the excerpt cut "[Obedience](…)" off
+    // before its closing syntax, leaving a lone "[" in the card.
+    expect(
+      mapOne(
+        "- See also Assurance; Baptism, Qualifications for; Believe; Confidence; Faithful; Faithfulness; [Obedi",
+      ),
+    ).toBe(
+      "- See also Assurance; Baptism, Qualifications for; Believe; Confidence; Faithful; Faithfulness; Obedi",
+    );
+    expect(mapOne("See also [Obedi")).toBe("See also Obedi");
+  });
+
+  it("drops the dangling image bracket when an excerpt truncates an image mid-alt", () => {
+    expect(mapOne("Portrait: ![Elaine L. Ja")).toBe("Portrait: Elaine L. Ja");
+  });
+
+  it("drops a lone trailing bracket at the input edge", () => {
+    expect(mapOne("Faith; [")).toBe("Faith;");
+  });
+
+  it("keeps unmatched brackets that are not a trailing fragment", () => {
+    // The fragment continues onto another line: not an excerpt cut.
+    expect(mapOne("Faith [hope\ncharity")).toBe("Faith [hope\ncharity");
+    // An HTML line break counts too: the link scanner runs before
+    // the HTML pass turns <br> into "\n".
+    expect(mapOne("Faith [hope<br>charity")).toBe("Faith [hope\ncharity");
+    // But only a complete tag counts — the HTML pass requires the
+    // closing ">", so an excerpt cut inside the tag itself ("<br"
+    // with no ">") is still a truncated fragment and its dangling
+    // bracket drops.
+    expect(mapOne("See [Faith<br")).toBe("See Faith<br");
+  });
+
+  it("keeps literal bracket notation in complete text", () => {
+    // This converter also runs on complete chapter/talk text, where a
+    // "[" can be literal notation rather than markup: an interval's
+    // fragment carries a ")" that no "(" in the fragment opened, so
+    // the bracket stays.
+    expect(mapOne("Value in [0, 1) is valid.")).toBe("Value in [0, 1) is valid.");
+  });
+
+  it("counts escaped parens in the truncated-fragment depth check", () => {
+    // Escaped parens are protected as placeholders before the link
+    // scanner runs; the depth check must count them as parens or the
+    // two cases below resolve inconsistently (Copilot review of the
+    // post-merge head, PR #78). An escaped ")" is still a close no
+    // "(" in the fragment opened, so the literal bracket stays; an
+    // escaped "(" in a truncated label still leaves the bracket
+    // dangling, so it drops like the unescaped case above.
+    expect(mapOne("Value in [0, 1\\) is valid.")).toBe("Value in [0, 1) is valid.");
+    expect(mapOne("See [Faith \\(part")).toBe("See Faith (part");
+  });
+
+  it("drops the dangling bracket when a truncated label contains a parenthesis", () => {
+    // Labels and alt text can carry parentheses; a "(" the fragment
+    // itself opened does not make the bracket literal.
+    expect(mapOne("See [Faith (part")).toBe("See Faith (part");
+    expect(mapOne("Portrait: ![Elaine L. Jack (speaker")).toBe("Portrait: Elaine L. Jack (speaker");
+  });
+
+  it("drops a truncated linked image's prefix but keeps the outer literal bracket", () => {
+    // "[![alt](img)](page)" cut mid-alt: the outer "[" is a literal
+    // bracket (a link label is not markup), the inner image's "!["
+    // is truncated syntax and drops together.
+    expect(mapOne("Portrait: [![Elaine L. Ja")).toBe("Portrait: [Elaine L. Ja");
+  });
+});
+
 describe("toPlainText replacement-character cases (#77)", () => {
   const mapOne = (text: string) => mapGetResponse({ reference: "Talk excerpt", text })[0]?.text;
 
