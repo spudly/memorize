@@ -189,6 +189,63 @@ describe("memorize store", () => {
     expect(store.getState().data.verses).toHaveLength(2);
   });
 
+  test("allocates an unused id when a distinct source-less chunk arrives alone under a saved chunk's id", async () => {
+    // Copilot's cross-response case: source-less chunks carry the
+    // bare reference-slug id. Chunk A is saved from a combined
+    // [A, B] response (the first occurrence keeps the bare id);
+    // chunk B later returns ALONE and takes that same bare id, but
+    // its chunkKey differs, so it is a distinct item and must be
+    // inserted under an unused id — a second entry with A's id
+    // would duplicate React keys in the library and make id-based
+    // progress updates/removal hit both entries.
+    const chunkA = mapSearchItem({
+      title: "Charity Never Faileth",
+      snippet: "First source-less chunk.",
+    });
+    const chunkBAlone = mapSearchItem({
+      title: "Charity Never Faileth",
+      snippet: "Second source-less chunk.",
+    });
+    expect(chunkA).not.toBeNull();
+    expect(chunkBAlone).not.toBeNull();
+    if (!chunkA || !chunkBAlone) return;
+    expect(chunkA.id).toBe("charity-never-faileth");
+    expect(chunkBAlone.id).toBe("charity-never-faileth");
+    expect(chunkA.chunkKey).not.toBe(chunkBAlone.chunkKey);
+
+    const store = createMemorizeStore(memoryStorage());
+    await store.ready;
+    store.actions.addVerse(chunkA);
+    store.actions.addVerse(chunkBAlone);
+    await flush();
+    const verses = store.getState().data.verses;
+    expect(verses).toHaveLength(2);
+    expect(new Set(verses.map((v) => v.verse.id)).size).toBe(2);
+    // The existing entry keeps its id; the new entry got a fresh one.
+    expect(verses[0]?.verse.id).toBe("charity-never-faileth");
+    const chunkBId = verses[1]?.verse.id;
+    expect(chunkBId).toBeDefined();
+    if (!chunkBId) return;
+
+    // Progress by id touches only its own entry.
+    store.actions.setDrillProgress(chunkBId, 3, 1);
+    await flush();
+    expect(store.getState().data.verses[0]?.drillRound).toBe(0);
+    expect(store.getState().data.verses[1]?.drillRound).toBe(3);
+
+    // Re-adding chunk B dedupes by chunkKey despite the allocated id.
+    store.actions.addVerse(chunkBAlone);
+    await flush();
+    expect(store.getState().data.verses).toHaveLength(2);
+
+    // Removal by id removes only chunk B.
+    store.actions.removeVerse(chunkBId);
+    await flush();
+    const remaining = store.getState().data.verses;
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0]?.verse.text).toBe(chunkA.text);
+  });
+
   test("annotates a legacy save with the verified chunk identity on match, preserving progress", async () => {
     // Copilot's legacy case, under the per-chunk ruling: a key-less
     // legacy save matches chunk B by reference + text, so B's source

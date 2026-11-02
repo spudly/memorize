@@ -33,7 +33,38 @@ export default function SearchTab({ store, dataSource, usingDemo }: Props) {
     setBusy(true);
     setError(null);
     try {
-      setResults(await dataSource.search(query));
+      const found = await dataSource.search(query);
+      // Reconcile legacy saves as results arrive, BEFORE membership
+      // is rendered below: a result that matches a pre-#79 save only
+      // via the legacy bridge (isSameVerse) renders as a disabled
+      // "Added" button, so its addVerse path — the one that persists
+      // the verified chunk identity onto the stored entry — would
+      // never run and the entry would stay key-less, letting a
+      // DIFFERENT document with the same title + text keep matching
+      // it through the fallback. Calling addVerse for exactly those
+      // bridge-matched, still-incomplete entries runs the store's
+      // reconciliation branch (it annotates, never duplicates);
+      // store state is re-read per result because a reconciliation
+      // updates it synchronously. This happens here, not during
+      // render — render must not mutate the store.
+      for (const result of found) {
+        const needsReconcile = store
+          .getState()
+          .data.verses.some(
+            (entry) =>
+              (entry.verse.chunkKey === undefined ||
+                entry.verse.sourceType === undefined ||
+                entry.verse.sourceId === undefined) &&
+              (result.chunkKey !== undefined ||
+                result.sourceType !== undefined ||
+                result.sourceId !== undefined) &&
+              isSameVerse(entry.verse, result),
+          );
+        if (needsReconcile) {
+          store.actions.addVerse(result);
+        }
+      }
+      setResults(found);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Search failed");
     } finally {

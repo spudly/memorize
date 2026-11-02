@@ -126,9 +126,32 @@ export function createMemorizeStore(storage: KeyValueStorage): MemorizeStore {
         }
         return;
       }
+      // The incoming verse is a distinct item (its chunk identity
+      // matched no saved entry above), but its id can still collide
+      // with a saved entry's id: source-less results carry the bare
+      // reference-slug id, and withUniqueIds only disambiguates
+      // WITHIN one response — chunk A saved from [A, B] holds
+      // `charity-never-faileth` while chunk B returned alone takes
+      // that same bare id despite its different chunkKey. Persist
+      // the new item under an unused id instead: duplicate ids give
+      // library cards duplicate React keys and make id-based
+      // progress updates/removal hit both entries. Existing entries
+      // keep their ids and progress untouched, and the new item's
+      // chunkKey is unchanged, so identity-based membership/dedupe
+      // is unaffected.
+      let verseToAdd = verse;
+      if (data.verses.some((entry) => entry.verse.id === verse.id)) {
+        let suffix = 2;
+        let candidate = `${verse.id}~${suffix}`;
+        while (data.verses.some((entry) => entry.verse.id === candidate)) {
+          suffix += 1;
+          candidate = `${verse.id}~${suffix}`;
+        }
+        verseToAdd = { ...verse, id: candidate };
+      }
       const now = new Date();
       const entry: MemorizedVerse = {
-        verse,
+        verse: verseToAdd,
         status: "learning",
         addedAt: now.toISOString(),
         drillRound: 0,

@@ -1041,9 +1041,13 @@ function scriptureChunkKey(reference: string): string | null {
  * A scripture passage is the one text-independent case: its key is
  * its reference, because a search snippet and the full /api/get text
  * of the same passage (Ether 12:27) are different texts for the same
- * item and must match. A passage is recognized by a `scriptures`
- * source type, an upstream `verse` field, or a verse-level
- * (chapter:verse) reference — chapter-only and title references fall
+ * item and must match. An explicit `source_type` takes precedence:
+ * only `scriptures` marks a passage, so a non-scripture result that
+ * merely happens to be TITLED like a passage (a talk titled
+ * "Ether 12:27") keeps its content-keyed identity and never collides
+ * with the passage itself. Only when no source type is present does
+ * the heuristic apply — an upstream `verse` field, or a verse-level
+ * (chapter:verse) reference; chapter-only and title references fall
  * through to the content-keyed forms so distinct chunks of a manual
  * or talk never collapse into one item.
  */
@@ -1053,10 +1057,13 @@ function deriveChunkKey(
   obj: Record<string, unknown>,
   identity: { type: string; id: string } | null,
 ): string {
+  const explicitType = firstString(obj, ["source_type"]);
   const isScripturePassage =
-    identity?.type === "scriptures" ||
-    obj["verse"] !== undefined ||
-    (parseReference(reference)?.includes(":") ?? false);
+    explicitType !== undefined
+      ? explicitType === "scriptures"
+      : identity?.type === "scriptures" ||
+        obj["verse"] !== undefined ||
+        (parseReference(reference)?.includes(":") ?? false);
   if (isScripturePassage) {
     const key = scriptureChunkKey(reference);
     if (key !== null) {

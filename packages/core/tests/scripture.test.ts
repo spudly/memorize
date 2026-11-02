@@ -676,6 +676,44 @@ describe("per-chunk source identity (#79, Stephen's ruling)", () => {
     expect(isSameVerse(snippetHit, full28)).toBe(false);
   });
 
+  it("gives explicitly non-scripture results titled like a passage their own chunk keys", () => {
+    // An explicit source type takes precedence over the reference
+    // heuristic: talks TITLED "Ether 12:27" are not the Ether 12:27
+    // passage. Under the old derivation they all shared
+    // `scripture:ether-12-27`, so saving one marked the others (and
+    // the passage itself) as Added and blocked saving them.
+    const talkOne = mapSearchItem({
+      source_type: "talks",
+      source_id: 111,
+      title: "Ether 12:27",
+      snippet: "An identical excerpt appearing in two different talks.",
+    });
+    const talkTwo = mapSearchItem({
+      source_type: "talks",
+      source_id: 222,
+      title: "Ether 12:27",
+      snippet: "An identical excerpt appearing in two different talks.",
+    });
+    const passage = mapSearchItem({
+      source_type: "scriptures",
+      source_id: 4360,
+      reference: "Ether 12:27",
+      snippet: "And if men come unto me I will show unto them their weakness.",
+    });
+    expect(talkOne).not.toBeNull();
+    expect(talkTwo).not.toBeNull();
+    expect(passage).not.toBeNull();
+    if (!talkOne || !talkTwo || !passage) return;
+    expect(passage.chunkKey).toBe("scripture:ether-12-27");
+    expect(talkOne.chunkKey).not.toBe("scripture:ether-12-27");
+    expect(talkTwo.chunkKey).not.toBe("scripture:ether-12-27");
+    // Same title AND same text, different documents: still distinct.
+    expect(talkOne.chunkKey).not.toBe(talkTwo.chunkKey);
+    expect(isSameVerse(talkOne, talkTwo)).toBe(false);
+    expect(isSameVerse(talkOne, passage)).toBe(false);
+    expect(isSameVerse(talkTwo, passage)).toBe(false);
+  });
+
   it("(d) bridges a legacy key-less save to the same chunk, and not to a different chunk", () => {
     const legacy = {
       id: "charity-never-faileth",
