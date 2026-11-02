@@ -93,7 +93,7 @@ jobs:
           // the exact head commit" depends on ci-gate, which needs this
           // job, so it can never be honestly checked before the guard
           // passes. The ruleset's required checks enforce green CI.
-          const selfReferential = /^\s*[-*+]\s+\[\s\]\s+CI is green\b/;
+          const selfReferential = /^\s*[-*+]\s+\[\s\]\s+CI is green for the exact head commit\s*$/;
           const items = text
             .split('\n')
             .filter((line) => /^\s*[-*+]\s+\[\s\]\s+\S/.test(line) && !line.includes('~~'));
