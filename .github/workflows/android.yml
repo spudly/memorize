@@ -24,6 +24,13 @@ jobs:
   # check never reports — and a required check that never reports
   # blocks merges. Detecting the paths in a job lets the build report
   # "skipped" and the android-gate below report on every PR.
+  # The heavy build runs only for app-affecting paths: the app package
+  # (packages/app/** — source, app.json, its manifest), the workspace
+  # libraries the app bundles (packages/core/**, packages/types/**),
+  # the root package.json / package-lock.json (dependency and
+  # packageManager pins), and this workflow file itself. A skip is
+  # announced in the job log and in the run summary so it never looks
+  # like a lost run.
   changes:
     name: Detect Android-relevant changes
     runs-on: ubuntu-latest
@@ -42,13 +49,32 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" != "pull_request" ]; then
             echo "run-build=true" >> "$GITHUB_OUTPUT"
+            echo "### Android build: running (manual dispatch always builds)" >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
           git fetch --depth=1 origin "+refs/heads/$BASE_REF:refs/remotes/origin/$BASE_REF"
-          if git diff --name-only "origin/$BASE_REF...HEAD" | grep -Eq '^(packages/app/|packages/core/|packages/types/|package-lock\.json$|\.github/)'; then
+          changed="$(git diff --name-only "origin/$BASE_REF...HEAD")"
+          # Filenames come from the PR, so print them with workflow
+          # commands disabled: a crafted name must not be able to
+          # inject log commands into this job.
+          token="$(head -c 16 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+          echo "::stop-commands::$token"
+          echo "Changed files:"
+          echo "$changed"
+          echo "::$token::"
+          # App-affecting paths: the app package, the workspace
+          # libraries it bundles, the root manifests, and this
+          # workflow. Everything else (web, docs, other workflows)
+          # skips the heavy build.
+          pattern='^(packages/app/|packages/core/|packages/types/|package\.json$|package-lock\.json$|\.github/workflows/android\.yml$)'
+          if echo "$changed" | grep -Eq "$pattern"; then
             echo "run-build=true" >> "$GITHUB_OUTPUT"
+            echo "### Android build: running (app-affecting paths changed)" >> "$GITHUB_STEP_SUMMARY"
+            echo "$changed" | grep -E "$pattern" | sed 's/^/- /' >> "$GITHUB_STEP_SUMMARY"
           else
             echo "run-build=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Android build skipped: no app-affecting paths changed (packages/app/**, package.json, package-lock.json, .github/workflows/android.yml)."
+            echo "### Android build: skipped (no app-affecting paths changed)" >> "$GITHUB_STEP_SUMMARY"
           fi
 
   android-build:
@@ -150,6 +176,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - name: Verify the changes job reported a decision
+        env:
+          RUN_BUILD: ${{ needs.changes.outputs.run-build }}
+        run: |
+          if [ "$RUN_BUILD" != "true" ] && [ "$RUN_BUILD" != "false" ]; then
+            echo "::error::The changes job reported no run-build decision ('$RUN_BUILD'); a missing decision is not a pass."
+            exit 1
+          fi
+          echo "run-build decision: $RUN_BUILD"
       - name: Verify job results
         env:
           NEEDS_JSON: ${{ toJSON(needs) }}
