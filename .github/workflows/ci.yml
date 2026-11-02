@@ -56,6 +56,10 @@ jobs:
   # in the template's guidance comments doesn't trip the guard.
   # Dependabot PRs are exempt: their bodies quote upstream changelogs
   # that can contain task lists nobody here owns.
+  # Self-referential items are also exempt: "CI is green for the exact
+  # head commit" can only become true once ci-gate passes, and ci-gate
+  # needs this job — requiring that box here would deadlock every PR.
+  # Green CI itself is still enforced by the ruleset's required checks.
   merge-guard:
     name: merge-guard
     if: github.event.pull_request.user.login != 'dependabot[bot]'
@@ -85,9 +89,18 @@ jobs:
           }
           // Drop HTML comments, then look for unchecked task items.
           const text = kept.join('\n').replace(/<!--[\s\S]*?-->/g, '');
-          const unchecked = text
+          // Self-referential items are not required: "CI is green for
+          // the exact head commit" depends on ci-gate, which needs this
+          // job, so it can never be honestly checked before the guard
+          // passes. The ruleset's required checks enforce green CI.
+          const selfReferential = /^\s*[-*+]\s+\[\s\]\s+CI is green for the exact head commit\s*$/;
+          const items = text
             .split('\n')
             .filter((line) => /^\s*[-*+]\s+\[\s\]\s+\S/.test(line) && !line.includes('~~'));
+          const unchecked = items.filter((line) => !selfReferential.test(line));
+          if (items.length > unchecked.length) {
+            console.log(`Ignored ${items.length - unchecked.length} self-referential checklist item(s); they are exempt from this guard (see the merge-guard comment in ci.yml).`);
+          }
           if (unchecked.length > 0) {
             console.log('::error::Unchecked task-list items remain in the PR body:');
             for (const line of unchecked) console.log(line);

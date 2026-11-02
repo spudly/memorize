@@ -9,7 +9,10 @@
 ## Pre-merge checklist
 
 All boxes must be checked (or struck through with a one-line reason)
-before this PR is merged.
+before this PR is merged. Exception: "CI is green for the exact head
+commit" is exempt from the merge-guard — it can only become true once
+the CI gate (which includes the guard itself) passes, so it cannot be
+required up front; green CI is enforced by the required checks.
 
 - [ ] CI is green for the exact head commit
 - [ ] Review feedback addressed (Copilot and/or human)
