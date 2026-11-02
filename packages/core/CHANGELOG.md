@@ -1,5 +1,20 @@
 # @memorize/core
 
+## 1.1.3
+
+### Patch Changes
+
+- f52c512: Fix replacement characters (U+FFFD) showing in some search-result card
+  text (#77): the gospel engine builds search snippets by slicing source
+  text at a byte limit, so a multibyte character at the cut point reached
+  the app as replacement characters (e.g. "…(2014), 46��…" on the
+  "Chapter 2: Pray Always" card). Text mapped from the engine in
+  @memorize/core now drops U+FFFD characters and unpaired surrogates,
+  which render the same way, so cards show the readable excerpt text
+  with its trailing "…" and no "��".
+- Updated dependencies [f52c512]
+  - @memorize/types@1.1.3
+
 ## 1.1.2
 
 ### Patch Changes
