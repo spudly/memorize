@@ -219,6 +219,13 @@ jobs:
           target: google_apis
           arch: x86_64
           profile: pixel_6
+          # The stock 2-core / 3 GB emulator starves the system
+          # server on the 4-vCPU runner — the Pixel Launcher ANRs
+          # under the accessibility load and its modal dialog hides
+          # the app's view hierarchy from Maestro (first proof run,
+          # 2026-11-03). Give the emulator the whole runner.
+          cores: 4
+          ram-size: 4096M
           disable-animations: true
           script: >
             adb install -r artifacts/apk/app-release.apk &&

@@ -4,6 +4,14 @@ appId: com.memorize.app
 ---
 - launchApp:
     clearState: true
+# A freshly booted emulator can show a system "isn't responding"
+# (ANR) dialog over the app; its window hides the app's hierarchy
+# from Maestro. Dismiss it if present (no-op otherwise).
+- runFlow:
+    when:
+      visible: "isn't responding"
+    commands:
+      - tapOn: "Wait"
 - extendedWaitUntil:
     visible: "My verses"
     timeout: 30000

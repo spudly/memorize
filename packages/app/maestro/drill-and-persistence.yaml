@@ -6,6 +6,13 @@ appId: com.memorize.app
 ---
 - launchApp:
     clearState: true
+# Dismiss a system ANR dialog if the emulator shows one (see
+# launch.yaml); it would otherwise hide the app's hierarchy.
+- runFlow:
+    when:
+      visible: "isn't responding"
+    commands:
+      - tapOn: "Wait"
 - extendedWaitUntil:
     visible: "My verses"
     timeout: 30000
@@ -39,6 +46,11 @@ appId: com.memorize.app
 - assertVisible: "My verses"
 - stopApp: com.memorize.app
 - launchApp
+- runFlow:
+    when:
+      visible: "isn't responding"
+    commands:
+      - tapOn: "Wait"
 - extendedWaitUntil:
     visible: "Ether 12:27"
     timeout: 30000
