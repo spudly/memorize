@@ -5,13 +5,21 @@ appId: com.memorize.app
 - launchApp:
     clearState: true
 # A freshly booted emulator can show a system "isn't responding"
-# (ANR) dialog over the app; its window hides the app's hierarchy
-# from Maestro. Dismiss it if present (no-op otherwise).
-- runFlow:
-    when:
-      visible: ".*(Launcher|System UI) isn't responding.*"
+# (ANR) dialog over the app — "Quickstep isn't responding" on the
+# AOSP image, "Pixel Launcher isn't responding" on google_apis;
+# its window hides the app's hierarchy from Maestro (#94). The
+# dismissal is repeated: runFlow's `when` is evaluated once, and
+# an ANR that appears after a single early check would otherwise
+# sit through the whole wait below (no-op when no dialog shows).
+- repeat:
+    times: 3
     commands:
-      - tapOn: "Wait"
+      - runFlow:
+          when:
+            visible: ".*isn't responding.*"
+          commands:
+            - tapOn: "Wait"
+      - waitForAnimationToEnd
 - extendedWaitUntil:
     visible: "My verses"
     timeout: 30000

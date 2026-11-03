@@ -222,9 +222,10 @@ jobs:
           # its modal "isn't responding" dialog hides the app's view
           # hierarchy from Maestro and fails every flow (proof runs
           # 1 and 3, 2026-11-03; the app itself rendered correctly
-          # behind the dialog). The AOSP launcher does not have this
-          # failure mode. The flows also dismiss an ANR dialog if
-          # one appears, and the emulator gets the whole runner
+          # behind the dialog). The AOSP launcher's Quickstep can
+          # ANR the same way (#94, release PR #93, 2026-11-03), so
+          # the flows dismiss any "isn't responding" dialog with a
+          # repeated check, and the emulator gets the whole runner
           # (4 cores / 4 GB) instead of the stock 2-core / 3 GB.
           target: default
           arch: x86_64
