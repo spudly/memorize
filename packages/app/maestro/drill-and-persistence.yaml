@@ -38,15 +38,22 @@ appId: com.memorize.app
 # drill's input), then advance: one peek is within the pass grade.
 # The blank is a pressable nested inside the verse text; tapping by
 # its accessibility label matched the node but landed outside the
-# pressable's real touch region (proof run 2, 2026-11-03: tap
-# completed, nothing revealed). Tap the blank's location directly
-# instead — the emulator profile is pinned (pixel_6), the verse and
-# fonts are fixed, so the first blank ("I", after "weakness.") sits
-# at a stable point. The reveal is verified by the word appearing
-# in the rendered sentence.
+# pressable's real touch region (proof run 2, 2026-11-03). Tap the
+# blank's location directly instead — the emulator image/profile
+# are pinned, the verse and fonts are fixed, so the blank at this
+# point (blank 2, the word "I" after "weakness.") is stable.
+# Proof the tap registered: the revealed blank's button leaves the
+# hierarchy (proof run 4: the word was visibly revealed in the
+# screenshot and "Reveal blank word 2" was gone from the tree,
+# while its neighbours remained). The revealed word itself merges
+# into the paragraph's flattened accessibility text, where
+# Maestro cannot substring-match across the embedded blanks, so
+# the consumed button is the reliable observable.
 - tapOn:
     point: "62%, 43%"
-- assertVisible: "their weakness. I"
+- assertNotVisible: "Reveal blank word 2 of .*"
+- assertVisible: "Reveal blank word 1 of .*"
+- assertVisible: "Reveal blank word 3 of .*"
 - tapOn: "Next round"
 - assertVisible: "Round 3 of 7.*"
 # Leave the session, then kill and relaunch the app entirely: the
