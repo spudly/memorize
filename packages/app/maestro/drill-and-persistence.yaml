@@ -1,0 +1,86 @@
+# Phase 2 of #29: start a memorization session — the word-blanking
+# drill renders with blanks and accepts input (tap a blank to peek) —
+# and session progress persists: advance two rounds, leave, kill and
+# relaunch the app, and the verse and its round are still there.
+appId: com.memorize.app
+---
+- launchApp:
+    clearState: true
+# Dismiss a system ANR dialog if the emulator shows one (see
+# launch.yaml); it would otherwise hide the app's hierarchy.
+- runFlow:
+    when:
+      visible: ".*(Launcher|System UI) isn't responding.*"
+    commands:
+      - tapOn: "Wait"
+- extendedWaitUntil:
+    visible: "My verses"
+    timeout: 30000
+- tapOn: "^Search$"
+- tapOn: "e\\.g\\. Ether 12:27.*"
+- inputText: "Ether 12:27"
+- pressKey: Enter
+- extendedWaitUntil:
+    visible: "Add to memorize list"
+    timeout: 30000
+- tapOn: "Add to memorize list"
+- tapOn: "^Verses$"
+- tapOn: "^Drill$"
+- extendedWaitUntil:
+    visible: "Round 1 of 7.*"
+    timeout: 30000
+- assertVisible: "Ether 12:27"
+- assertVisible: "And if men come unto me I will show unto them their weakness.*"
+# Round 1 blanks nothing (read-through); advancing persists round 2.
+- tapOn: "Next round"
+- assertVisible: "Round 2 of 7.*"
+# Round 2 blanks ~20% of the words. Peek at the first blank (the
+# drill's input), then advance: one peek is within the pass grade.
+# The blank is a pressable nested inside the verse text; tapping by
+# its accessibility label matched the node but landed outside the
+# pressable's real touch region (proof run 2, 2026-11-03). Tap the
+# blank's location directly instead — the emulator image/profile
+# are pinned, the verse and fonts are fixed, so the blank at this
+# point (blank 2, the word "I" after "weakness.") is stable.
+# Proof the tap registered: assert blank 2 is present BEFORE the
+# tap so its disappearance cannot pass vacuously, then verify the
+# reveal two ways — the consumed button leaves the hierarchy
+# while its neighbours remain, and the revealed word appears in
+# the passage element's text (Maestro text selectors are
+# full-match regexes, so the sentence assertion needs .* anchors;
+# proof run 4, where the unanchored form failed even though the
+# word was visibly revealed in the screenshot).
+- assertVisible: "Reveal blank word 2 of .*"
+- tapOn:
+    point: "62%, 43%"
+- assertNotVisible: "Reveal blank word 2 of .*"
+- assertVisible: "Reveal blank word 1 of .*"
+- assertVisible: "Reveal blank word 3 of .*"
+- assertVisible: ".*their weakness\\. I.*"
+- tapOn: "Next round"
+- assertVisible: "Round 3 of 7.*"
+# Leave the session, then kill and relaunch the app entirely: the
+# verse and the in-progress round must survive (AsyncStorage).
+# The header's back link renders as "← Back", so "^Back$" matched
+# only the Android system back button in the nav bar and exited
+# the app (proof run 5, 2026-11-03). Tap the link's location
+# directly instead — measured from proof run 6's screenshot: the
+# link sits under the tab bar at about (17%, 19%) on the pinned
+# profile (an earlier estimate taken from the google_apis render
+# landed on the tab bar and no-oped).
+- tapOn:
+    point: "17%, 19%"
+- assertVisible: "My verses"
+- stopApp: com.memorize.app
+- launchApp
+- runFlow:
+    when:
+      visible: ".*(Launcher|System UI) isn't responding.*"
+    commands:
+      - tapOn: "Wait"
+- extendedWaitUntil:
+    visible: "Ether 12:27"
+    timeout: 30000
+- assertVisible: "learning"
+- tapOn: "^Drill$"
+- assertVisible: "Round 3 of 7.*"

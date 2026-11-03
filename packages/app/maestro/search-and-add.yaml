@@ -1,0 +1,36 @@
+# Phase 2 of #29: search for a scripture reference and display the
+# passage text, then add it to My verses. No API key is configured in
+# CI, so the app searches its bundled demo set — the demo banner
+# assertion proves the data is self-contained (no live API/account).
+appId: com.memorize.app
+---
+- launchApp:
+    clearState: true
+# Dismiss a system ANR dialog if the emulator shows one (see
+# launch.yaml); it would otherwise hide the app's hierarchy.
+- runFlow:
+    when:
+      visible: ".*(Launcher|System UI) isn't responding.*"
+    commands:
+      - tapOn: "Wait"
+- extendedWaitUntil:
+    visible: "My verses"
+    timeout: 30000
+- tapOn: "^Search$"
+- assertVisible: "Search verses"
+- assertVisible: "Searching the built-in demo set.*"
+- tapOn: "e\\.g\\. Ether 12:27.*"
+- inputText: "Ether 12:27"
+- pressKey: Enter
+- extendedWaitUntil:
+    visible: "Add to memorize list"
+    timeout: 30000
+- assertVisible: "Ether 12:27"
+- assertVisible: "And if men come unto me I will show unto them their weakness.*"
+- tapOn: "Add to memorize list"
+- tapOn: "^Verses$"
+- assertVisible: "My verses"
+- assertVisible: "Ether 12:27"
+- assertVisible: "learning"
+- assertVisible: "^Drill$"
+- assertVisible: "^Remove$"
