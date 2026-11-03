@@ -15,6 +15,13 @@ appId: com.memorize.app
 # waitForAnimationToEnd returns as soon as the UI is static, so a
 # fixed number of early checks could all finish before a dialog
 # that appears mid-wait (no-op when no dialog shows).
+# The dismissal taps "Close app", never "Wait": "Wait" only
+# snoozes the dialog for a wedged process — proof run 41722042744
+# (2026-11-03) tapped "Wait" 10 times over ~70 s and the dialog
+# reappeared every ~7 s, present again at the final assert, in
+# all 3 flows. "Close app" kills the wedged system process; the
+# system restarts it, the dialog does not recur, and the app's
+# foreground task is unaffected.
 - repeat:
     times: 10
     while:
@@ -24,7 +31,7 @@ appId: com.memorize.app
           when:
             visible: ".*(Quickstep|Launcher|System UI) isn't responding.*"
           commands:
-            - tapOn: "Wait"
+            - tapOn: "Close app"
       - waitForAnimationToEnd
 - extendedWaitUntil:
     visible: "My verses"

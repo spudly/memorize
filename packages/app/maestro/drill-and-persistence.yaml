@@ -17,7 +17,7 @@ appId: com.memorize.app
           when:
             visible: ".*(Quickstep|Launcher|System UI) isn't responding.*"
           commands:
-            - tapOn: "Wait"
+            - tapOn: "Close app"
       - waitForAnimationToEnd
 - extendedWaitUntil:
     visible: "My verses"
@@ -88,7 +88,7 @@ appId: com.memorize.app
           when:
             visible: ".*(Quickstep|Launcher|System UI) isn't responding.*"
           commands:
-            - tapOn: "Wait"
+            - tapOn: "Close app"
       - waitForAnimationToEnd
 - extendedWaitUntil:
     visible: "Ether 12:27"
