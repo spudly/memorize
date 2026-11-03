@@ -43,5 +43,8 @@
     "packages/core",
     "packages/web",
     "packages/app"
-  ]
+  ],
+  "overrides": {
+    "test-exclude": "^8.0.0"
+  }
 }
