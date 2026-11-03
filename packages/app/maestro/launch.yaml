@@ -5,13 +5,34 @@ appId: com.memorize.app
 - launchApp:
     clearState: true
 # A freshly booted emulator can show a system "isn't responding"
-# (ANR) dialog over the app; its window hides the app's hierarchy
-# from Maestro. Dismiss it if present (no-op otherwise).
-- runFlow:
-    when:
-      visible: ".*(Launcher|System UI) isn't responding.*"
+# (ANR) dialog over the app — "Quickstep isn't responding" on the
+# AOSP image, "Pixel Launcher isn't responding" on google_apis;
+# its window hides the app's hierarchy from Maestro (#94). The
+# selector names system titles only, so an ANR of the app itself
+# ("Memorize isn't responding") still fails the flow instead of
+# being dismissed. The dismissal polls while the target below is
+# not yet visible: runFlow's `when` is evaluated once and
+# waitForAnimationToEnd returns as soon as the UI is static, so a
+# fixed number of early checks could all finish before a dialog
+# that appears mid-wait (no-op when no dialog shows).
+# The dismissal taps "Close app", never "Wait": "Wait" only
+# snoozes the dialog for a wedged process — proof run 41722042744
+# (2026-11-03) tapped "Wait" 10 times over ~70 s and the dialog
+# reappeared every ~7 s, present again at the final assert, in
+# all 3 flows. "Close app" kills the wedged system process; the
+# system restarts it, the dialog does not recur, and the app's
+# foreground task is unaffected.
+- repeat:
+    times: 10
+    while:
+      notVisible: "My verses"
     commands:
-      - tapOn: "Wait"
+      - runFlow:
+          when:
+            visible: ".*(Quickstep|Launcher|System UI) isn't responding.*"
+          commands:
+            - tapOn: "Close app"
+      - waitForAnimationToEnd
 - extendedWaitUntil:
     visible: "My verses"
     timeout: 30000
