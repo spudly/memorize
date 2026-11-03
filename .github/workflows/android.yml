@@ -6,6 +6,11 @@ name: android
 # Without it, native-side breaks (Expo / RN / AGP upgrades) are invisible
 # until someone builds locally or tries to ship.
 #
+# Since 2026-11-02 the build runs only on release PRs (head branch
+# changeset-release/**): native breaks now surface on the release PR
+# instead of the PR that caused them. That tradeoff was accepted
+# deliberately to keep ordinary PR loops fast. See the `changes` job.
+#
 # Phase 2 (emulator use-case tests) is tracked in #29 and not part of this
 # job yet.
 
@@ -18,19 +23,21 @@ permissions:
   packages: read
 
 jobs:
-  # The path filter that used to sit on the workflow trigger lives in
-  # this job instead. A workflow-level `paths:` filter means the
-  # workflow never runs on PRs that don't touch the app, so the build
-  # check never reports — and a required check that never reports
-  # blocks merges. Detecting the paths in a job lets the build report
-  # "skipped" and the android-gate below report on every PR.
-  # The heavy build runs only for app-affecting paths: the app package
-  # (packages/app/** — source, app.json, its manifest), the workspace
-  # libraries the app bundles (packages/core/**, packages/types/**),
-  # the root package.json / package-lock.json (dependency and
-  # packageManager pins), and this workflow file itself. A skip is
-  # announced in the job log and in the run summary so it never looks
-  # like a lost run.
+  # The branch gate lives in this job instead of on the workflow
+  # trigger. A workflow-level branch filter means the workflow never
+  # runs on other PRs, so the build check never reports — and a
+  # required check that never reports blocks merges. Deciding in a
+  # job lets the build report "skipped" and the android-gate below
+  # report on every PR.
+  # The heavy build runs only on release PRs: PRs whose head branch
+  # starts with changeset-release/ (the changesets Pending Release
+  # PR). Until 2026-11-02 it ran for app-affecting paths
+  # (packages/app/**, packages/core/**, packages/types/**, the root
+  # manifests, this workflow); restricting it to release PRs keeps
+  # ordinary PR loops fast, at the accepted cost of native breaks
+  # surfacing on the release PR. Manual dispatch always builds, as
+  # an explicit escape hatch. A skip is announced in the job log and
+  # in the run summary so it never looks like a lost run.
   changes:
     name: Detect Android-relevant changes
     runs-on: ubuntu-latest
@@ -38,44 +45,30 @@ jobs:
     outputs:
       run-build: ${{ steps.detect.outputs.run-build }}
     steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-
-      - name: Detect relevant paths
+      - name: Detect release PR
         id: detect
         env:
-          BASE_REF: ${{ github.base_ref }}
+          HEAD_REF: ${{ github.head_ref }}
         run: |
           if [ "${{ github.event_name }}" != "pull_request" ]; then
             echo "run-build=true" >> "$GITHUB_OUTPUT"
             echo "### Android build: running (manual dispatch always builds)" >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
-          git fetch --depth=1 origin "+refs/heads/$BASE_REF:refs/remotes/origin/$BASE_REF"
-          changed="$(git diff --name-only "origin/$BASE_REF...HEAD")"
-          # Filenames come from the PR, so print them with workflow
-          # commands disabled: a crafted name must not be able to
-          # inject log commands into this job.
-          token="$(head -c 16 /dev/urandom | od -An -tx1 | tr -d ' \n')"
-          echo "::stop-commands::$token"
-          echo "Changed files:"
-          echo "$changed"
-          echo "::$token::"
-          # App-affecting paths: the app package, the workspace
-          # libraries it bundles, the root manifests, and this
-          # workflow. Everything else (web, docs, other workflows)
-          # skips the heavy build.
-          pattern='^(packages/app/|packages/core/|packages/types/|package\.json$|package-lock\.json$|\.github/workflows/android\.yml$)'
-          if echo "$changed" | grep -Eq "$pattern"; then
-            echo "run-build=true" >> "$GITHUB_OUTPUT"
-            echo "### Android build: running (app-affecting paths changed)" >> "$GITHUB_STEP_SUMMARY"
-            echo "$changed" | grep -E "$pattern" | sed 's/^/- /' >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "run-build=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::Android build skipped: no app-affecting paths changed (packages/app/**, package.json, package-lock.json, .github/workflows/android.yml)."
-            echo "### Android build: skipped (no app-affecting paths changed)" >> "$GITHUB_STEP_SUMMARY"
-          fi
+          # HEAD_REF is the PR's head branch name. Git ref names
+          # cannot contain ':' or control characters, so echoing it
+          # cannot inject workflow commands into this job's log.
+          case "$HEAD_REF" in
+            changeset-release/*)
+              echo "run-build=true" >> "$GITHUB_OUTPUT"
+              echo "### Android build: running (release PR, head branch $HEAD_REF)" >> "$GITHUB_STEP_SUMMARY"
+              ;;
+            *)
+              echo "run-build=false" >> "$GITHUB_OUTPUT"
+              echo "::notice::Android build skipped: the build runs only on release PRs (head branch changeset-release/**); this PR's head branch is $HEAD_REF."
+              echo "### Android build: skipped (not a release PR)" >> "$GITHUB_STEP_SUMMARY"
+              ;;
+          esac
 
   android-build:
     name: Build Android release APK
@@ -168,7 +161,7 @@ jobs:
   # Always-reporting gate for branch protection: reports on every PR,
   # fails only when the changes detection or the build failed or was
   # cancelled, and passes when the build succeeded or was legitimately
-  # skipped (no Android-relevant paths in the PR).
+  # skipped (the PR is not a release PR).
   android-gate:
     name: android-gate
     needs: [changes, android-build]
