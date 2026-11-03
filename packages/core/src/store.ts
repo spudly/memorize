@@ -49,11 +49,28 @@ export function createMemorizeStore(storage: KeyValueStorage): MemorizeStore {
     });
   };
 
-  const persist = async (): Promise<void> => {
-    data = { ...data, updatedAt: new Date().toISOString() };
-    await local.saveData(data);
-    emit();
+  // Saves are serialized through a chain. Storage backends do not
+  // promise ordering for concurrent writes (AsyncStorage on Android
+  // runs each write independently), and every save writes a FULL
+  // snapshot — an older snapshot landing after a newer one would
+  // silently revert it, e.g. a peek's progress save overwriting a
+  // completed drill (#91). Each queued save writes the current data
+  // at its turn, so the final write always holds the newest state;
+  // a failed save rejects its own caller but does not poison the
+  // chain for later saves.
+  let saveChain: Promise<void> = Promise.resolve();
+  const enqueueSave = (save: () => Promise<void>): Promise<void> => {
+    const run = saveChain.then(save);
+    saveChain = run.catch(() => undefined);
+    return run;
   };
+
+  const persist = (): Promise<void> =>
+    enqueueSave(async () => {
+      data = { ...data, updatedAt: new Date().toISOString() };
+      await local.saveData(data);
+      emit();
+    });
 
   const findVerse = (id: string): MemorizedVerse | undefined =>
     data.verses.find((v) => v.verse.id === id);
@@ -198,8 +215,10 @@ export function createMemorizeStore(storage: KeyValueStorage): MemorizeStore {
 
     async replaceAll(next: AppData): Promise<void> {
       data = next;
-      await local.saveData(data);
-      emit();
+      await enqueueSave(async () => {
+        await local.saveData(data);
+        emit();
+      });
     },
   };
 
