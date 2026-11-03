@@ -53,7 +53,11 @@ export default function DrillScreen({ store, verseId, onBack }: Props) {
     setRevealed(nextRevealed);
     const nextPeeks = peeks + 1;
     setPeeks(nextPeeks);
-    await store.actions.setDrillProgress(verseId, round, nextPeeks);
+    try {
+      await store.actions.setDrillProgress(verseId, round, nextPeeks);
+    } catch {
+      setMessage("Couldn't save your progress — it isn't saved yet if you leave now.");
+    }
   };
 
   const nextRound = async (): Promise<void> => {
@@ -62,7 +66,12 @@ export default function DrillScreen({ store, verseId, onBack }: Props) {
       return;
     }
     if (round + 1 >= BLANK_FRACTIONS.length) {
-      await store.actions.completeDrill(verseId);
+      try {
+        await store.actions.completeDrill(verseId);
+      } catch {
+        setMessage("Couldn't save finishing the drill. Try again before leaving.");
+        return;
+      }
       onBack();
       return;
     }
@@ -71,7 +80,11 @@ export default function DrillScreen({ store, verseId, onBack }: Props) {
     setPeeks(0);
     setRevealed(new Set());
     setMessage(null);
-    await store.actions.setDrillProgress(verseId, next, 0);
+    try {
+      await store.actions.setDrillProgress(verseId, next, 0);
+    } catch {
+      setMessage("Couldn't save your progress — it isn't saved yet if you leave now.");
+    }
   };
 
   return (

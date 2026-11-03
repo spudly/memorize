@@ -283,6 +283,7 @@ saved API key.
    empty states rather than errors.
 
 **Run when:** `packages/core/src/storage.ts`,
+`packages/core/src/store.ts` persistence path,
 `packages/web/src/lib/storage.ts`, store initialization in
 `packages/web/src/App.tsx` or `packages/app`.
 
