@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, BlankWord, Button, ProgressBar, Text, VerseText } from "@spudly/ui";
 import {
   BLANK_FRACTIONS,
@@ -20,6 +20,17 @@ export default function DrillView({ store, verseId, onBack }: Props) {
   const [peeks, setPeeks] = useState(entry?.drillPeeks ?? 0);
   const [revealed, setRevealed] = useState<Set<number>>(new Set());
   const [message, setMessage] = useState<string | null>(null);
+  // Whether this view is still mounted: leaving via the tabs
+  // unmounts it, and a completion save that resolves afterwards
+  // must not navigate — onBack clears whatever drill is open by
+  // then, which could be a different verse's session (#91).
+  const activeRef = useRef(true);
+  useEffect(() => {
+    activeRef.current = true;
+    return () => {
+      activeRef.current = false;
+    };
+  }, []);
 
   const verseText = entry?.verse.text ?? "";
   const words = useMemo(() => tokenize(verseText), [verseText]);
@@ -67,7 +78,9 @@ export default function DrillView({ store, verseId, onBack }: Props) {
         setMessage("Couldn't save finishing the drill. Try again before leaving.");
         return;
       }
-      onBack();
+      if (activeRef.current) {
+        onBack();
+      }
       return;
     }
     const next = round + 1;
