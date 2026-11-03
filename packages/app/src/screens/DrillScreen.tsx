@@ -44,7 +44,7 @@ export default function DrillScreen({ store, verseId, onBack }: Props) {
     return <MemorizationSessionPage state="not-found" onBack={onBack} />;
   }
 
-  const peek = (index: number): void => {
+  const peek = async (index: number): Promise<void> => {
     if (revealed.has(index)) {
       return;
     }
@@ -53,16 +53,16 @@ export default function DrillScreen({ store, verseId, onBack }: Props) {
     setRevealed(nextRevealed);
     const nextPeeks = peeks + 1;
     setPeeks(nextPeeks);
-    store.actions.setDrillProgress(verseId, round, nextPeeks);
+    await store.actions.setDrillProgress(verseId, round, nextPeeks);
   };
 
-  const nextRound = (): void => {
+  const nextRound = async (): Promise<void> => {
     if (gradeRound(blanks.size, peeks) === "retry") {
       setMessage(retryFeedback(peeks, blanks.size));
       return;
     }
     if (round + 1 >= BLANK_FRACTIONS.length) {
-      store.actions.completeDrill(verseId);
+      await store.actions.completeDrill(verseId);
       onBack();
       return;
     }
@@ -71,7 +71,7 @@ export default function DrillScreen({ store, verseId, onBack }: Props) {
     setPeeks(0);
     setRevealed(new Set());
     setMessage(null);
-    store.actions.setDrillProgress(verseId, next, 0);
+    await store.actions.setDrillProgress(verseId, next, 0);
   };
 
   return (

@@ -37,7 +37,7 @@ export default function DrillView({ store, verseId, onBack }: Props) {
     );
   }
 
-  const peek = (index: number): void => {
+  const peek = async (index: number): Promise<void> => {
     if (revealed.has(index)) {
       return;
     }
@@ -46,10 +46,10 @@ export default function DrillView({ store, verseId, onBack }: Props) {
     setRevealed(nextRevealed);
     const nextPeeks = peeks + 1;
     setPeeks(nextPeeks);
-    store.actions.setDrillProgress(verseId, round, nextPeeks);
+    await store.actions.setDrillProgress(verseId, round, nextPeeks);
   };
 
-  const nextRound = (): void => {
+  const nextRound = async (): Promise<void> => {
     if (gradeRound(blanks.size, peeks) === "retry") {
       setMessage(
         `Not quite — you peeked ${peeks} time(s) on ${blanks.size} blank(s). Try the round again.`,
@@ -57,7 +57,7 @@ export default function DrillView({ store, verseId, onBack }: Props) {
       return;
     }
     if (round + 1 >= BLANK_FRACTIONS.length) {
-      store.actions.completeDrill(verseId);
+      await store.actions.completeDrill(verseId);
       onBack();
       return;
     }
@@ -66,7 +66,7 @@ export default function DrillView({ store, verseId, onBack }: Props) {
     setPeeks(0);
     setRevealed(new Set());
     setMessage(null);
-    store.actions.setDrillProgress(verseId, next, 0);
+    await store.actions.setDrillProgress(verseId, next, 0);
   };
 
   const isLastRound = round + 1 >= BLANK_FRACTIONS.length;

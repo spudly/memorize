@@ -15,11 +15,11 @@ export interface MemorizeState {
 }
 
 export interface MemorizeActions {
-  addVerse(verse: Verse): void;
-  removeVerse(id: string): void;
-  setDrillProgress(id: string, round: number, peeks: number): void;
-  completeDrill(id: string, now?: Date): void;
-  recordReview(id: string, outcome: ReviewOutcome, now?: Date): void;
+  addVerse(verse: Verse): Promise<void>;
+  removeVerse(id: string): Promise<void>;
+  setDrillProgress(id: string, round: number, peeks: number): Promise<void>;
+  completeDrill(id: string, now?: Date): Promise<void>;
+  recordReview(id: string, outcome: ReviewOutcome, now?: Date): Promise<void>;
   setApiKey(key: string): Promise<void>;
   clearApiKey(): Promise<void>;
   replaceAll(data: AppData): Promise<void>;
@@ -58,7 +58,10 @@ export function createMemorizeStore(storage: KeyValueStorage): MemorizeStore {
   const findVerse = (id: string): MemorizedVerse | undefined =>
     data.verses.find((v) => v.verse.id === id);
 
-  const updateVerse = (id: string, update: (v: MemorizedVerse) => MemorizedVerse): void => {
+  const updateVerse = async (
+    id: string,
+    update: (v: MemorizedVerse) => MemorizedVerse,
+  ): Promise<void> => {
     if (!findVerse(id)) {
       return;
     }
@@ -66,7 +69,7 @@ export function createMemorizeStore(storage: KeyValueStorage): MemorizeStore {
       ...data,
       verses: data.verses.map((v) => (v.verse.id === id ? update(v) : v)),
     };
-    void persist();
+    await persist();
   };
 
   const ready = (async (): Promise<void> => {
@@ -79,7 +82,7 @@ export function createMemorizeStore(storage: KeyValueStorage): MemorizeStore {
   })();
 
   const actions: MemorizeActions = {
-    addVerse(verse: Verse): void {
+    async addVerse(verse: Verse): Promise<void> {
       // Dedupe on verse identity, not id alone (see isSameVerse):
       // each chunk of a document is its own item (#79, Stephen's
       // ruling), so dedupe compares the persisted per-chunk identity
@@ -120,7 +123,7 @@ export function createMemorizeStore(storage: KeyValueStorage): MemorizeStore {
             ...data,
             verses: data.verses.map((v, i) => (i === matchIndex ? { ...v, verse: annotated } : v)),
           };
-          void persist();
+          await persist();
         }
         return;
       }
@@ -158,27 +161,27 @@ export function createMemorizeStore(storage: KeyValueStorage): MemorizeStore {
         nextReviewAt: nextReviewDate(now, 0).toISOString(),
       };
       data = { ...data, verses: [...data.verses, entry] };
-      void persist();
+      await persist();
     },
 
-    removeVerse(id: string): void {
+    async removeVerse(id: string): Promise<void> {
       if (!findVerse(id)) {
         return;
       }
       data = { ...data, verses: data.verses.filter((v) => v.verse.id !== id) };
-      void persist();
+      await persist();
     },
 
-    setDrillProgress(id: string, round: number, peeks: number): void {
-      updateVerse(id, (v) => ({ ...v, drillRound: round, drillPeeks: peeks }));
+    setDrillProgress(id: string, round: number, peeks: number): Promise<void> {
+      return updateVerse(id, (v) => ({ ...v, drillRound: round, drillPeeks: peeks }));
     },
 
-    completeDrill(id: string, now: Date = new Date()): void {
-      updateVerse(id, (v) => markMemorized(v, now));
+    completeDrill(id: string, now: Date = new Date()): Promise<void> {
+      return updateVerse(id, (v) => markMemorized(v, now));
     },
 
-    recordReview(id: string, outcome: ReviewOutcome, now: Date = new Date()): void {
-      updateVerse(id, (v) => applyReview(v, outcome, now));
+    recordReview(id: string, outcome: ReviewOutcome, now: Date = new Date()): Promise<void> {
+      return updateVerse(id, (v) => applyReview(v, outcome, now));
     },
 
     async setApiKey(key: string): Promise<void> {

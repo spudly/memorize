@@ -47,6 +47,52 @@ describe("memorize store", () => {
     expect(entry?.nextReviewAt).toBeDefined();
   });
 
+  test("verse mutations resolve only after the persist write lands (#91)", async () => {
+    // Storage whose writes can be held open, so the test can observe
+    // whether a mutation's promise settles before or after the write.
+    const map = new Map<string, string>();
+    const gate: { release: (() => void) | null } = { release: null };
+    let holdWrites = false;
+    const storage: KeyValueStorage = {
+      getItem: async (key) => map.get(key) ?? null,
+      setItem: async (key, value) => {
+        if (holdWrites) {
+          await new Promise<void>((resolve) => {
+            gate.release = resolve;
+          });
+        }
+        map.set(key, value);
+      },
+      removeItem: async (key) => {
+        map.delete(key);
+      },
+    };
+    const store = createMemorizeStore(storage);
+    await store.ready;
+    await store.actions.addVerse(VERSE);
+
+    holdWrites = true;
+    let resolved = false;
+    const pending = store.actions.setDrillProgress(VERSE.id, 2, 1).then(() => {
+      resolved = true;
+    });
+    await flush();
+    // The write has not landed, so the mutation must not have resolved
+    // and a fresh store must not see the new progress yet.
+    expect(resolved).toBe(false);
+    const store2 = createMemorizeStore(storage);
+    await store2.ready;
+    expect(store2.getState().data.verses[0]?.drillRound).toBe(0);
+
+    gate.release?.();
+    await pending;
+    expect(resolved).toBe(true);
+    const store3 = createMemorizeStore(storage);
+    await store3.ready;
+    expect(store3.getState().data.verses[0]?.drillRound).toBe(2);
+    expect(store3.getState().data.verses[0]?.drillPeeks).toBe(1);
+  });
+
   test("does not add the same verse twice", async () => {
     const store = createMemorizeStore(memoryStorage());
     await store.ready;
