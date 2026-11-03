@@ -8,15 +8,21 @@ appId: com.memorize.app
 # (ANR) dialog over the app — "Quickstep isn't responding" on the
 # AOSP image, "Pixel Launcher isn't responding" on google_apis;
 # its window hides the app's hierarchy from Maestro (#94). The
-# dismissal is repeated: runFlow's `when` is evaluated once, and
-# an ANR that appears after a single early check would otherwise
-# sit through the whole wait below (no-op when no dialog shows).
+# selector names system titles only, so an ANR of the app itself
+# ("Memorize isn't responding") still fails the flow instead of
+# being dismissed. The dismissal polls while the target below is
+# not yet visible: runFlow's `when` is evaluated once and
+# waitForAnimationToEnd returns as soon as the UI is static, so a
+# fixed number of early checks could all finish before a dialog
+# that appears mid-wait (no-op when no dialog shows).
 - repeat:
-    times: 3
+    times: 10
+    while:
+      notVisible: "My verses"
     commands:
       - runFlow:
           when:
-            visible: ".*isn't responding.*"
+            visible: ".*(Quickstep|Launcher|System UI) isn't responding.*"
           commands:
             - tapOn: "Wait"
       - waitForAnimationToEnd

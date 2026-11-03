@@ -9,11 +9,13 @@ appId: com.memorize.app
 # Dismiss a system ANR dialog if the emulator shows one (see
 # launch.yaml); it would otherwise hide the app's hierarchy.
 - repeat:
-    times: 3
+    times: 10
+    while:
+      notVisible: "My verses"
     commands:
       - runFlow:
           when:
-            visible: ".*isn't responding.*"
+            visible: ".*(Quickstep|Launcher|System UI) isn't responding.*"
           commands:
             - tapOn: "Wait"
       - waitForAnimationToEnd
