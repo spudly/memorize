@@ -24,8 +24,16 @@ passes on the skip, and fails if the suite fails when it does run.
 
 ## Run locally
 
+> **Warning:** the flows launch the app with `clearState`, which
+> wipes all `com.memorize.app` data on the device — saved verses,
+> drill progress, and any gospel-engine API key in Settings. Run
+> them on a dedicated emulator, or back that data up first.
+
 With an emulator running, build the release APK the same way CI
-does (from the repository root):
+does (from the repository root). `npm ci` installs the private
+`@spudly/ui` package from GitHub Packages, so export a token with
+`read:packages` first (a `gh` login token works:
+`export NODE_AUTH_TOKEN=$(gh auth token)`):
 
 ```sh
 corepack enable npm

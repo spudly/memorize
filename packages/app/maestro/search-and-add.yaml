@@ -10,7 +10,7 @@ appId: com.memorize.app
 # launch.yaml); it would otherwise hide the app's hierarchy.
 - runFlow:
     when:
-      visible: ".*isn't responding.*"
+      visible: ".*(Launcher|System UI) isn't responding.*"
     commands:
       - tapOn: "Wait"
 - extendedWaitUntil:
