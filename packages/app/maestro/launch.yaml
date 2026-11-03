@@ -9,7 +9,7 @@ appId: com.memorize.app
 # from Maestro. Dismiss it if present (no-op otherwise).
 - runFlow:
     when:
-      visible: "isn't responding"
+      visible: ".*isn't responding.*"
     commands:
       - tapOn: "Wait"
 - extendedWaitUntil:

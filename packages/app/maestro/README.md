@@ -24,11 +24,15 @@ passes on the skip, and fails if the suite fails when it does run.
 
 ## Run locally
 
-With an emulator running and a release APK built
-(`npx expo prebuild --platform android` then
-`./gradlew assembleRelease` in `packages/app/android`):
+With an emulator running, build the release APK the same way CI
+does (from the repository root):
 
 ```sh
+corepack enable npm
+npm ci
+npx turbo run build --filter=@memorize/app^...
+(cd packages/app && npx expo prebuild --platform android --no-install)
+(cd packages/app/android && ./gradlew assembleRelease)
 adb install -r packages/app/android/app/build/outputs/apk/release/app-release.apk
 maestro test packages/app/maestro
 ```

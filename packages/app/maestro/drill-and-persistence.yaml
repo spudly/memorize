@@ -10,7 +10,7 @@ appId: com.memorize.app
 # launch.yaml); it would otherwise hide the app's hierarchy.
 - runFlow:
     when:
-      visible: "isn't responding"
+      visible: ".*isn't responding.*"
     commands:
       - tapOn: "Wait"
 - extendedWaitUntil:
@@ -42,29 +42,37 @@ appId: com.memorize.app
 # blank's location directly instead — the emulator image/profile
 # are pinned, the verse and fonts are fixed, so the blank at this
 # point (blank 2, the word "I" after "weakness.") is stable.
-# Proof the tap registered: the revealed blank's button leaves the
-# hierarchy (proof run 4: the word was visibly revealed in the
-# screenshot and "Reveal blank word 2" was gone from the tree,
-# while its neighbours remained). The revealed word itself merges
-# into the paragraph's flattened accessibility text, where
-# Maestro cannot substring-match across the embedded blanks, so
-# the consumed button is the reliable observable.
+# Proof the tap registered: assert blank 2 is present BEFORE the
+# tap so its disappearance cannot pass vacuously, then verify the
+# reveal two ways — the consumed button leaves the hierarchy
+# while its neighbours remain, and the revealed word appears in
+# the passage element's text (Maestro text selectors are
+# full-match regexes, so the sentence assertion needs .* anchors;
+# proof run 4, where the unanchored form failed even though the
+# word was visibly revealed in the screenshot).
+- assertVisible: "Reveal blank word 2 of .*"
 - tapOn:
     point: "62%, 43%"
 - assertNotVisible: "Reveal blank word 2 of .*"
 - assertVisible: "Reveal blank word 1 of .*"
 - assertVisible: "Reveal blank word 3 of .*"
+- assertVisible: ".*their weakness\\. I.*"
 - tapOn: "Next round"
 - assertVisible: "Round 3 of 7.*"
 # Leave the session, then kill and relaunch the app entirely: the
 # verse and the in-progress round must survive (AsyncStorage).
-- tapOn: "^Back$"
+# The header's back link renders as "‹ Back", so "^Back$" matched
+# only the Android system back button in the nav bar and exited
+# the app (proof run 5, 2026-11-03). Tap the link's location
+# directly instead.
+- tapOn:
+    point: "10%, 10%"
 - assertVisible: "My verses"
 - stopApp: com.memorize.app
 - launchApp
 - runFlow:
     when:
-      visible: "isn't responding"
+      visible: ".*isn't responding.*"
     commands:
       - tapOn: "Wait"
 - extendedWaitUntil:
