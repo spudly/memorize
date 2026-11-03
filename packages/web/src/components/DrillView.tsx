@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, BlankWord, Button, ProgressBar, Text, VerseText } from "@spudly/ui";
 import {
   BLANK_FRACTIONS,
@@ -20,6 +20,17 @@ export default function DrillView({ store, verseId, onBack }: Props) {
   const [peeks, setPeeks] = useState(entry?.drillPeeks ?? 0);
   const [revealed, setRevealed] = useState<Set<number>>(new Set());
   const [message, setMessage] = useState<string | null>(null);
+  // Whether this view is still mounted: leaving via the tabs
+  // unmounts it, and a completion save that resolves afterwards
+  // must not navigate — onBack clears whatever drill is open by
+  // then, which could be a different verse's session (#91).
+  const activeRef = useRef(true);
+  useEffect(() => {
+    activeRef.current = true;
+    return () => {
+      activeRef.current = false;
+    };
+  }, []);
 
   const verseText = entry?.verse.text ?? "";
   const words = useMemo(() => tokenize(verseText), [verseText]);
@@ -37,7 +48,7 @@ export default function DrillView({ store, verseId, onBack }: Props) {
     );
   }
 
-  const peek = (index: number): void => {
+  const peek = async (index: number): Promise<void> => {
     if (revealed.has(index)) {
       return;
     }
@@ -46,10 +57,14 @@ export default function DrillView({ store, verseId, onBack }: Props) {
     setRevealed(nextRevealed);
     const nextPeeks = peeks + 1;
     setPeeks(nextPeeks);
-    store.actions.setDrillProgress(verseId, round, nextPeeks);
+    try {
+      await store.actions.setDrillProgress(verseId, round, nextPeeks);
+    } catch {
+      setMessage("Couldn't save your progress — it isn't saved yet if you leave now.");
+    }
   };
 
-  const nextRound = (): void => {
+  const nextRound = async (): Promise<void> => {
     if (gradeRound(blanks.size, peeks) === "retry") {
       setMessage(
         `Not quite — you peeked ${peeks} time(s) on ${blanks.size} blank(s). Try the round again.`,
@@ -57,8 +72,15 @@ export default function DrillView({ store, verseId, onBack }: Props) {
       return;
     }
     if (round + 1 >= BLANK_FRACTIONS.length) {
-      store.actions.completeDrill(verseId);
-      onBack();
+      try {
+        await store.actions.completeDrill(verseId);
+      } catch {
+        setMessage("Couldn't save finishing the drill. Try again before leaving.");
+        return;
+      }
+      if (activeRef.current) {
+        onBack();
+      }
       return;
     }
     const next = round + 1;
@@ -66,7 +88,11 @@ export default function DrillView({ store, verseId, onBack }: Props) {
     setPeeks(0);
     setRevealed(new Set());
     setMessage(null);
-    store.actions.setDrillProgress(verseId, next, 0);
+    try {
+      await store.actions.setDrillProgress(verseId, next, 0);
+    } catch {
+      setMessage("Couldn't save your progress — it isn't saved yet if you leave now.");
+    }
   };
 
   const isLastRound = round + 1 >= BLANK_FRACTIONS.length;

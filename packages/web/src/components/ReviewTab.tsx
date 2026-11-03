@@ -9,7 +9,7 @@ export default function ReviewTab({ store }: Props) {
   const due = dueVerses(store.getState().data.verses, new Date());
 
   const review = (id: string, outcome: ReviewOutcome): void => {
-    store.actions.recordReview(id, outcome);
+    void store.actions.recordReview(id, outcome);
   };
 
   if (due.length === 0) {

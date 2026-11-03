@@ -37,7 +37,7 @@ export default function VersesTab({ store, onDrill }: Props) {
           <Button
             size="sm"
             variant="secondary"
-            onPress={() => store.actions.removeVerse(v.verse.id)}
+            onPress={() => void store.actions.removeVerse(v.verse.id)}
           >
             Remove
           </Button>

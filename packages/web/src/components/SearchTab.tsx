@@ -55,7 +55,7 @@ export default function SearchTab({ store, dataSource, usingDemo }: Props) {
               suppliesMissingVerseIdentity(entry.verse, result) && isSameVerse(entry.verse, result),
           );
         if (needsReconcile) {
-          store.actions.addVerse(result);
+          void store.actions.addVerse(result);
         }
       }
       setResults(found);
@@ -103,7 +103,7 @@ export default function SearchTab({ store, dataSource, usingDemo }: Props) {
               Added
             </Button>
           ) : (
-            <Button size="sm" onPress={() => store.actions.addVerse(v)}>
+            <Button size="sm" onPress={() => void store.actions.addVerse(v)}>
               Add to memorize list
             </Button>
           )}

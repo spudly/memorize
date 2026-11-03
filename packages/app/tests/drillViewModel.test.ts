@@ -1,4 +1,9 @@
-import { isFinalRound, retryFeedback, toSessionWords } from "../src/screens/drillViewModel";
+import {
+  finishDrill,
+  isFinalRound,
+  retryFeedback,
+  toSessionWords,
+} from "../src/screens/drillViewModel";
 
 describe("toSessionWords", () => {
   const words = ["For", "God", "so", "loved", "the", "world,"];
@@ -45,6 +50,63 @@ describe("isFinalRound", () => {
     expect(isFinalRound(0, 5)).toBe(false);
     expect(isFinalRound(3, 5)).toBe(false);
     expect(isFinalRound(4, 5)).toBe(true);
+  });
+});
+
+describe("finishDrill (#91)", () => {
+  test("does not navigate back until the completion save resolves", async () => {
+    const gate: { release: (() => void) | null } = { release: null };
+    const onBack = jest.fn();
+    const onSaveError = jest.fn();
+    const pending = finishDrill({
+      complete: () =>
+        new Promise<void>((resolve) => {
+          gate.release = resolve;
+        }),
+      isActive: () => true,
+      onBack,
+      onSaveError,
+    });
+    // Flush microtasks: the save is still held, so nothing may happen.
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(onBack).not.toHaveBeenCalled();
+    expect(onSaveError).not.toHaveBeenCalled();
+
+    gate.release?.();
+    await pending;
+    expect(onBack).toHaveBeenCalledTimes(1);
+    expect(onSaveError).not.toHaveBeenCalled();
+  });
+
+  test("a rejected completion save reports the error and stays on the drill", async () => {
+    const onBack = jest.fn();
+    const onSaveError = jest.fn();
+    await finishDrill({
+      complete: () => Promise.reject(new Error("storage full")),
+      isActive: () => true,
+      onBack,
+      onSaveError,
+    });
+    expect(onSaveError).toHaveBeenCalledTimes(1);
+    expect(onBack).not.toHaveBeenCalled();
+  });
+
+  test("a save that lands after the user left does not navigate", async () => {
+    let active = true;
+    const onBack = jest.fn();
+    const onSaveError = jest.fn();
+    const pending = finishDrill({
+      complete: async () => {
+        active = false;
+      },
+      isActive: () => active,
+      onBack,
+      onSaveError,
+    });
+    await pending;
+    expect(onBack).not.toHaveBeenCalled();
+    expect(onSaveError).not.toHaveBeenCalled();
   });
 });
 

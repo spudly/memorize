@@ -1,6 +1,6 @@
 import type { Verse } from "@memorize/types";
 import { mapSearchItem } from "../src/scripture";
-import { LocalStore, type KeyValueStorage } from "../src/storage";
+import { DATA_KEY, LocalStore, type KeyValueStorage } from "../src/storage";
 import { createMemorizeStore } from "../src/store";
 
 function memoryStorage(): KeyValueStorage {
@@ -45,6 +45,104 @@ describe("memorize store", () => {
     expect(entry?.verse.id).toBe("john-3-16");
     expect(entry?.status).toBe("learning");
     expect(entry?.nextReviewAt).toBeDefined();
+  });
+
+  test("verse mutations resolve only after the persist write lands (#91)", async () => {
+    // Storage whose writes can be held open, so the test can observe
+    // whether a mutation's promise settles before or after the write.
+    const map = new Map<string, string>();
+    const gate: { release: (() => void) | null } = { release: null };
+    let holdWrites = false;
+    const storage: KeyValueStorage = {
+      getItem: async (key) => map.get(key) ?? null,
+      setItem: async (key, value) => {
+        if (holdWrites) {
+          await new Promise<void>((resolve) => {
+            gate.release = resolve;
+          });
+        }
+        map.set(key, value);
+      },
+      removeItem: async (key) => {
+        map.delete(key);
+      },
+    };
+    const store = createMemorizeStore(storage);
+    await store.ready;
+    await store.actions.addVerse(VERSE);
+
+    holdWrites = true;
+    let resolved = false;
+    const pending = store.actions.setDrillProgress(VERSE.id, 2, 1).then(() => {
+      resolved = true;
+    });
+    await flush();
+    // The write has not landed, so the mutation must not have resolved
+    // and a fresh store must not see the new progress yet.
+    expect(resolved).toBe(false);
+    const store2 = createMemorizeStore(storage);
+    await store2.ready;
+    expect(store2.getState().data.verses[0]?.drillRound).toBe(0);
+
+    gate.release?.();
+    await pending;
+    expect(resolved).toBe(true);
+    const store3 = createMemorizeStore(storage);
+    await store3.ready;
+    expect(store3.getState().data.verses[0]?.drillRound).toBe(2);
+    expect(store3.getState().data.verses[0]?.drillPeeks).toBe(1);
+  });
+
+  test("concurrent mutation saves are serialized — a stale snapshot cannot overwrite a newer one (#91)", async () => {
+    // Storage whose data writes can be held open individually, so
+    // the test controls exactly when each write lands. Without save
+    // serialization both writes below would be in flight at once,
+    // and on a backend without write ordering (AsyncStorage on
+    // Android) the older progress snapshot could land last and
+    // revert the completed drill.
+    const map = new Map<string, string>();
+    const writes: { value: string; release: () => void }[] = [];
+    let holdWrites = false;
+    const storage: KeyValueStorage = {
+      getItem: async (key) => map.get(key) ?? null,
+      setItem: (key, value) => {
+        if (holdWrites && key === DATA_KEY) {
+          return new Promise<void>((resolve) => {
+            writes.push({ value, release: resolve });
+          }).then(() => {
+            map.set(key, value);
+          });
+        }
+        map.set(key, value);
+        return Promise.resolve();
+      },
+      removeItem: async (key) => {
+        map.delete(key);
+      },
+    };
+    const store = createMemorizeStore(storage);
+    await store.ready;
+    await store.actions.addVerse(VERSE);
+
+    holdWrites = true;
+    const progress = store.actions.setDrillProgress(VERSE.id, 2, 1);
+    const completion = store.actions.completeDrill(VERSE.id, new Date("2026-06-01T00:00:00.000Z"));
+    await flush();
+    // The completion save must not start until the progress save
+    // has landed — exactly one write in flight. (Without the chain,
+    // both setItem calls would already have started, and nothing
+    // would order their landing.)
+    expect(writes).toHaveLength(1);
+
+    writes[0]?.release();
+    await flush();
+    expect(writes).toHaveLength(2);
+
+    writes[1]?.release();
+    await Promise.all([progress, completion]);
+    const store2 = createMemorizeStore(storage);
+    await store2.ready;
+    expect(store2.getState().data.verses[0]?.status).toBe("memorized");
   });
 
   test("does not add the same verse twice", async () => {

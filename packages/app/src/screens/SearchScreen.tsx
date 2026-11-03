@@ -50,7 +50,7 @@ export default function SearchScreen({ store, dataSource, usingDemo }: Props) {
   const handleAddVerse = (verseId: string): void => {
     const verse = results.find((v) => v.id === verseId);
     if (verse) {
-      store.actions.addVerse(verse);
+      void store.actions.addVerse(verse);
     }
   };
 

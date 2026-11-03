@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { MemorizationSessionPage } from "@spudly/ui/pages";
 import {
   BLANK_FRACTIONS,
@@ -7,7 +7,7 @@ import {
   tokenize,
   type MemorizeStore,
 } from "@memorize/core";
-import { isFinalRound, retryFeedback, toSessionWords } from "./drillViewModel";
+import { finishDrill, isFinalRound, retryFeedback, toSessionWords } from "./drillViewModel";
 
 interface Props {
   store: MemorizeStore;
@@ -32,6 +32,16 @@ export default function DrillScreen({ store, verseId, onBack }: Props) {
   const [peeks, setPeeks] = useState(entry?.drillPeeks ?? 0);
   const [revealed, setRevealed] = useState<Set<number>>(new Set());
   const [message, setMessage] = useState<string | null>(null);
+  // Whether this screen is still mounted: leaving via the tabs
+  // unmounts it, and a save that resolves afterwards must not
+  // navigate (see finishDrill in drillViewModel).
+  const activeRef = useRef(true);
+  useEffect(() => {
+    activeRef.current = true;
+    return () => {
+      activeRef.current = false;
+    };
+  }, []);
 
   const verseText = entry?.verse.text ?? "";
   const words = useMemo(() => tokenize(verseText), [verseText]);
@@ -44,7 +54,7 @@ export default function DrillScreen({ store, verseId, onBack }: Props) {
     return <MemorizationSessionPage state="not-found" onBack={onBack} />;
   }
 
-  const peek = (index: number): void => {
+  const peek = async (index: number): Promise<void> => {
     if (revealed.has(index)) {
       return;
     }
@@ -53,17 +63,27 @@ export default function DrillScreen({ store, verseId, onBack }: Props) {
     setRevealed(nextRevealed);
     const nextPeeks = peeks + 1;
     setPeeks(nextPeeks);
-    store.actions.setDrillProgress(verseId, round, nextPeeks);
+    try {
+      await store.actions.setDrillProgress(verseId, round, nextPeeks);
+    } catch {
+      setMessage("Couldn't save your progress — it isn't saved yet if you leave now.");
+    }
   };
 
-  const nextRound = (): void => {
+  const nextRound = async (): Promise<void> => {
     if (gradeRound(blanks.size, peeks) === "retry") {
       setMessage(retryFeedback(peeks, blanks.size));
       return;
     }
     if (round + 1 >= BLANK_FRACTIONS.length) {
-      store.actions.completeDrill(verseId);
-      onBack();
+      await finishDrill({
+        complete: () => store.actions.completeDrill(verseId),
+        isActive: () => activeRef.current,
+        onBack,
+        onSaveError: () => {
+          setMessage("Couldn't save finishing the drill. Try again before leaving.");
+        },
+      });
       return;
     }
     const next = round + 1;
@@ -71,7 +91,11 @@ export default function DrillScreen({ store, verseId, onBack }: Props) {
     setPeeks(0);
     setRevealed(new Set());
     setMessage(null);
-    store.actions.setDrillProgress(verseId, next, 0);
+    try {
+      await store.actions.setDrillProgress(verseId, next, 0);
+    } catch {
+      setMessage("Couldn't save your progress — it isn't saved yet if you leave now.");
+    }
   };
 
   return (

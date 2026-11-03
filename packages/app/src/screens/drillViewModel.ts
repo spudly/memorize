@@ -27,6 +27,33 @@ export function toSessionWords(
   );
 }
 
+/**
+ * The final round's completion flow (#91): the completion save is
+ * awaited, and only a successful save navigates back — a failed
+ * save surfaces `onSaveError` and stays on the drill so Finish can
+ * be retried. A save that lands after the user has already left
+ * this drill (tab switch unmounts the screen) must NOT navigate:
+ * `onBack` clears whatever drill is open by then, which could be a
+ * different verse's session, so navigation happens only while
+ * `isActive()` still holds at resolution time.
+ */
+export async function finishDrill(args: {
+  complete(): Promise<void>;
+  isActive(): boolean;
+  onBack(): void;
+  onSaveError(): void;
+}): Promise<void> {
+  try {
+    await args.complete();
+  } catch {
+    args.onSaveError();
+    return;
+  }
+  if (args.isActive()) {
+    args.onBack();
+  }
+}
+
 /** Whether the current round is the session's last — the page's
  * advance button reads "Finish — mark memorized" for it. */
 export function isFinalRound(roundIndex: number, roundCount: number): boolean {

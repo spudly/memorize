@@ -23,7 +23,7 @@ export default function VersesScreen({ store, onDrill }: Props) {
     <MyVersesPage
       verses={toMyVersesPageItems(verses)}
       onDrillVerse={onDrill}
-      onRemoveVerse={(id) => store.actions.removeVerse(id)}
+      onRemoveVerse={(id) => void store.actions.removeVerse(id)}
     />
   );
 }

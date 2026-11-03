@@ -28,10 +28,10 @@ export default function ReviewScreen({ store }: Props) {
     <MemorizeReviewPage
       verses={verses}
       onRememberedPress={(verseId) => {
-        store.actions.recordReview(verseId, "remembered");
+        void store.actions.recordReview(verseId, "remembered");
       }}
       onForgotPress={(verseId) => {
-        store.actions.recordReview(verseId, "forgot");
+        void store.actions.recordReview(verseId, "forgot");
       }}
     />
   );
