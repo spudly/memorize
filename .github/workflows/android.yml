@@ -11,8 +11,15 @@ name: android
 # instead of the PR that caused them. That tradeoff was accepted
 # deliberately to keep ordinary PR loops fast. See the `changes` job.
 #
-# Phase 2 (emulator use-case tests) is tracked in #29 and not part of this
-# job yet.
+# Phase 2 of #29 (the android-usecases job below) installs the release
+# APK the build job produced on an emulator and runs the Maestro
+# use-case flows in packages/app/maestro: app launch, scripture search
+# + passage display, the word-blanking drill (render + peek input),
+# and session persistence across an app restart. No API key is
+# configured in CI, so the app runs on its bundled demo data — the
+# suite is self-contained and never touches the live API or an
+# account. It inherits the build's gating (release PRs + manual
+# dispatch): ordinary PRs skip it, and android-gate still reports.
 
 on:
   pull_request:
@@ -158,13 +165,92 @@ jobs:
           path: packages/app/android/app/build/outputs/apk/release/*.apk
           if-no-files-found: warn
 
+  # Phase 2 of #29: run the Maestro use-case flows against the release
+  # APK from the build job on a GitHub-hosted emulator. Gated by the
+  # same run-build decision as the build (release PRs + manual
+  # dispatch), so ordinary PRs skip it and the gate still reports.
+  android-usecases:
+    name: Run Android use-case tests (emulator)
+    needs: [changes, android-build]
+    if: needs.changes.outputs.run-build == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      MAESTRO_CLI_NO_ANALYTICS: "1"
+    steps:
+      - uses: actions/checkout@v7
+
+      # The tested APK is exactly the release build android-build
+      # produced and uploaded — no second Gradle build.
+      - name: Download the release APK
+        uses: actions/download-artifact@v7
+        with:
+          name: memorize-app-release-apk
+          path: artifacts/apk
+
+      # Maestro is a JVM CLI; temurin 17 matches the build job's JDK.
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 17
+
+      # Pinned CLI release (mobile-dev-inc/Maestro cli-2.12.1) so a
+      # new upstream release cannot change suite behavior silently.
+      - name: Install Maestro CLI (pinned 2.12.1)
+        run: |
+          curl -fsSL -o /tmp/maestro.zip \
+            "https://github.com/mobile-dev-inc/Maestro/releases/download/cli-2.12.1/maestro.zip"
+          sudo unzip -q /tmp/maestro.zip -d /opt/maestro
+          echo "/opt/maestro/maestro/bin" >> "$GITHUB_PATH"
+
+      # GitHub's ubuntu runners need this udev rule before the
+      # emulator can use KVM acceleration.
+      - name: Enable KVM for the emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Install the APK and run the use-case flows
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          script: >
+            adb install -r artifacts/apk/app-release.apk &&
+            maestro test packages/app/maestro
+            --format junit --output maestro-report.xml
+
+      - name: Upload Maestro report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: maestro-report
+          path: maestro-report.xml
+          if-no-files-found: ignore
+
+      # On failure Maestro leaves per-flow screenshots and logs under
+      # ~/.maestro/tests — keep them so a red run is diagnosable
+      # without a local emulator.
+      - name: Upload Maestro failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: maestro-failure-evidence
+          path: ~/.maestro/tests
+          if-no-files-found: ignore
+
   # Always-reporting gate for branch protection: reports on every PR,
-  # fails only when the changes detection or the build failed or was
-  # cancelled, and passes when the build succeeded or was legitimately
-  # skipped (the PR is not a release PR).
+  # fails only when the changes detection, the build, or the use-case
+  # tests failed or were cancelled, and passes when they succeeded or
+  # were legitimately skipped (the PR is not a release PR).
   android-gate:
     name: android-gate
-    needs: [changes, android-build]
+    needs: [changes, android-build, android-usecases]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5

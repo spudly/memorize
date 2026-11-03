@@ -1,0 +1,47 @@
+# Phase 2 of #29: start a memorization session — the word-blanking
+# drill renders with blanks and accepts input (tap a blank to peek) —
+# and session progress persists: advance two rounds, leave, kill and
+# relaunch the app, and the verse and its round are still there.
+appId: com.memorize.app
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "My verses"
+    timeout: 30000
+- tapOn: "^Search$"
+- tapOn: "e\\.g\\. Ether 12:27.*"
+- inputText: "Ether 12:27"
+- pressKey: Enter
+- extendedWaitUntil:
+    visible: "Add to memorize list"
+    timeout: 30000
+- tapOn: "Add to memorize list"
+- tapOn: "^Verses$"
+- tapOn: "^Drill$"
+- extendedWaitUntil:
+    visible: "Round 1 of 7.*"
+    timeout: 30000
+- assertVisible: "Ether 12:27"
+- assertVisible: "And if men come unto me I will show unto them their weakness.*"
+# Round 1 blanks nothing (read-through); advancing persists round 2.
+- tapOn: "Next round"
+- assertVisible: "Round 2 of 7.*"
+# Round 2 blanks ~20% of the words. Peek at the first blank (the
+# drill's input), then advance: one peek is within the pass grade.
+- tapOn: "Reveal blank word 1 of .*"
+- assertVisible: "Revealed: .*"
+- tapOn: "Next round"
+- assertVisible: "Round 3 of 7.*"
+# Leave the session, then kill and relaunch the app entirely: the
+# verse and the in-progress round must survive (AsyncStorage).
+- tapOn: "^Back$"
+- assertVisible: "My verses"
+- stopApp: com.memorize.app
+- launchApp
+- extendedWaitUntil:
+    visible: "Ether 12:27"
+    timeout: 30000
+- assertVisible: "learning"
+- tapOn: "^Drill$"
+- assertVisible: "Round 3 of 7.*"

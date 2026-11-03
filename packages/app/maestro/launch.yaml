@@ -1,0 +1,16 @@
+# Phase 2 of #29: the installed app launches to its initial screen
+# (the Verses tab) without crashing and shows the empty state.
+appId: com.memorize.app
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "My verses"
+    timeout: 30000
+- assertVisible: "Memorize"
+- assertVisible: "No verses yet"
+- assertVisible: "Find one in the Search tab to get started."
+- assertVisible: "^Verses$"
+- assertVisible: "^Search$"
+- assertVisible: "^Review$"
+- assertVisible: "^Settings$"
