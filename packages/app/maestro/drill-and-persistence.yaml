@@ -61,12 +61,15 @@ appId: com.memorize.app
 - assertVisible: "Round 3 of 7.*"
 # Leave the session, then kill and relaunch the app entirely: the
 # verse and the in-progress round must survive (AsyncStorage).
-# The header's back link renders as "‹ Back", so "^Back$" matched
+# The header's back link renders as "← Back", so "^Back$" matched
 # only the Android system back button in the nav bar and exited
 # the app (proof run 5, 2026-11-03). Tap the link's location
-# directly instead.
+# directly instead — measured from proof run 6's screenshot: the
+# link sits under the tab bar at about (17%, 19%) on the pinned
+# profile (an earlier estimate taken from the google_apis render
+# landed on the tab bar and no-oped).
 - tapOn:
-    point: "10%, 10%"
+    point: "17%, 19%"
 - assertVisible: "My verses"
 - stopApp: com.memorize.app
 - launchApp
