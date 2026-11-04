@@ -27,7 +27,7 @@ jobs:
         run: |
           # Read the labels live: the event payload is a snapshot, and a
           # re-run of an old run would otherwise reuse a stale snapshot.
-          names=$(gh api "repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/labels" --jq '.[].name')
+          names=$(gh api --paginate "repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/labels" --jq '.[].name')
           echo "Current labels:"
           echo "$names"
           if printf '%s\n' "$names" | grep -qx 'blocked'; then
