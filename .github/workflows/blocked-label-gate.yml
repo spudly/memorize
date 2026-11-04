@@ -1,0 +1,25 @@
+name: Blocked label gate
+
+# Stephen's rule (2026-11-04): a PR carrying the `blocked` label must not
+# merge. This check fails while the label is present; it is a required
+# status check in the repo's "Require CI before merge" ruleset.
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, labeled, unlabeled, edited]
+
+permissions:
+  pull-requests: read
+
+jobs:
+  blocked-label-gate:
+    name: blocked-label-gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail while the blocked label is present
+        if: contains(github.event.pull_request.labels.*.name, 'blocked')
+        run: |
+          echo "::error::This PR carries the 'blocked' label and must not merge. Resolve the blocker it names and remove the label before merging."
+          exit 1
+      - name: Pass when the blocked label is absent
+        if: ${{ !contains(github.event.pull_request.labels.*.name, 'blocked') }}
+        run: echo "No 'blocked' label on this PR."
