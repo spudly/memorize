@@ -1,0 +1,37 @@
+name: Blocked label gate
+
+# Stephen's rule (2026-11-04): a PR carrying the `blocked` label must not
+# merge. This check fails while the label is present; it is a required
+# status check in the repo's "Require CI before merge" ruleset.
+#
+# The trigger is pull_request_target so the workflow definition always
+# comes from the base branch — a blocked PR cannot edit this file on its
+# own branch to neuter the gate. The job checks out no code and runs no
+# PR-controlled code; it only reads the PR's labels.
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize, labeled, unlabeled, edited]
+
+permissions:
+  issues: read
+  pull-requests: read
+
+jobs:
+  blocked-label-gate:
+    name: blocked-label-gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail while the blocked label is present
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Read the labels live: the event payload is a snapshot, and a
+          # re-run of an old run would otherwise reuse a stale snapshot.
+          names=$(gh api --paginate "repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/labels" --jq '.[].name')
+          echo "Current labels:"
+          echo "$names"
+          if printf '%s\n' "$names" | grep -qx 'blocked'; then
+            echo "::error::This PR carries the 'blocked' label and must not merge. Resolve the blocker it names and remove the label before merging."
+            exit 1
+          fi
+          echo "No 'blocked' label on this PR."
