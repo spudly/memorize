@@ -13,6 +13,9 @@
  *    percent-decoding with a raw-id fallback for malformed escapes
  *    — so non-drill URLs, empty ids, and extra path segments never
  *    open a drill.
+ * 3. DrillScreen is keyed by the drilled verse id, so a warm link
+ *    that changes the verse remounts the screen instead of carrying
+ *    the previous verse's drill state into the new verse.
  */
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -35,6 +38,14 @@ test("cold start and url events both route drill links to the drill screen", () 
   assert.match(code, /const id = drillIdFromUrl\(url\);/);
   assert.match(code, /const id = drillIdFromUrl\(event\.url\);/);
   assert.equal(code.match(/setDrillingId\(id\)/g)?.length, 2, "both paths hand the id over");
+});
+
+test("the drill screen remounts when the drilled verse changes", () => {
+  // DrillScreen initializes its round/peeks state from the verse on
+  // mount only, so a warm link that swaps drillingId while a drill is
+  // open must remount it — otherwise the previous verse's progress
+  // state would be displayed and saved against the new verse.
+  assert.match(code, /<DrillScreen\s+key=\{drillingId\}/, "DrillScreen is keyed by drillingId");
 });
 
 test("the matcher accepts only the canonical drill route", () => {

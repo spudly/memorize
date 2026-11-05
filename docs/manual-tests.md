@@ -86,8 +86,9 @@ library (one learning, one memorized).
    reference, or layout shift as cards render.
 2. **Badge and schedule readability.** Compare a learning verse and a
    memorized verse, including one with no review scheduled.
-   **Expected:** status badges are visually distinct; "Next review" /
-   "Not scheduled" lines are readable and correctly reflect each verse.
+   **Expected:** status badges are visually distinct; a verse with a
+   review scheduled shows a readable "Next review: <date>" line, and a
+   verse with no review scheduled shows no schedule line at all.
 3. **Remove and re-add.** Remove a verse, then search and re-add the same
    reference. **Expected:** the re-added verse starts fresh (learning,
    drill round reset) — no resurrected progress from the removed entry.

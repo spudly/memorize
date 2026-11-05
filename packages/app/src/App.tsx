@@ -152,7 +152,15 @@ export default function App() {
             })}
           </XStack>
           {drillingId ? (
-            <DrillScreen store={store} verseId={drillingId} onBack={() => setDrillingId(null)} />
+            // Keyed by the verse id: a warm drill link for a different
+            // verse must remount the screen, not carry the previous
+            // verse's round/peeks state into the new verse's drill.
+            <DrillScreen
+              key={drillingId}
+              store={store}
+              verseId={drillingId}
+              onBack={() => setDrillingId(null)}
+            />
           ) : tab === "verses" ? (
             <VersesScreen store={store} />
           ) : tab === "search" ? (
