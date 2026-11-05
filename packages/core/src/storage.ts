@@ -11,12 +11,11 @@ export const DATA_KEY = "memorize:data:v1";
 export const SECRETS_KEY = "memorize:secrets:v1";
 
 /**
- * Secrets stay on the device: the gospel-engine API key and the last Drive
- * sync timestamp. Never written to Google Drive.
+ * Secrets stay on the device: the gospel-engine API key lives here and is
+ * never included in the persisted app data.
  */
 interface LocalSecrets {
   gospelEngineKey?: string;
-  lastSyncedAt?: string;
 }
 
 export class LocalStore {
@@ -70,17 +69,6 @@ export class LocalStore {
   async clearApiKey(): Promise<void> {
     const secrets = await this.loadSecrets();
     delete secrets.gospelEngineKey;
-    await this.saveSecrets(secrets);
-  }
-
-  async getLastSyncedAt(): Promise<string | null> {
-    const secrets = await this.loadSecrets();
-    return secrets.lastSyncedAt ?? null;
-  }
-
-  async setLastSyncedAt(iso: string): Promise<void> {
-    const secrets = await this.loadSecrets();
-    secrets.lastSyncedAt = iso;
     await this.saveSecrets(secrets);
   }
 }

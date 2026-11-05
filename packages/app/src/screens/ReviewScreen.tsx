@@ -1,9 +1,9 @@
-import { MemorizeReviewPage, type MemorizeReviewPageVerse } from "@spudly/ui/pages";
+import { MemorizeReviewPage, type MemorizeReviewPageVerse } from "@spudly/ui";
 import { dueVerses, type MemorizeStore } from "@memorize/core";
 
-interface Props {
+type Props = {
   store: MemorizeStore;
-}
+};
 
 /**
  * Review tab host (#49): the app keeps the spaced-repetition

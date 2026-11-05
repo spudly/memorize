@@ -1,5 +1,5 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { Alert, BlankWord, Button, ProgressBar, Text, VerseText } from "@spudly/ui";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { MemorizationSessionPage, type MemorizationSessionPageWord } from "@spudly/ui";
 import {
   BLANK_FRACTIONS,
   blankedIndices,
@@ -8,12 +8,22 @@ import {
   type MemorizeStore,
 } from "@memorize/core";
 
-interface Props {
+type Props = {
   store: MemorizeStore;
   verseId: string;
   onBack(): void;
-}
+};
 
+/**
+ * The memorization session view (#96): the session engine stays
+ * here and in @memorize/core — tokenizing, blank selection,
+ * grading, peek counting, round advancement, and the awaited
+ * persistence of #91 — and the rendered surface is the design
+ * system's MemorizationSessionPage, driven entirely through
+ * props. Finishing the final round completes the drill and
+ * navigates back, so the view has no "complete" state; a missing
+ * verse is the page's not-found branch.
+ */
 export default function DrillView({ store, verseId, onBack }: Props) {
   const entry = store.getState().data.verses.find((v) => v.verse.id === verseId);
   const [round, setRound] = useState(entry?.drillRound ?? 0);
@@ -40,12 +50,7 @@ export default function DrillView({ store, verseId, onBack }: Props) {
   );
 
   if (!entry) {
-    return (
-      <>
-        <Text variant="body">Verse not found.</Text>
-        <Button onPress={onBack}>Back</Button>
-      </>
-    );
+    return <MemorizationSessionPage state="not-found" onBack={onBack} />;
   }
 
   const peek = async (index: number): Promise<void> => {
@@ -95,52 +100,22 @@ export default function DrillView({ store, verseId, onBack }: Props) {
     }
   };
 
-  const isLastRound = round + 1 >= BLANK_FRACTIONS.length;
-  const progress = ((round + 1) / BLANK_FRACTIONS.length) * 100;
-  // BlankWord's index is the blank's zero-based ordinal among the blanks
-  // (not the word's position in the verse) — mirrors the native DrillScreen.
-  let blankOrdinal = -1;
+  const sessionWords: MemorizationSessionPageWord[] = words.map((text, i) =>
+    blanks.has(i) ? { text, blank: { revealed: revealed.has(i) } } : { text },
+  );
 
   return (
-    <>
-      <Button variant="ghost" size="sm" onPress={onBack}>
-        ← Back
-      </Button>
-      <Text variant="subheading">{entry.verse.reference}</Text>
-      <ProgressBar value={progress} />
-      <Text variant="hint">
-        Round {round + 1} of {BLANK_FRACTIONS.length} — tap a blank to peek at the word.
-      </Text>
-      <VerseText>
-        {words.map((word, i) => {
-          if (blanks.has(i)) {
-            blankOrdinal += 1;
-            return (
-              <Fragment key={i}>
-                <BlankWord
-                  word={word}
-                  revealed={revealed.has(i)}
-                  onReveal={() => peek(i)}
-                  index={blankOrdinal}
-                  total={blanks.size}
-                />
-                {/* Separator matching the plain-word branch's trailing
-                    space (the DS's own drill composition puts an explicit
-                    space after each BlankWord); without it an inline
-                    blank touches the word that follows it. */}
-                <Text variant="verse"> </Text>
-              </Fragment>
-            );
-          }
-          return (
-            <Text key={i} variant="verse">
-              {word}{" "}
-            </Text>
-          );
-        })}
-      </VerseText>
-      {message && <Alert severity="warning">{message}</Alert>}
-      <Button onPress={nextRound}>{isLastRound ? "Finish — mark memorized" : "Next round"}</Button>
-    </>
+    <MemorizationSessionPage
+      state="ready"
+      reference={entry.verse.reference}
+      roundIndex={round}
+      roundCount={BLANK_FRACTIONS.length}
+      words={sessionWords}
+      feedback={message}
+      isFinalRound={round + 1 >= BLANK_FRACTIONS.length}
+      onBack={onBack}
+      onBlankReveal={(index) => void peek(index)}
+      onAdvance={() => void nextRound()}
+    />
   );
 }

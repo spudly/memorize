@@ -7,9 +7,10 @@
  * like the design system's own page contract tests — this pins the
  * host's wiring by scanning its source with comments stripped:
  *
- * 1. The view is VerseSearchPage from "@spudly/ui/pages"; the old
- *    hand-composed view (root @spudly/ui primitives + a FlatList in
- *    the screen) is gone.
+ * 1. The view is VerseSearchPage from the "@spudly/ui" root (the
+ *    5.0.0 pages-only contract has no subpath exports); the old
+ *    hand-composed view (DS widget primitives + a FlatList in the
+ *    screen) is gone.
  * 2. The search state (query, results, error, busy) stays in the
  *    screen, the search still runs against the app's data source,
  *    and the error composition (message or "Search failed") is the
@@ -35,13 +36,13 @@ function stripComments(source) {
 
 const code = stripComments(readFileSync(screenPath, "utf8"));
 
-test("the screen renders VerseSearchPage from the pages subpath", () => {
-  assert.match(code, /import\s*\{[^}]*VerseSearchPage[^}]*\}\s*from\s*"@spudly\/ui\/pages"/);
+test("the screen renders VerseSearchPage from the package root", () => {
+  assert.match(code, /import\s*\{[^}]*VerseSearchPage[^}]*\}\s*from\s*"@spudly\/ui"/);
+  assert.doesNotMatch(code, /@spudly\/ui\/pages/, "5.0.0 has no subpath exports");
   assert.match(code, /<VerseSearchPage/);
 });
 
 test("the old hand-composed view does not survive in the screen", () => {
-  assert.doesNotMatch(code, /from\s*"@spudly\/ui"/, "no root @spudly/ui view imports remain");
   assert.doesNotMatch(code, /FlatList/, "the results list is the page's, not the screen's");
   assert.doesNotMatch(code, /Search verses/, "the heading is the page's, not the screen's");
 });
@@ -60,6 +61,7 @@ test("results map to the page's view-model fields", () => {
   assert.match(code, /id: verse\.id/);
   assert.match(code, /reference: verse\.reference/);
   assert.match(code, /text: verse\.text/);
+  assert.match(code, /added: libraryVerses\.some/);
 });
 
 test("an add by id resolves back to the full Verse for the store", () => {
@@ -76,6 +78,7 @@ test("every page prop is wired to app state and callbacks", () => {
     /usingDemo=\{usingDemo\}/,
     /errorMessage=\{error\}/,
     /results=\{items\}/,
+    /hasSearched=\{searched\}/,
     /onAddVerse=\{handleAddVerse\}/,
   ]) {
     assert.match(code, wiring);

@@ -123,8 +123,7 @@ export function createMemorizeStore(storage: KeyValueStorage): MemorizeStore {
         // the stored verse lacks: a verse that legitimately carries a
         // chunkKey without source fields (demo verses, /api/get
         // results) matches itself on re-search, and persisting that
-        // no-op would advance updatedAt — which Drive sync uses to
-        // detect local edits — risking a false sync conflict.
+        // no-op would advance updatedAt for no change in the data.
         if (entry && suppliesMissingVerseIdentity(entry.verse, verse)) {
           const annotated: Verse = { ...entry.verse };
           if (annotated.chunkKey === undefined && verse.chunkKey !== undefined) {

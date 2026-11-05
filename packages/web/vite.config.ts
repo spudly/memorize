@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { join } from "node:path";
 import react from "@vitejs/plugin-react";
 import { defineConfig, loadEnv } from "vite";
 import type { Plugin } from "vite";
@@ -71,6 +72,14 @@ export default defineConfig(({ mode }) => {
   // process.env, so reloads always see the current file contents.
   const fileEnv = loadEnv(mode, process.cwd(), "GOSPEL_ENGINE_");
   const gospelServerKey = process.env.GOSPEL_ENGINE_API_KEY ?? fileEnv.GOSPEL_ENGINE_API_KEY;
+  // Absolute paths for the react-native-svg web stubs below: the
+  // aliases replace the whole import specifier, so a relative
+  // replacement would be resolved against the importing file inside
+  // react-native-svg and miss. Mirrors the design system's own web
+  // Storybook wiring (.storybook/main.ts in spudly/design-system),
+  // which consumes @spudly/ui pages the same way.
+  const svgSoundModuleStub = join(process.cwd(), "scripts/svgSoundModuleStub.ts");
+  const assetsRegistryStub = join(process.cwd(), "scripts/assetsRegistryStub.ts");
   return {
     plugins: [react(), gospelApiDevProxy(gospelServerKey)],
     build: {
@@ -103,7 +112,39 @@ export default defineConfig(({ mode }) => {
       // Keep workspace symlinks (node_modules/@memorize/* -> packages/*) intact
       // so the CommonJS transform applies to @memorize/core's dist output.
       preserveSymlinks: true,
+      // Platform extensions, web first: react-native-svg (which
+      // @spudly/ui's icons module uses) ships parallel .web.js builds
+      // of its entry and element files; without this, Vite resolves
+      // the native entry, whose fabric components import
+      // codegenNativeComponent from "react-native" — which the
+      // react-native-web alias below cannot provide, and the build
+      // fails with MISSING_EXPORT errors. (The @spudly/ui 5.0.0
+      // pages all wrap in the BigFooter shell, whose icons pull
+      // react-native-svg into every page's graph.)
+      extensions: [
+        ".web.tsx",
+        ".web.ts",
+        ".web.jsx",
+        ".web.js",
+        ".mjs",
+        ".mts",
+        ".tsx",
+        ".ts",
+        ".jsx",
+        ".js",
+        ".json",
+      ],
       alias: [
+        // react-native-svg's sound module is native-only and breaks
+        // the web build (TurboModuleRegistry is not exported by
+        // react-native-web) — see scripts/svgSoundModuleStub.ts.
+        // This entry must precede the react-native alias below.
+        { find: /^.*NativeSvgSoundModule(\.js)?$/, replacement: svgSoundModuleStub },
+        // react-native-svg's web build imports
+        // @react-native/assets-registry/registry, which is not in
+        // this repo's dependency tree — see
+        // scripts/assetsRegistryStub.ts.
+        { find: /^@react-native\/assets-registry\/registry$/, replacement: assetsRegistryStub },
         // @spudly/ui's component graph pulls in react-native (via
         // react-native-svg and friends); on web it resolves to
         // react-native-web — the same substitution the design system's

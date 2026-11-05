@@ -24,9 +24,10 @@ const screenCode = strip(
 );
 const appCode = strip(readFileSync(join(here, "..", "src", "App.tsx"), "utf8"));
 
-test("the screen renders the DS MemorizeReviewPage from the pages subpath", () => {
+test("the screen renders the DS MemorizeReviewPage from the package root", () => {
   assert.match(screenCode, /import \{ MemorizeReviewPage/);
-  assert.match(screenCode, /from "@spudly\/ui\/pages"/);
+  assert.match(screenCode, /from "@spudly\/ui"/);
+  assert.doesNotMatch(screenCode, /@spudly\/ui\/pages/, "5.0.0 has no subpath exports");
   assert.match(screenCode, /<MemorizeReviewPage/);
 });
 

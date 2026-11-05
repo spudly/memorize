@@ -4,7 +4,7 @@ A scripture memorization app — web and mobile, **no backend server**. Search
 for verses, drill them with a progressive word-blanking memorizer, and review
 them on a spaced-repetition schedule (daily for a week, weekly for a month,
 monthly for a year, then annually). Everything is stored locally on the
-device, with optional sync to a file in your own Google Drive.
+device.
 
 ## Features
 
@@ -18,21 +18,20 @@ device, with optional sync to a file in your own Google Drive.
   shows what's due for review today.
 - **Spaced review** — after a verse is memorized: daily × 7, weekly × 4,
   monthly × 12, then yearly. Forgetting a verse restarts it at daily.
-- **Google Drive sync** — one JSON file (`Memorize/memorize-data.json`) in
-  your Drive; bring your own Google OAuth client (below). Your API key is
-  stored locally only and is never synced.
+- **Local only** — your verse list and progress never leave the device;
+  your API key is stored locally only too.
 
 ## Stack
 
 TypeScript monorepo (npm workspaces + Turborepo), mirroring the conventions
 of the Eciperay project:
 
-| Package          | What it is                                                                       |
-| ---------------- | -------------------------------------------------------------------------------- |
-| `packages/types` | Shared types (`Verse`, `MemorizedVerse`, `AppData`, settings)                    |
-| `packages/core`  | Scripture API client, spaced-repetition engine, drill logic, storage, Drive sync |
-| `packages/web`   | Web app — Vite + React + React Router + Tailwind                                 |
-| `packages/app`   | Mobile app — Expo + React Native + React Navigation                              |
+| Package          | What it is                                                           |
+| ---------------- | -------------------------------------------------------------------- |
+| `packages/types` | Shared types (`Verse`, `MemorizedVerse`, `AppData`, settings)        |
+| `packages/core`  | Scripture API client, spaced-repetition engine, drill logic, storage |
+| `packages/web`   | Web app — Vite + React + React Router + Tailwind                     |
+| `packages/app`   | Mobile app — Expo + React Native + React Navigation                  |
 
 ## Getting started
 
@@ -64,29 +63,11 @@ commands to verify the field mapping against a live response.
 > directly. On mobile this doesn't apply. For the web app, deploy to Vercel
 > (below) — its edge proxy solves this — or use the demo data locally.
 
-## Google Drive sync setup
-
-Sync is optional and talks to Drive directly from the app (no server). It
-needs your own Google Cloud OAuth client:
-
-1. In [Google Cloud Console](https://console.cloud.google.com), create a
-   project and enable the **Google Drive API**.
-2. Create an OAuth client ID of type **Web application**; add your app's
-   origin under _Authorized JavaScript origins_.
-3. Web: copy `packages/web/.env.example` to `packages/web/.env` and set
-   `VITE_GOOGLE_CLIENT_ID`.
-4. Mobile: put the client configuration in `packages/app/app.json` under
-   `extra` (see the Expo AuthSession docs for the Android/iOS client IDs).
-
-The sync uses the `drive.file` scope — the app can only see files it created.
-Conflicts are last-write-wins by the data's `updatedAt` timestamp, with an
-explicit conflict state rather than a silent overwrite.
-
 ## Data model
 
 One `AppData` object (version 1) holds everything: the verse list (each with
 status, drill progress, review count, and next-review date) and non-secret
-settings. It is what gets stored locally and synced to Drive. The review
+settings. It is what gets stored locally. The review
 intervals in days are `[1×7, 7×4, 30×12, 365…]`, computed in
 `packages/core/src/schedule.ts`.
 

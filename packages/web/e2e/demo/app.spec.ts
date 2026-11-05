@@ -80,10 +80,7 @@ test("demo mode: the placeholder's keyword example finds a demo verse", async ({
   await expect(page.getByText("Searching the built-in demo set.")).toBeVisible();
   // The demo set contains no "charity" verse (#59): the suggested keyword
   // example must be one the demo set can actually match.
-  await expect(page.getByPlaceholder(/Ether 12:27/)).toHaveAttribute(
-    "placeholder",
-    /weakness/,
-  );
+  await expect(page.getByPlaceholder(/Ether 12:27/)).toHaveAttribute("placeholder", /weakness/);
   await searchDemoVerse(page, "weakness");
   await expect(page.getByText("Ether 12:27", { exact: true })).toBeVisible();
   expect(errors).toEqual([]);
@@ -101,7 +98,7 @@ test("drill renders blanks and tapping a blank reveals its word", async ({ page 
   await page.getByRole("button", { name: "Next round" }).click();
   await expect(page.getByText(/Round 2 of \d+/)).toBeVisible();
   // A hidden blank is a button labeled "Reveal blank word N of M"
-  // (@spudly/ui 1.x BlankWord; the 0.4.x version labeled it with
+  // (@spudly/ui BlankWord; the 0.4.x version labeled it with
   // underscores). On web the DS currently emits that label as an
   // `accessibilitylabel` attribute instead of `aria-label`
   // (spudly/design-system#235), so match both spellings.

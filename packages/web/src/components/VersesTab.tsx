@@ -1,48 +1,36 @@
-import { Badge, Button, Card, EmptyState, Text } from "@spudly/ui";
+import { MyVersesPage, type MyVersesPageItem } from "@spudly/ui";
 import type { MemorizeStore } from "@memorize/core";
 
-interface Props {
+type Props = {
   store: MemorizeStore;
-  onDrill(id: string): void;
-}
+};
 
-export default function VersesTab({ store, onDrill }: Props) {
+/**
+ * "My verses" tab — a thin host over the DS MyVersesPage (#96).
+ * The store and the remove mutation stay app-side. Drill
+ * navigation is NOT a callback: each row carries its canonical
+ * `/drill/<id>` href (DS #425) and App parses that route on load
+ * and opens the drill session for the verse.
+ *
+ * The next-review line crosses pre-composed with the app's locale
+ * date format; no scheduled review means the key is absent, so no
+ * line renders (the page's contract).
+ */
+export default function VersesTab({ store }: Props) {
   const { verses } = store.getState().data;
 
-  if (verses.length === 0) {
-    return (
-      <>
-        <Text variant="subheading">My verses</Text>
-        <EmptyState title="No verses yet" body="Find one in the Search tab to get started." />
-      </>
-    );
-  }
+  const items: MyVersesPageItem[] = verses.map((entry) => ({
+    id: entry.verse.id,
+    drillHref: `/drill/${encodeURIComponent(entry.verse.id)}`,
+    reference: entry.verse.reference,
+    text: entry.verse.text,
+    status: entry.status,
+    ...(entry.nextReviewAt
+      ? {
+          nextReviewLabel: `Next review: ${new Date(entry.nextReviewAt).toLocaleDateString()}`,
+        }
+      : {}),
+  }));
 
-  return (
-    <>
-      <Text variant="subheading">My verses</Text>
-      {verses.map((v) => (
-        <Card key={v.verse.id}>
-          <Text variant="body">{v.verse.reference}</Text>{" "}
-          <Badge tone={v.status === "memorized" ? "success" : "info"}>{v.status}</Badge>
-          <Text variant="verse">{v.verse.text}</Text>
-          <Text variant="hint">
-            {v.nextReviewAt
-              ? `Next review: ${new Date(v.nextReviewAt).toLocaleDateString()}`
-              : "Not scheduled"}
-          </Text>
-          <Button size="sm" onPress={() => onDrill(v.verse.id)}>
-            Drill
-          </Button>{" "}
-          <Button
-            size="sm"
-            variant="secondary"
-            onPress={() => void store.actions.removeVerse(v.verse.id)}
-          >
-            Remove
-          </Button>
-        </Card>
-      ))}
-    </>
-  );
+  return <MyVersesPage verses={items} onRemoveVerse={(id) => void store.actions.removeVerse(id)} />;
 }

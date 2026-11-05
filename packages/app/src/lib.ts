@@ -21,5 +21,3 @@ export function dataSourceFor(apiKey: string | null): ScriptureDataSource {
   }
   return new DemoDataSource();
 }
-
-export const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";

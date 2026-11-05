@@ -18,23 +18,21 @@ automation.
   delta.
 - **Full regression.** Run every section in this document. A full
   regression is run when explicitly requested, and is the right scope for
-  major `@spudly/ui` upgrades or changes to storage, sync, or the spaced
+  major `@spudly/ui` upgrades or changes to storage or the spaced
   repetition schedule.
 - **Environment.** Runs execute against the Memorize web preview
   deployment (Vercel preview for the change under test), or production
   (https://memorize-ivory.vercel.app) for smoke checks of a release.
-  Memorize has no accounts of its own: all state is local to the browser
-  plus the user's own Google Drive, so test data never touches another
-  user's data.
+  Memorize has no accounts of its own: all state is local to the browser,
+  so test data never touches another user's data.
 - **Who runs it.** An AI agent driving a browser, or a person by hand.
   Steps are written so either can execute them.
 - **Test data.** Verses added during a run are prefixed `QA —` in notes
   or chosen from the built-in demo set when demo mode suffices. Clean up
-  created data at the end of a run (remove QA verses, clear the API key,
-  disconnect Drive test files) unless a case says to keep it for a later
-  case in the same run. Cases that need a real gospel-engine API key or a
-  real Google account use the dedicated QA credentials, never personal
-  ones.
+  created data at the end of a run (remove QA verses, clear the API key)
+  unless a case says to keep it for a later case in the same run. Cases
+  that need a real gospel-engine API key use the dedicated QA
+  credentials, never personal ones.
 
 ## Maintaining this document
 
@@ -95,9 +93,8 @@ library (one learning, one memorized).
    drill round reset) — no resurrected progress from the removed entry.
 
 **Run when:** `packages/web/src/components/VersesTab.tsx`,
-`packages/app` verses screens, `@spudly/ui` `Card`/`Badge`/`EmptyState`
-components or the memorize verses pages, `packages/core/src/store.ts`
-verse actions.
+`packages/app` verses screens, the `@spudly/ui` `MyVersesPage`,
+`packages/core/src/store.ts` verse actions.
 
 ---
 
@@ -138,8 +135,7 @@ entering it); network access to the live engine.
 
 **Run when:** `packages/web/src/components/SearchTab.tsx`,
 `packages/web/api/**` (the edge proxy), `packages/web/src/lib/gospel.ts`,
-`packages/core/src/scripture.ts`, `@spudly/ui` `SearchField` or the
-memorize search page.
+`packages/core/src/scripture.ts`, the `@spudly/ui` `VerseSearchPage`.
 
 ---
 
@@ -196,9 +192,20 @@ demo set) in the library.
    resumes at the persisted round (by design) and Back never loses the
    verse or its earlier progress.
 
+4. **Canonical drill URL (web).** Copy a verse's Drill link from My
+   verses (it points at `/drill/<verse-id>`), open it in a fresh tab /
+   fresh page load. **Expected:** the app loads straight into that
+   verse's drill session; Back returns to My verses, and the browser
+   Back button re-enters the drill. On native, opening
+   `memorize://drill/<verse-id>` (e.g. via `adb shell am start -a
+android.intent.action.VIEW -d memorize://drill/<verse-id>`) lands
+   on the same verse's drill.
+
 **Run when:** `packages/web/src/components/DrillView.tsx`,
 `packages/app` drill/session screens, `packages/core/src/drill.ts`,
-`@spudly/ui` `BlankWord`/`VerseText` or the memorization session page.
+the `@spudly/ui` `MemorizationSessionPage`, drill routing in
+`packages/web/src/App.tsx` (`/drill/:id`) or `packages/app/src/App.tsx`
+(`memorize://drill/<id>` deep links).
 
 ---
 
@@ -218,45 +225,14 @@ key string.
    **Expected:** a human-readable error (never a raw status/code dump),
    the app stays usable, and clearing the key returns search to the
    working demo set.
-3. **Key is never synced.** With a key saved, run a Drive sync (Drive
-   section), then inspect `memorize-data.json` in Drive.
-   **Expected:** the file contains verses and settings but no API key
-   anywhere in it.
+3. **Key stays out of the app data.** With a key saved, inspect the
+   `memorize:data:v1` local storage value.
+   **Expected:** it contains verses and settings but no API key
+   anywhere in it (the key lives only under `memorize:secrets:v1`).
 
 **Run when:** `packages/web/src/components/SettingsTab.tsx`,
 `packages/app` settings screens, `packages/core/src/storage.ts` secrets
 handling, `packages/web/src/lib/gospel.ts`.
-
----
-
-## Google Drive sync
-
-_Automated: Playwright `settings.spec.ts` covers only the signed-out /
-unconfigured state (section renders; an attempt without an OAuth client
-ID reports that in-page). Real OAuth is out of scope for CI, so the
-whole connected flow below is manual._
-
-**Preconditions:** QA Google account; two browser profiles (or two
-browsers) signed into it; a saved API key in profile A (to re-verify
-case 3 of the Settings section end to end).
-
-1. **First sync round trip.** In profile A, add two verses and sync.
-   **Expected:** sync reports success; a `Memorize` folder containing
-   `memorize-data.json` exists in the QA Drive. In profile B (fresh,
-   empty library), sync. **Expected:** profile B's library now matches
-   profile A.
-2. **Conflict choice.** With both profiles holding the same list, add
-   different verses in each, then sync profile B. **Expected:** the
-   conflict UI appears naming both sides' change times; "Keep this
-   device" and "Keep Drive" each resolve to exactly the chosen side's
-   list on the next sync.
-3. **Sign-in failure is graceful.** Start a sync and cancel the Google
-   sign-in popup. **Expected:** an in-page message explains the failure;
-   local data is unchanged; no half-written Drive file.
-
-**Run when:** `packages/web/src/components/SettingsTab.tsx` sync
-section, `packages/web/src/lib/driveAuth.ts`, `packages/app` settings /
-Drive code, `packages/core/src/drive.ts`.
 
 ---
 
