@@ -33,10 +33,11 @@ test("a failed search clears results and is not a completed search", () => {
   assert.match(catchBlock, /setSearched\(false\)/);
   assert.doesNotMatch(catchBlock, /setSearched\(true\)/);
   const successBlock = runSearch.slice(0, runSearch.indexOf("} catch (e) {"));
-  assert.ok(
-    successBlock.indexOf("setResults(found)") < successBlock.indexOf("setSearched(true)"),
-    "successful results are set before the searched flag",
-  );
+  const resultsIndex = successBlock.indexOf("setResults(found)");
+  const searchedIndex = successBlock.indexOf("setSearched(true)");
+  assert.ok(resultsIndex >= 0, "a successful search sets its results");
+  assert.ok(searchedIndex >= 0, "a successful search sets the searched flag");
+  assert.ok(resultsIndex < searchedIndex, "successful results are set before the searched flag");
 });
 
 test("fire-and-forget saves handle addVerse rejections on the error channel", () => {
