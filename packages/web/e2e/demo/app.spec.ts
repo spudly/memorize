@@ -91,7 +91,7 @@ test("drill renders blanks and tapping a blank reveals its word", async ({ page 
   await page.goto("/");
   await addDemoVerse(page, "2 Nephi 2:25");
 
-  await page.getByRole("button", { name: "Drill" }).click();
+  await page.getByRole("link", { name: "Drill" }).click();
   await expect(page.getByText(/Round 1 of \d+/)).toBeVisible();
   // Round 1 blanks nothing (BLANK_FRACTIONS starts at 0); round 2 is the
   // first round with hidden words.
@@ -177,13 +177,15 @@ test("progress persists: the verse list and drill round survive a reload", async
 
   // Advance one drill round with no peeks (grades as a pass), then reload:
   // the in-progress session resumes at the persisted round.
-  await page.getByRole("button", { name: "Drill" }).click();
+  await page.getByRole("link", { name: "Drill" }).click();
   await expect(page.getByText(/Round 1 of \d+/)).toBeVisible();
   await page.getByRole("button", { name: "Next round" }).click();
   await expect(page.getByText(/Round 2 of \d+/)).toBeVisible();
 
+  // The drill lives at its canonical /drill/:id route (#96), so a
+  // reload reopens the session directly at the persisted round —
+  // there is no Drill link to click on the drill page itself.
   await page.reload();
-  await page.getByRole("button", { name: "Drill" }).click();
   await expect(page.getByText(/Round 2 of \d+/)).toBeVisible();
   expect(errors).toEqual([]);
 });

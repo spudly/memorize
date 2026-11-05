@@ -80,7 +80,7 @@ test("completing every drill round marks the verse memorized", async ({ page }) 
   // Short verse: 9 words, so later rounds blank only a handful of words.
   await addDemoVerse(page, "Philippians 4:13");
 
-  await page.getByRole("button", { name: "Drill" }).click();
+  await page.getByRole("link", { name: "Drill" }).click();
   await expect(page.getByText(/Round 1 of 7/)).toBeVisible();
 
   // No peeks: every round grades as a pass. Six "Next round" clicks walk
@@ -106,7 +106,7 @@ test("peeking at too many blanks holds the round with a retry message", async ({
   await page.goto("/");
   await addDemoVerse(page, "2 Nephi 2:25");
 
-  await page.getByRole("button", { name: "Drill" }).click();
+  await page.getByRole("link", { name: "Drill" }).click();
   await page.getByRole("button", { name: "Next round" }).click();
   await expect(page.getByText(/Round 2 of 7/)).toBeVisible();
 
