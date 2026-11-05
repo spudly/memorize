@@ -19,6 +19,7 @@ describe("toMyVersesPageItem", () => {
     const item = toMyVersesPageItem(ENTRY);
     expect(item).toEqual({
       id: "ether-12-27",
+      drillHref: "memorize://drill/ether-12-27",
       reference: "Ether 12:27",
       text: "And if men come unto me I will show unto them their weakness.",
       status: "learning",

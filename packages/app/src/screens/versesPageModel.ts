@@ -1,4 +1,4 @@
-import type { MyVersesPageItem } from "@spudly/ui/pages";
+import type { MyVersesPageItem } from "@spudly/ui";
 import type { MemorizedVerse } from "@memorize/types";
 
 /**
@@ -7,6 +7,12 @@ import type { MemorizedVerse } from "@memorize/types";
  * verse's id, reference, and text, plus its status (the page
  * renders the status as the badge text and derives the badge tone
  * from it).
+ *
+ * The Drill control is a link (#248 / DS #425): the host owns a
+ * canonical drill destination for every verse, so the row carries
+ * the pre-composed `drillHref` — this host's is its deep link,
+ * `memorize://drill/<id>`, which App handles and opens the drill
+ * screen for that verse. There is no callback form.
  *
  * The next-review line crosses pre-composed: the app formats the
  * stored timestamp with its locale date format, and locale
@@ -17,6 +23,7 @@ import type { MemorizedVerse } from "@memorize/types";
 export function toMyVersesPageItem(entry: MemorizedVerse): MyVersesPageItem {
   return {
     id: entry.verse.id,
+    drillHref: `memorize://drill/${encodeURIComponent(entry.verse.id)}`,
     reference: entry.verse.reference,
     text: entry.verse.text,
     status: entry.status,

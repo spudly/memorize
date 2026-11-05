@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { SafeAreaView } from "react-native";
+import { Linking, Pressable, SafeAreaView } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { useFonts } from "expo-font";
 import Raleway from "../assets/fonts/Raleway.ttf";
 import Alegreya from "../assets/fonts/Alegreya.ttf";
-import { TamaguiProvider } from "tamagui";
-import { ScreenContainer, Spinner, Tabs, Text } from "@spudly/ui";
+import { Spinner, TamaguiProvider, Text, XStack, YStack } from "tamagui";
+import { memorizeTheme } from "@spudly/ui";
 import { appTamaguiConfig } from "./tamaguiConfig";
 import { createMemorizeStore, type MemorizeStore } from "@memorize/core";
 import { appStorage, dataSourceFor } from "./lib";
@@ -23,6 +23,25 @@ const TABS: { value: Tab; label: string }[] = [
   { value: "review", label: "Review" },
   { value: "settings", label: "Settings" },
 ];
+
+/**
+ * The canonical drill destination on native (DS #425):
+ * `memorize://drill/<id>`. MyVersesPage rows link here (the DS
+ * Button href form opens the href through the platform link
+ * path); the host handles the deep link and opens the drill
+ * screen for that verse. Returns null for every other URL.
+ */
+function drillIdFromUrl(url: string): string | null {
+  const match = /^memorize:\/\/drill\/([^/?#]+)\/?$/.exec(url);
+  if (!match?.[1]) {
+    return null;
+  }
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return match[1];
+  }
+}
 
 export default function App() {
   // @spudly/ui names Raleway as the UI font for every theme
@@ -45,6 +64,30 @@ export default function App() {
     return unsubscribe;
   }, [store]);
 
+  // Canonical drill deep links: cold start (initial URL) and
+  // warm opens (URL events) both land on the verse's drill.
+  useEffect(() => {
+    let cancelled = false;
+    void Linking.getInitialURL().then((url) => {
+      if (!cancelled && url) {
+        const id = drillIdFromUrl(url);
+        if (id) {
+          setDrillingId(id);
+        }
+      }
+    });
+    const subscription = Linking.addEventListener("url", (event) => {
+      const id = drillIdFromUrl(event.url);
+      if (id) {
+        setDrillingId(id);
+      }
+    });
+    return () => {
+      cancelled = true;
+      subscription.remove();
+    };
+  }, []);
+
   const { apiKey } = store.getState();
   const dataSource = useMemo(() => dataSourceFor(apiKey), [apiKey]);
 
@@ -52,9 +95,9 @@ export default function App() {
     return (
       <TamaguiProvider config={appTamaguiConfig} defaultTheme="light">
         <SafeAreaView style={{ flex: 1 }}>
-          <ScreenContainer>
-            <Spinner />
-          </ScreenContainer>
+          <YStack flex={1} alignItems="center" justifyContent="center" padding="$4">
+            <Spinner size="large" />
+          </YStack>
         </SafeAreaView>
       </TamaguiProvider>
     );
@@ -64,20 +107,62 @@ export default function App() {
     <TamaguiProvider config={appTamaguiConfig} defaultTheme="light">
       <SafeAreaView style={{ flex: 1 }}>
         <StatusBar style="auto" />
-        <ScreenContainer scrollable={false}>
-          <Text variant="heading">Memorize</Text>
-          <Tabs
-            tabs={TABS}
-            value={tab}
-            onValueChange={(value: string) => {
-              setTab(value as Tab);
-              setDrillingId(null);
-            }}
-          />
+        <YStack flex={1} padding="$4" gap="$3" backgroundColor="$background">
+          <Text fontSize="$8" fontWeight="700" color="$color">
+            Memorize
+          </Text>
+          <XStack
+            gap="$2"
+            flexWrap="wrap"
+            accessibilityRole="tablist"
+            aria-label="Memorize sections"
+          >
+            {TABS.map((t) => {
+              const selected = !drillingId && tab === t.value;
+              return (
+                <Pressable
+                  key={t.value}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected }}
+                  aria-selected={selected}
+                  onPress={() => {
+                    setTab(t.value);
+                    setDrillingId(null);
+                  }}
+                  style={{
+                    backgroundColor: selected
+                      ? memorizeTheme.semantic.primary
+                      : memorizeTheme.semantic.surface,
+                    borderColor: memorizeTheme.semantic.border,
+                    borderWidth: 1,
+                    borderRadius: 8,
+                    paddingHorizontal: 14,
+                    paddingVertical: 8,
+                  }}
+                >
+                  <Text
+                    color={
+                      selected ? memorizeTheme.semantic.onPrimary : memorizeTheme.semantic.text
+                    }
+                  >
+                    {t.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </XStack>
           {drillingId ? (
-            <DrillScreen store={store} verseId={drillingId} onBack={() => setDrillingId(null)} />
+            // Keyed by the verse id: a warm drill link for a different
+            // verse must remount the screen, not carry the previous
+            // verse's round/peeks state into the new verse's drill.
+            <DrillScreen
+              key={drillingId}
+              store={store}
+              verseId={drillingId}
+              onBack={() => setDrillingId(null)}
+            />
           ) : tab === "verses" ? (
-            <VersesScreen store={store} onDrill={setDrillingId} />
+            <VersesScreen store={store} />
           ) : tab === "search" ? (
             <SearchScreen store={store} dataSource={dataSource} usingDemo={!apiKey} />
           ) : tab === "review" ? (
@@ -85,7 +170,7 @@ export default function App() {
           ) : (
             <SettingsScreen store={store} />
           )}
-        </ScreenContainer>
+        </YStack>
       </SafeAreaView>
     </TamaguiProvider>
   );

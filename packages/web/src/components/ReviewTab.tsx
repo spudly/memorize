@@ -1,41 +1,34 @@
-import { Button, Card, EmptyState, Text } from "@spudly/ui";
-import { dueVerses, type MemorizeStore, type ReviewOutcome } from "@memorize/core";
+import { MemorizeReviewPage, type MemorizeReviewPageVerse } from "@spudly/ui";
+import { dueVerses, type MemorizeStore } from "@memorize/core";
 
-interface Props {
+type Props = {
   store: MemorizeStore;
-}
+};
 
+/**
+ * Review tab host (#96): the spaced-repetition logic — computing
+ * due verses and recording outcomes — stays app-side and the DS
+ * MemorizeReviewPage renders the heading, rows, and nothing-due
+ * empty state from the view-models.
+ */
 export default function ReviewTab({ store }: Props) {
-  const due = dueVerses(store.getState().data.verses, new Date());
-
-  const review = (id: string, outcome: ReviewOutcome): void => {
-    void store.actions.recordReview(id, outcome);
-  };
-
-  if (due.length === 0) {
-    return (
-      <>
-        <Text variant="subheading">Review</Text>
-        <EmptyState title="Nothing due" body="Nice work." />
-      </>
-    );
-  }
+  const verses: MemorizeReviewPageVerse[] = dueVerses(store.getState().data.verses, new Date()).map(
+    (item) => ({
+      id: item.verse.id,
+      reference: item.verse.reference,
+      text: item.verse.text,
+    }),
+  );
 
   return (
-    <>
-      <Text variant="subheading">Review ({due.length} due)</Text>
-      {due.map((v) => (
-        <Card key={v.verse.id}>
-          <Text variant="body">{v.verse.reference}</Text>
-          <Text variant="verse">{v.verse.text}</Text>
-          <Button size="sm" onPress={() => review(v.verse.id, "remembered")}>
-            I remembered it
-          </Button>{" "}
-          <Button size="sm" variant="secondary" onPress={() => review(v.verse.id, "forgot")}>
-            I forgot it
-          </Button>
-        </Card>
-      ))}
-    </>
+    <MemorizeReviewPage
+      verses={verses}
+      onRememberedPress={(verseId) => {
+        void store.actions.recordReview(verseId, "remembered");
+      }}
+      onForgotPress={(verseId) => {
+        void store.actions.recordReview(verseId, "forgot");
+      }}
+    />
   );
 }

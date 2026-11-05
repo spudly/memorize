@@ -1,4 +1,4 @@
-import type { MemorizationSessionPageWord } from "@spudly/ui/pages";
+import type { MemorizationSessionPageWord } from "@spudly/ui";
 
 /**
  * View-model mapping for the memorization session (#49): the pure

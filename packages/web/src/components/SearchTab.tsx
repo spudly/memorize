@@ -1,14 +1,22 @@
 import { useState } from "react";
-import { Alert, Button, Card, EmptyState, SearchField, Spinner, Text } from "@spudly/ui";
+import { VerseSearchPage, type VerseSearchPageItem } from "@spudly/ui";
 import { isSameVerse, suppliesMissingVerseIdentity } from "@memorize/core";
 import type { MemorizeStore, ScriptureDataSource, Verse } from "@memorize/core";
 
-interface Props {
+type Props = {
   store: MemorizeStore;
   dataSource: ScriptureDataSource;
   usingDemo: boolean;
-}
+};
 
+/**
+ * Search tab host (#96): renders the DS VerseSearchPage and keeps
+ * every piece of state and business logic app-side — the query,
+ * the search against the scripture data source, the error
+ * composition, and the store mutation. Results cross as
+ * {id, reference, text, added} view-models; an add reported by id
+ * resolves back to the full Verse the store action takes.
+ */
 export default function SearchTab({ store, dataSource, usingDemo }: Props) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Verse[]>([]);
@@ -28,6 +36,16 @@ export default function SearchTab({ store, dataSource, usingDemo }: Props) {
   // copy's id, and each chunk of a document is its own item — a
   // different chunk of a saved document still shows Add.
   const libraryVerses = store.getState().data.verses.map((entry) => entry.verse);
+
+  // addVerse persists, and persistence can reject (#91 made it
+  // awaitable): a fire-and-forget save must surface a failure on
+  // the page's error channel instead of dying as an unhandled
+  // rejection with the verse silently unsaved.
+  const saveVerse = (verse: Verse): void => {
+    store.actions.addVerse(verse).catch((e: unknown) => {
+      setError(e instanceof Error ? e.message : "Couldn't save that verse");
+    });
+  };
 
   const runSearch = async (): Promise<void> => {
     setBusy(true);
@@ -55,60 +73,48 @@ export default function SearchTab({ store, dataSource, usingDemo }: Props) {
               suppliesMissingVerseIdentity(entry.verse, result) && isSameVerse(entry.verse, result),
           );
         if (needsReconcile) {
-          void store.actions.addVerse(result);
+          saveVerse(result);
         }
       }
       setResults(found);
+      setSearched(true);
     } catch (e) {
+      // A failed search is not a completed one: clear stale results and
+      // keep hasSearched false so the page shows the error alone, never
+      // an empty-result message next to it.
+      setResults([]);
+      setSearched(false);
       setError(e instanceof Error ? e.message : "Search failed");
     } finally {
       setBusy(false);
-      setSearched(true);
+    }
+  };
+
+  const items: VerseSearchPageItem[] = results.map((verse) => ({
+    id: verse.id,
+    reference: verse.reference,
+    text: verse.text,
+    added: libraryVerses.some((saved) => isSameVerse(saved, verse)),
+  }));
+
+  const handleAddVerse = (verseId: string): void => {
+    const verse = results.find((v) => v.id === verseId);
+    if (verse) {
+      saveVerse(verse);
     }
   };
 
   return (
-    <>
-      <Text variant="subheading">Search verses</Text>
-      {usingDemo && (
-        <Text variant="hint">
-          Searching the built-in demo set. Add a gospel-engine API key in Settings for full-library
-          search.
-        </Text>
-      )}
-      <SearchField
-        value={query}
-        onChangeText={setQuery}
-        placeholder={usingDemo ? "e.g. Ether 12:27 or “weakness”" : "e.g. Ether 12:27 or “charity”"}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            void runSearch();
-          }
-        }}
-      />
-      <Button onPress={() => void runSearch()} disabled={busy || !query.trim()}>
-        Search
-      </Button>
-      {error && <Alert severity="error">{error}</Alert>}
-      {busy && <Spinner label="Searching verses" />}
-      {!busy && searched && results.length === 0 && !error && (
-        <EmptyState title="No results" body="Try a different reference or keyword." />
-      )}
-      {results.map((v) => (
-        <Card key={v.id}>
-          <Text variant="body">{v.reference}</Text>
-          <Text variant="verse">{v.text}</Text>
-          {libraryVerses.some((saved) => isSameVerse(saved, v)) ? (
-            <Button size="sm" variant="secondary" disabled>
-              Added
-            </Button>
-          ) : (
-            <Button size="sm" onPress={() => void store.actions.addVerse(v)}>
-              Add to memorize list
-            </Button>
-          )}
-        </Card>
-      ))}
-    </>
+    <VerseSearchPage
+      query={query}
+      onQueryChange={setQuery}
+      onSearch={() => void runSearch()}
+      isSearching={busy}
+      usingDemo={usingDemo}
+      errorMessage={error}
+      results={items}
+      hasSearched={searched}
+      onAddVerse={handleAddVerse}
+    />
   );
 }

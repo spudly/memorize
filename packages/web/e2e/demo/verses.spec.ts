@@ -31,7 +31,6 @@ function seedData(verses: SeedVerse[]): string {
     })),
     settings: {
       gospelEngineBaseUrl: "https://engine.ibeco.me",
-      driveFolderName: "Memorize",
     },
     updatedAt: "2026-10-01T12:00:00.000Z",
   });

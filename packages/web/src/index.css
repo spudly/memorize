@@ -12,12 +12,11 @@ body {
 }
 
 /*
- * App-shell height chain. ScreenContainer renders the page inside a
- * Tamagui ScrollView whose frame is `flex: 1`, and its content uses
- * `min-height: 100%` — both only resolve against a definite height.
- * Without this chain the ScrollView collapses to a short strip and the
- * page looks blank. The TamaguiProvider wrappers use display:contents,
- * so the ScrollView frame is #root's flex item directly.
+ * App-shell height chain. The app shell is a flex column (the
+ * Tamagui YStack in App.tsx), and each @spudly/ui page renders its
+ * own ScreenContainer inside it, whose frame is `flex: 1` — both
+ * only resolve against a definite height. Without this chain the
+ * page collapses to a short strip and looks blank.
  */
 html,
 body,

@@ -84,23 +84,22 @@ export interface MemorizedVerse {
 
 /**
  * App settings. `gospelEngineKey` is LOCAL-ONLY: it lives in secret storage on
- * the device and is never included in the data synced to Google Drive.
+ * the device and is never included in the persisted app data.
  */
 export interface AppSettings {
   gospelEngineKey?: string;
   gospelEngineBaseUrl: string;
-  driveFolderName: string;
 }
 
 /**
- * Everything that gets synced to Google Drive. The API key is deliberately
- * excluded — see {@link AppSettings.gospelEngineKey}.
+ * Everything persisted locally. The API key is deliberately excluded — see
+ * {@link AppSettings.gospelEngineKey}.
  */
 export interface AppData {
   version: 1;
   verses: MemorizedVerse[];
   settings: Omit<AppSettings, "gospelEngineKey">;
-  /** ISO-8601 timestamp of the last local mutation; drives sync conflict logic. */
+  /** ISO-8601 timestamp of the last local mutation. */
   updatedAt: string;
 }
 
@@ -110,7 +109,6 @@ export const DATA_VERSION = 1;
 
 export const DEFAULT_SETTINGS: Omit<AppSettings, "gospelEngineKey"> = {
   gospelEngineBaseUrl: "https://engine.ibeco.me",
-  driveFolderName: "Memorize",
 };
 
 export function createEmptyAppData(): AppData {

@@ -1273,8 +1273,7 @@ export function isSameVerse(a: Verse, b: Verse): boolean {
  * may persist: verses that legitimately carry a `chunkKey` without
  * source fields (demo verses, /api/get results) match themselves on
  * re-search, and persisting that no-op match would advance
- * `updatedAt` — which Drive sync uses to detect local edits — and
- * risk a false sync conflict. Both call sites share this helper so
+ * `updatedAt` for no change in the data. Both call sites share this helper so
  * their guards cannot drift apart.
  */
 export function suppliesMissingVerseIdentity(saved: Verse, incoming: Verse): boolean {

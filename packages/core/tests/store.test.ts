@@ -499,7 +499,7 @@ describe("memorize store", () => {
     // Copilot: demo verses and /api/get results legitimately carry a
     // chunkKey without source fields, so re-searching one used to
     // enter the reconciliation branch and persist unchanged data —
-    // advancing updatedAt, which Drive sync reads as a local edit.
+    // advancing updatedAt for a no-op match.
     let writes = 0;
     const inner = memoryStorage();
     const storage: KeyValueStorage = {

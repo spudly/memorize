@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { MemorizationSessionPage } from "@spudly/ui/pages";
+import { MemorizationSessionPage } from "@spudly/ui";
 import {
   BLANK_FRACTIONS,
   blankedIndices,
@@ -9,11 +9,11 @@ import {
 } from "@memorize/core";
 import { finishDrill, isFinalRound, retryFeedback, toSessionWords } from "./drillViewModel";
 
-interface Props {
+type Props = {
   store: MemorizeStore;
   verseId: string;
   onBack(): void;
-}
+};
 
 /**
  * The memorization session screen (#49): the session engine
