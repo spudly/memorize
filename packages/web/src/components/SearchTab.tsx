@@ -67,11 +67,16 @@ export default function SearchTab({ store, dataSource, usingDemo }: Props) {
         }
       }
       setResults(found);
+      setSearched(true);
     } catch (e) {
+      // A failed search is not a completed one: clear stale results and
+      // keep hasSearched false so the page shows the error alone, never
+      // an empty-result message next to it.
+      setResults([]);
+      setSearched(false);
       setError(e instanceof Error ? e.message : "Search failed");
     } finally {
       setBusy(false);
-      setSearched(true);
     }
   };
 
