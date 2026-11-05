@@ -35,8 +35,8 @@ test("a failed search clears results and is not a completed search", () => {
   const successBlock = runSearch.slice(0, runSearch.indexOf("} catch (e) {"));
   const resultsIndex = successBlock.indexOf("setResults(found)");
   const searchedIndex = successBlock.indexOf("setSearched(true)");
-  assert.ok(resultsIndex >= 0, "a successful search sets its results");
-  assert.ok(searchedIndex >= 0, "a successful search sets the searched flag");
+  assert.ok(resultsIndex !== -1, "a successful search sets its results");
+  assert.ok(searchedIndex !== -1, "a successful search sets the searched flag");
   assert.ok(resultsIndex < searchedIndex, "successful results are set before the searched flag");
 });
 
