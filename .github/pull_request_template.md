@@ -9,13 +9,12 @@
 ## Pre-merge checklist
 
 All boxes must be checked (or struck through with a one-line reason)
-before this PR is merged. Exception: "CI is green for the exact head
-commit" is exempt from the merge-guard — it can only become true once
-the CI gate (which includes the guard itself) passes, so it cannot be
-required up front; green CI is enforced by the required checks.
+before this PR is merged. (There are deliberately no "CI is green"
+or "Review feedback addressed" boxes: green CI is enforced
+mechanically by the required gate checks, and the ruleset's
+required review-thread resolution blocks a merge while any review
+thread is unresolved — attesting to either here would be redundant.)
 
-- [ ] CI is green for the exact head commit
-- [ ] Review feedback addressed (Copilot and/or human)
 - [ ] Manual test pass posted for this head SHA in this PR's preview
       deployment, scoped to this PR's changes, or exempt
       (release/Dependabot/docs-CI-only, or no matching manual-test
