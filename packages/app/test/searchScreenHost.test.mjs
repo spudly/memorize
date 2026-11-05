@@ -69,6 +69,27 @@ test("an add by id resolves back to the full Verse for the store", () => {
   assert.match(code, /store\.actions\.addVerse\(verse\)/);
 });
 
+test("a failed search clears results and is not a completed search", () => {
+  const runSearch = code.slice(code.indexOf("const runSearch"), code.indexOf("const items"));
+  const catchBlock = runSearch.slice(runSearch.indexOf("} catch (e) {"));
+  assert.match(catchBlock, /setResults\(\[\]\)/);
+  assert.match(catchBlock, /setSearched\(false\)/);
+  assert.doesNotMatch(catchBlock, /setSearched\(true\)/);
+  const successBlock = runSearch.slice(0, runSearch.indexOf("} catch (e) {"));
+  assert.ok(
+    successBlock.indexOf("setResults(found)") < successBlock.indexOf("setSearched(true)"),
+    "successful results are set before the searched flag",
+  );
+});
+
+test("fire-and-forget saves handle addVerse rejections on the error channel", () => {
+  assert.match(code, /store\.actions\.addVerse\(verse\)\.catch\(/);
+  assert.match(code, /e instanceof Error \? e\.message : "Couldn't save that verse"/);
+  assert.match(code, /saveVerse\(result\)/, "the reconcile loop saves through the handled path");
+  assert.match(code, /saveVerse\(verse\)/, "a reported add saves through the handled path");
+  assert.doesNotMatch(code, /void store\.actions\.addVerse/);
+});
+
 test("every page prop is wired to app state and callbacks", () => {
   for (const wiring of [
     /query=\{query\}/,

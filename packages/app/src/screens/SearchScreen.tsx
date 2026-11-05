@@ -38,6 +38,16 @@ export default function SearchScreen({ store, dataSource, usingDemo }: Props) {
 
   const libraryVerses = store.getState().data.verses.map((entry) => entry.verse);
 
+  // addVerse persists, and persistence can reject (#91 made it
+  // awaitable): a fire-and-forget save must surface a failure on
+  // the page's error channel instead of dying as an unhandled
+  // rejection with the verse silently unsaved.
+  const saveVerse = (verse: Verse): void => {
+    store.actions.addVerse(verse).catch((e: unknown) => {
+      setError(e instanceof Error ? e.message : "Couldn't save that verse");
+    });
+  };
+
   const runSearch = async (): Promise<void> => {
     setBusy(true);
     setError(null);
@@ -56,7 +66,7 @@ export default function SearchScreen({ store, dataSource, usingDemo }: Props) {
               suppliesMissingVerseIdentity(entry.verse, result) && isSameVerse(entry.verse, result),
           );
         if (needsReconcile) {
-          void store.actions.addVerse(result);
+          saveVerse(result);
         }
       }
       setResults(found);
@@ -83,7 +93,7 @@ export default function SearchScreen({ store, dataSource, usingDemo }: Props) {
   const handleAddVerse = (verseId: string): void => {
     const verse = results.find((v) => v.id === verseId);
     if (verse) {
-      void store.actions.addVerse(verse);
+      saveVerse(verse);
     }
   };
 
