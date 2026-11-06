@@ -184,7 +184,7 @@ test("selecting a tab during a drill closes the drill (#100)", async ({ page }) 
   await page.getByRole("tab", { name: "Review" }).click();
   await expect(page.getByRole("tab", { name: "Review" })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByText(/Round 1 of \d+/)).toHaveCount(0);
-  await expect(page).toHaveURL(/\/$/);
+  await expect(page).toHaveURL(new URL("/", page.url()).href);
   expect(errors).toEqual([]);
 });
 
