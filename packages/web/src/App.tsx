@@ -1,14 +1,16 @@
-import { Suspense, lazy, useEffect, useMemo, useState } from "react";
-import { Spinner, TamaguiProvider, Text, XStack, YStack } from "tamagui";
-import { Pressable } from "react-native";
-import { ChunkErrorBoundary, memorizeTheme } from "@spudly/ui";
+import { lazy, useEffect, useMemo, useState } from "react";
+import { Spinner, TamaguiProvider, Text, YStack } from "tamagui";
+import { TabbedShellPage, type TabbedShellPageTab } from "@spudly/ui";
 import { webTamaguiConfig } from "./tamaguiConfig";
 import { createMemorizeStore, type MemorizeStore } from "@memorize/core";
 import VersesTab from "./components/VersesTab";
 
 // Code-split the non-initial surfaces (memorize#54, Option B): the verses tab
 // is the landing view and stays in the initial chunk; drill, search, review
-// and settings load on first navigation to them.
+// and settings load on first navigation to them. The lazy components are
+// passed into TabbedShellPage as tab content / the drill override; the
+// frame's internal LazySlot wraps them with its chunk-error boundary
+// and Suspense, so this host never imports the boundary (memorize#100).
 const DrillView = lazy(() => import("./components/DrillView"));
 const ReviewTab = lazy(() => import("./components/ReviewTab"));
 const SearchTab = lazy(() => import("./components/SearchTab"));
@@ -18,12 +20,12 @@ import { webStorage } from "./lib/storage";
 
 type Tab = "verses" | "search" | "review" | "settings";
 
-const TABS: { id: Tab; label: string }[] = [
-  { id: "verses", label: "My verses" },
-  { id: "search", label: "Search" },
-  { id: "review", label: "Review" },
-  { id: "settings", label: "Settings" },
-];
+const TAB_IDS: Tab[] = ["verses", "search", "review", "settings"];
+
+/** Whether a TabbedShellPage tab id names one of this host's tabs. */
+function isTab(value: string): value is Tab {
+  return (TAB_IDS as string[]).includes(value);
+}
 
 /**
  * The canonical drill destination on web (DS #425): `/drill/:id`.
@@ -78,7 +80,10 @@ export default function App() {
     }
   };
 
-  const handleTabChange = (next: Tab): void => {
+  const handleTabChange = (next: string): void => {
+    if (!isTab(next)) {
+      return;
+    }
     setTab(next);
     closeDrill();
   };
@@ -94,64 +99,30 @@ export default function App() {
     );
   }
 
+  const tabs: TabbedShellPageTab[] = [
+    { id: "verses", label: "My verses", content: <VersesTab store={store} /> },
+    {
+      id: "search",
+      label: "Search",
+      content: <SearchTab store={store} dataSource={dataSource} usingDemo={isDemoDataSource()} />,
+    },
+    { id: "review", label: "Review", content: <ReviewTab store={store} /> },
+    { id: "settings", label: "Settings", content: <SettingsTab /> },
+  ];
+
   return (
     <TamaguiProvider config={webTamaguiConfig} defaultTheme="light">
-      <YStack flex={1} padding="$4" gap="$3" backgroundColor="$background">
-        <Text fontSize="$8" fontWeight="700" color="$color">
-          Memorize
-        </Text>
-        <XStack gap="$2" flexWrap="wrap" accessibilityRole="tablist" aria-label="Memorize sections">
-          {TABS.map((t) => {
-            const selected = !drillingId && tab === t.id;
-            return (
-              <Pressable
-                key={t.id}
-                accessibilityRole="tab"
-                accessibilityState={{ selected }}
-                aria-selected={selected}
-                onPress={() => handleTabChange(t.id)}
-                style={{
-                  backgroundColor: selected
-                    ? memorizeTheme.semantic.primary
-                    : memorizeTheme.semantic.surface,
-                  borderColor: memorizeTheme.semantic.border,
-                  borderWidth: 1,
-                  borderRadius: 8,
-                  paddingHorizontal: 14,
-                  paddingVertical: 8,
-                }}
-              >
-                <Text
-                  color={selected ? memorizeTheme.semantic.onPrimary : memorizeTheme.semantic.text}
-                >
-                  {t.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </XStack>
-        <ChunkErrorBoundary key={drillingId ? "drill" : tab}>
-          <Suspense
-            fallback={
-              <YStack alignItems="center" padding="$4">
-                <Spinner size="large" accessibilityLabel="Loading" />
-              </YStack>
-            }
-          >
-            {drillingId ? (
-              <DrillView store={store} verseId={drillingId} onBack={closeDrill} />
-            ) : tab === "verses" ? (
-              <VersesTab store={store} />
-            ) : tab === "search" ? (
-              <SearchTab store={store} dataSource={dataSource} usingDemo={isDemoDataSource()} />
-            ) : tab === "review" ? (
-              <ReviewTab store={store} />
-            ) : (
-              <SettingsTab />
-            )}
-          </Suspense>
-        </ChunkErrorBoundary>
-      </YStack>
+      <TabbedShellPage
+        title="Memorize"
+        tabsLabel="Memorize sections"
+        tabs={tabs}
+        activeTabId={drillingId ? null : tab}
+        onTabSelect={handleTabChange}
+      >
+        {drillingId ? (
+          <DrillView store={store} verseId={drillingId} onBack={closeDrill} />
+        ) : undefined}
+      </TabbedShellPage>
     </TamaguiProvider>
   );
 }

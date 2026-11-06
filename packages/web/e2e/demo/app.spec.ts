@@ -166,6 +166,28 @@ test("drill renders blanks and tapping a blank reveals its word", async ({ page 
   expect(errors).toEqual([]);
 });
 
+test("selecting a tab during a drill closes the drill (#100)", async ({ page }) => {
+  const errors = trackPageErrors(page);
+  await page.goto("/");
+  await addDemoVerse(page, "Ether 12:27");
+
+  await page.getByRole("link", { name: "Drill" }).click();
+  await expect(page.getByText(/Round 1 of \d+/)).toBeVisible();
+  await expect(page).toHaveURL(/\/drill\//);
+  // While the drill override shows, no tab is selected.
+  for (const tab of ["My verses", "Search", "Review", "Settings"]) {
+    await expect(page.getByRole("tab", { name: tab })).toHaveAttribute("aria-selected", "false");
+  }
+
+  // Selecting a tab is the host's cue to close the drill: the tab's
+  // view replaces the drill and the URL returns to the root.
+  await page.getByRole("tab", { name: "Review" }).click();
+  await expect(page.getByRole("tab", { name: "Review" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByText(/Round 1 of \d+/)).toHaveCount(0);
+  await expect(page).toHaveURL(new URL("/", page.url()).href);
+  expect(errors).toEqual([]);
+});
+
 test("progress persists: the verse list and drill round survive a reload", async ({ page }) => {
   const errors = trackPageErrors(page);
   await page.goto("/");
