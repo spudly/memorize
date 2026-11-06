@@ -69,8 +69,7 @@ export default function App() {
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
-  const { apiKey } = store.getState();
-  const dataSource = useMemo(() => dataSourceFor(apiKey), [apiKey]);
+  const dataSource = useMemo(() => dataSourceFor(), []);
 
   const closeDrill = (): void => {
     setDrillingId(null);
@@ -144,15 +143,11 @@ export default function App() {
             ) : tab === "verses" ? (
               <VersesTab store={store} />
             ) : tab === "search" ? (
-              <SearchTab
-                store={store}
-                dataSource={dataSource}
-                usingDemo={isDemoDataSource(apiKey)}
-              />
+              <SearchTab store={store} dataSource={dataSource} usingDemo={isDemoDataSource()} />
             ) : tab === "review" ? (
               <ReviewTab store={store} />
             ) : (
-              <SettingsTab store={store} />
+              <SettingsTab />
             )}
           </Suspense>
         </ChunkErrorBoundary>

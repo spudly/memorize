@@ -8,16 +8,22 @@ export interface KeyValueStorage {
 }
 
 export const DATA_KEY = "memorize:data:v1";
-export const SECRETS_KEY = "memorize:secrets:v1";
 
 /**
- * Secrets stay on the device: the gospel-engine API key lives here and is
- * never included in the persisted app data.
+ * Storage key that held the user API key before #101 removed it
+ * end-to-end. Existing installs may still carry an entry under this
+ * key; the store deletes it on initialization (see
+ * {@link LocalStore.clearLegacySecrets}) so no dead credential is
+ * left on device.
  */
-interface LocalSecrets {
-  gospelEngineKey?: string;
-}
+export const LEGACY_SECRETS_KEY = "memorize:secrets:v1";
 
+/**
+ * Local persistence for the app data snapshot. There is no secret
+ * storage anymore (#101): the user API key was removed end-to-end —
+ * web search is server-key-only via the edge proxy and native search
+ * uses the offline demo set, so nothing secret is kept on device.
+ */
 export class LocalStore {
   constructor(private readonly storage: KeyValueStorage) {}
 
@@ -38,37 +44,16 @@ export class LocalStore {
     await this.storage.setItem(DATA_KEY, JSON.stringify(data));
   }
 
-  private async loadSecrets(): Promise<LocalSecrets> {
-    const raw = await this.storage.getItem(SECRETS_KEY);
-    if (raw === null) {
-      return {};
-    }
+  /**
+   * Deletes any pre-#101 secrets entry (the removed user API key).
+   * Best-effort: a storage failure here must never block startup —
+   * the entry is inert either way, since nothing reads it anymore.
+   */
+  async clearLegacySecrets(): Promise<void> {
     try {
-      const parsed: unknown = JSON.parse(raw);
-      return typeof parsed === "object" && parsed !== null ? (parsed as LocalSecrets) : {};
+      await this.storage.removeItem(LEGACY_SECRETS_KEY);
     } catch {
-      return {};
+      // Swallow: cleanup only; see the doc comment above.
     }
-  }
-
-  private async saveSecrets(secrets: LocalSecrets): Promise<void> {
-    await this.storage.setItem(SECRETS_KEY, JSON.stringify(secrets));
-  }
-
-  async getApiKey(): Promise<string | null> {
-    const secrets = await this.loadSecrets();
-    return secrets.gospelEngineKey ?? null;
-  }
-
-  async setApiKey(key: string): Promise<void> {
-    const secrets = await this.loadSecrets();
-    secrets.gospelEngineKey = key;
-    await this.saveSecrets(secrets);
-  }
-
-  async clearApiKey(): Promise<void> {
-    const secrets = await this.loadSecrets();
-    delete secrets.gospelEngineKey;
-    await this.saveSecrets(secrets);
   }
 }

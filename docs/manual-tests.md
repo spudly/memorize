@@ -29,10 +29,10 @@ automation.
   Steps are written so either can execute them.
 - **Test data.** Verses added during a run are prefixed `QA —` in notes
   or chosen from the built-in demo set when demo mode suffices. Clean up
-  created data at the end of a run (remove QA verses, clear the API key)
-  unless a case says to keep it for a later case in the same run. Cases
-  that need a real gospel-engine API key use the dedicated QA
-  credentials, never personal ones.
+  created data at the end of a run (remove QA verses) unless a case says
+  to keep it for a later case in the same run. There is no user
+  gospel-engine API key (#101): web search runs on the server key via
+  the edge proxy, and native search uses the built-in demo set.
 
 ## Maintaining this document
 
@@ -63,7 +63,8 @@ time.
    Settings) render.
 2. Open each tab in turn. **Expected:** each renders its view (empty
    states are fine) with no console errors.
-3. In demo mode (no API key), search `Ether 12:27` in the Search tab.
+3. In demo mode (a build without the gospel proxy), search
+   `Ether 12:27` in the Search tab.
    **Expected:** the demo passage renders with its full text.
 4. Add the verse, open the Drill from My verses, and advance one round.
    **Expected:** the drill renders the verse and the round indicator
@@ -110,11 +111,12 @@ proxy search and add-to-library
 below cannot run in CI — the fixtures pin the documented response
 shapes, not the live service._
 
-**Preconditions:** QA gospel-engine API key (Settings cases cover
-entering it); network access to the live engine.
+**Preconditions:** Network access to the live engine via the
+production proxy (web search is server-key-only; there is no user
+API key to enter).
 
-1. **Live keyword search.** With the QA key set (or via the production
-   proxy), search a common keyword (e.g. `faith`). **Expected:** real
+1. **Live keyword search.** Via the production proxy, search a
+   common keyword (e.g. `faith`). **Expected:** real
    results render with references and readable text; results are not
    limited to the demo set.
 2. **Live reference lookup.** Search an exact reference not in the demo
@@ -210,45 +212,49 @@ the `@spudly/ui` `MemorizationSessionPage`, drill routing in
 
 ---
 
-## Settings & API key
+## Settings
 
-_Automated: Playwright `settings.spec.ts` covers saving a key (persisted
-to local secret storage, Clear offered, survives reload) and clearing it.
-The cases below need the real service and are manual._
+_Automated: Playwright `settings.spec.ts` covers that the settings
+page renders no API-key section and no Google Drive sync section.
+There are no API-key cases anymore (#101): the key section was
+removed from the settings page on every platform (DS #439), web
+search is server-key-only by design, and native search uses the
+built-in demo set. The cases below are the manual remainder._
 
-**Preconditions:** QA gospel-engine API key; one deliberately invalid
-key string.
+**Preconditions:** The web preview (proxy build) and, for case 3, a
+native build.
 
-1. **Valid key unlocks live search.** Save the QA key, then run case 1
-   of the Search section. **Expected:** full-library results, and the
-   Search tab no longer describes the built-in demo set.
-2. **Invalid key failure mode.** Save an invalid key and search.
-   **Expected:** a human-readable error (never a raw status/code dump),
-   the app stays usable, and clearing the key returns search to the
-   working demo set.
-3. **Key stays out of the app data.** With a key saved, inspect the
-   `memorize:data:v1` local storage value.
-   **Expected:** it contains verses and settings but no API key
-   anywhere in it (the key lives only under `memorize:secrets:v1`).
+1. **No API-key UI anywhere.** Open Settings on web and on native.
+   **Expected:** the page shows only its "Settings" heading — no
+   API-key field, no Save key / Clear key controls, and nothing in
+   the app asks for a key.
+2. **Web search runs on the server key.** In the web preview, run
+   case 1 of the Search section without entering any key (there is
+   nowhere to enter one). **Expected:** full-library results, and
+   the Search tab does not describe the built-in demo set.
+3. **Native search is the demo set.** On native, search a reference
+   from the demo set and one that is not. **Expected:** the demo
+   passage renders for the first; the second reports no results
+   from the demo set — native never calls the live engine.
 
 **Run when:** `packages/web/src/components/SettingsTab.tsx`,
-`packages/app` settings screens, `packages/core/src/storage.ts` secrets
-handling, `packages/web/src/lib/gospel.ts`.
+`packages/app` settings screens, the `@spudly/ui`
+`MemorizeSettingsPage`, `packages/web/src/lib/gospel.ts`,
+`packages/app/src/lib.ts`.
 
 ---
 
 ## Data persistence & recovery
 
-_Automated: Playwright covers verse adds, drill progress, review
-rescheduling, and API key persistence across reloads. The cases below
-involve browser-level state the suites deliberately do not destroy._
+_Automated: Playwright covers verse adds, drill progress, and review
+rescheduling across reloads. The cases below involve browser-level
+state the suites deliberately do not destroy._
 
-**Preconditions:** A browser profile with verses, drill progress, and a
-saved API key.
+**Preconditions:** A browser profile with verses and drill progress.
 
 1. **Browser restart persistence.** Fully close and reopen the browser,
-   then open the app. **Expected:** library, drill progress, review
-   schedule, and the saved key are all intact.
+   then open the app. **Expected:** library, drill progress, and review
+   schedule are all intact.
 2. **Corrupted local data.** Corrupt the `memorize:data:v1` local
    storage value (devtools) and reload. **Expected:** the app recovers
    to a usable state (empty library is acceptable) with no crash loop
@@ -279,7 +285,7 @@ phone) and keyboard-only navigation for case 2.
    drill session. **Expected:** no horizontal scrolling, no clipped
    buttons or badges, verse text wraps readably.
 2. **Keyboard pass.** Navigate the app by keyboard alone: tabs, search,
-   add, drill advance, settings save. **Expected:** focus is always
+   add, drill advance. **Expected:** focus is always
    visible, every action is reachable, and Enter in the search field
    triggers the search.
 3. **Zoom / large text.** At 200% browser zoom, repeat the smoke

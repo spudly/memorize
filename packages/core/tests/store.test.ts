@@ -1,6 +1,6 @@
 import type { Verse } from "@memorize/types";
 import { mapSearchItem } from "../src/scripture";
-import { DATA_KEY, LocalStore, type KeyValueStorage } from "../src/storage";
+import { DATA_KEY, LEGACY_SECRETS_KEY, LocalStore, type KeyValueStorage } from "../src/storage";
 import { createMemorizeStore } from "../src/store";
 
 function memoryStorage(): KeyValueStorage {
@@ -475,24 +475,44 @@ describe("memorize store", () => {
     expect(after?.nextReviewAt).not.toBe(before);
   });
 
-  test("stores the API key separately from synced data", async () => {
+  test("state carries no API key and data round-trips without one (#101)", async () => {
     const storage = memoryStorage();
     const store = createMemorizeStore(storage);
     await store.ready;
-    await store.actions.setApiKey("secret-key");
-    expect(store.getState().apiKey).toBe("secret-key");
+    expect("apiKey" in store.getState()).toBe(false);
+
+    await store.actions.addVerse(VERSE);
+    await flush();
 
     const store2 = createMemorizeStore(storage);
     await store2.ready;
-    expect(store2.getState().apiKey).toBe("secret-key");
+    expect("apiKey" in store2.getState()).toBe(false);
+    expect(store2.getState().data.verses).toHaveLength(1);
+    expect(store2.getState().data.verses[0]?.verse.id).toBe(VERSE.id);
 
     const raw = await new LocalStore(storage).loadData();
-    expect(JSON.stringify(raw)).not.toContain("secret-key");
+    expect(raw?.verses).toHaveLength(1);
+  });
 
-    await store2.actions.clearApiKey();
-    const store3 = createMemorizeStore(storage);
-    await store3.ready;
-    expect(store3.getState().apiKey).toBeNull();
+  test("initialization deletes the legacy pre-#101 secrets entry", async () => {
+    const storage = memoryStorage();
+    await storage.setItem(LEGACY_SECRETS_KEY, JSON.stringify({ apiKey: "old-key" }));
+    const store = createMemorizeStore(storage);
+    await store.ready;
+    expect(await storage.getItem(LEGACY_SECRETS_KEY)).toBeNull();
+  });
+
+  test("a failing legacy-secrets cleanup does not block initialization", async () => {
+    const inner = memoryStorage();
+    const storage: KeyValueStorage = {
+      getItem: inner.getItem,
+      setItem: inner.setItem,
+      removeItem: async () => {
+        throw new Error("storage unavailable");
+      },
+    };
+    const store = createMemorizeStore(storage);
+    await expect(store.ready).resolves.toBeUndefined();
   });
 
   test("re-adding a chunkKey-only verse does not persist or advance updatedAt", async () => {

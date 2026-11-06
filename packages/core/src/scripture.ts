@@ -1659,8 +1659,10 @@ export const DEMO_VERSES: Verse[] = DEMO_VERSE_TUPLES.map(([reference, text]) =>
 }));
 
 /**
- * Offline data source with a small set of well-known verses. Used when no
- * gospel-engine API key is configured, so the app is fully usable offline.
+ * Offline data source with a small set of well-known verses. Used
+ * wherever the live engine is not reachable through a key — native
+ * always, and web builds without the server-key proxy (#101) — so
+ * the app is fully usable offline.
  */
 export class DemoDataSource implements ScriptureDataSource {
   async search(query: string): Promise<Verse[]> {
