@@ -22,6 +22,7 @@ type Tab = "verses" | "search" | "review" | "settings";
 
 const TAB_IDS: Tab[] = ["verses", "search", "review", "settings"];
 
+/** Whether a TabbedShellPage tab id names one of this host's tabs. */
 function isTab(value: string): value is Tab {
   return (TAB_IDS as string[]).includes(value);
 }
