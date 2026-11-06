@@ -33,7 +33,11 @@ test("a failed lazy-tab chunk shows the frame's reload recovery", async ({ page 
   // fallback is offered again rather than a blank screen.
   await page.getByRole("tab", { name: "Search" }).click();
   await expect(page.getByText("This section failed to load.")).toBeVisible();
-  await page.getByRole("button", { name: "Reload the app" }).click();
+  await Promise.all([
+    page.waitForEvent("load"),
+    page.getByRole("button", { name: "Reload the app" }).click(),
+  ]);
+  await expect(page.getByText("This section failed to load.")).toHaveCount(0);
   await expect(page.getByText("Memorize", { exact: true })).toBeVisible();
   await expect(page.getByRole("tab", { name: "My verses" })).toBeVisible();
   expect(errors).toEqual([]);
