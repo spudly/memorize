@@ -26,11 +26,26 @@ function readJson(path) {
 /** Specs npm resolves from somewhere other than the registry. */
 function isNonRegistrySpec(spec) {
   return (
-    spec.includes(":") || // workspace:, file:, link:, npm:, git+https:, …
+    spec.includes(":") || // workspace:, file:, link:, git+https:, …
     spec.startsWith(".") ||
     spec.startsWith("/") ||
     spec === "*"
   );
+}
+
+/**
+ * The registry range behind an `npm:` alias spec, e.g.
+ * `npm:real-foo@^2.0.0` → `^2.0.0` and `npm:@scope/pkg@^1.0.0` → `^1.0.0`.
+ * npm installs the aliased package under the manifest's dependency name,
+ * so the locked entry under that name must satisfy this range. Returns
+ * null when the alias names no range (npm resolves the latest version).
+ */
+function aliasRange(spec) {
+  const body = spec.slice("npm:".length);
+  const at = body.lastIndexOf("@");
+  if (at <= 0) return null;
+  const range = body.slice(at + 1);
+  return semver.validRange(range) ? range : null;
 }
 
 /**
@@ -68,11 +83,16 @@ export function findLockfileMismatches(manifests, lockPackages) {
     const where = path || ".";
     for (const section of ["dependencies", "devDependencies"]) {
       for (const [name, spec] of Object.entries(manifest[section] ?? {})) {
-        if (isNonRegistrySpec(spec) || !semver.validRange(spec)) continue;
+        // An `npm:` alias resolves from the registry under the alias
+        // name, so check its target range instead of skipping it.
+        const isAlias = spec.startsWith("npm:");
+        const range = isAlias ? aliasRange(spec) : spec;
+        if (range === null || (!isAlias && isNonRegistrySpec(spec)) || !semver.validRange(range))
+          continue;
         const version = lockedVersion(lockPackages, path, name);
         if (version === null) {
           failures.push(`${where}: ${name}@${spec} has no locked entry in package-lock.json`);
-        } else if (!semver.satisfies(version, spec)) {
+        } else if (!semver.satisfies(version, range)) {
           failures.push(
             `${where}: ${name}@${spec} is locked at ${version}, which does not satisfy the spec`,
           );
@@ -138,6 +158,34 @@ test("checker accepts hoisted entries, workspace links, and skips non-registry s
     "packages/core": { version: "1.1.4" },
   };
   assert.deepEqual(findLockfileMismatches(manifests, lockPackages), []);
+});
+
+test("checker validates npm: alias specs against the aliased range", () => {
+  const manifests = [
+    {
+      path: "",
+      manifest: {
+        dependencies: {
+          foo: "npm:real-foo@^2.0.0",
+          bar: "npm:@scope/real-bar@^1.0.0",
+          baz: "npm:real-baz",
+        },
+      },
+    },
+  ];
+  const stale = {
+    "node_modules/foo": { version: "1.9.0" },
+    "node_modules/bar": { version: "1.4.0" },
+  };
+  const failures = findLockfileMismatches(manifests, stale);
+  assert.equal(failures.length, 1);
+  assert.match(failures[0], /foo@npm:real-foo@\^2\.0\.0 is locked at 1\.9\.0/);
+
+  const current = {
+    "node_modules/foo": { version: "2.3.0" },
+    "node_modules/bar": { version: "1.4.0" },
+  };
+  assert.deepEqual(findLockfileMismatches(manifests, current), []);
 });
 
 test("checker flags a dependency with no locked entry", () => {
