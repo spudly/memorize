@@ -83,22 +83,20 @@ export interface MemorizedVerse {
 }
 
 /**
- * App settings. `gospelEngineKey` is LOCAL-ONLY: it lives in secret storage on
- * the device and is never included in the persisted app data.
+ * App settings. There is no user API key (#101): web search is
+ * server-key-only by design (the edge proxy injects the key), and
+ * native search uses the offline demo set, so no key is stored
+ * anywhere in the app state.
  */
 export interface AppSettings {
-  gospelEngineKey?: string;
   gospelEngineBaseUrl: string;
 }
 
-/**
- * Everything persisted locally. The API key is deliberately excluded — see
- * {@link AppSettings.gospelEngineKey}.
- */
+/** Everything persisted locally. */
 export interface AppData {
   version: 1;
   verses: MemorizedVerse[];
-  settings: Omit<AppSettings, "gospelEngineKey">;
+  settings: AppSettings;
   /** ISO-8601 timestamp of the last local mutation. */
   updatedAt: string;
 }
@@ -107,7 +105,7 @@ export type ReviewOutcome = "remembered" | "forgot";
 
 export const DATA_VERSION = 1;
 
-export const DEFAULT_SETTINGS: Omit<AppSettings, "gospelEngineKey"> = {
+export const DEFAULT_SETTINGS: AppSettings = {
   gospelEngineBaseUrl: "https://engine.ibeco.me",
 };
 

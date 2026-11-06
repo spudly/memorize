@@ -8,16 +8,13 @@ export interface KeyValueStorage {
 }
 
 export const DATA_KEY = "memorize:data:v1";
-export const SECRETS_KEY = "memorize:secrets:v1";
 
 /**
- * Secrets stay on the device: the gospel-engine API key lives here and is
- * never included in the persisted app data.
+ * Local persistence for the app data snapshot. There is no secret
+ * storage anymore (#101): the user API key was removed end-to-end —
+ * web search is server-key-only via the edge proxy and native search
+ * uses the offline demo set, so nothing secret is kept on device.
  */
-interface LocalSecrets {
-  gospelEngineKey?: string;
-}
-
 export class LocalStore {
   constructor(private readonly storage: KeyValueStorage) {}
 
@@ -36,39 +33,5 @@ export class LocalStore {
 
   async saveData(data: AppData): Promise<void> {
     await this.storage.setItem(DATA_KEY, JSON.stringify(data));
-  }
-
-  private async loadSecrets(): Promise<LocalSecrets> {
-    const raw = await this.storage.getItem(SECRETS_KEY);
-    if (raw === null) {
-      return {};
-    }
-    try {
-      const parsed: unknown = JSON.parse(raw);
-      return typeof parsed === "object" && parsed !== null ? (parsed as LocalSecrets) : {};
-    } catch {
-      return {};
-    }
-  }
-
-  private async saveSecrets(secrets: LocalSecrets): Promise<void> {
-    await this.storage.setItem(SECRETS_KEY, JSON.stringify(secrets));
-  }
-
-  async getApiKey(): Promise<string | null> {
-    const secrets = await this.loadSecrets();
-    return secrets.gospelEngineKey ?? null;
-  }
-
-  async setApiKey(key: string): Promise<void> {
-    const secrets = await this.loadSecrets();
-    secrets.gospelEngineKey = key;
-    await this.saveSecrets(secrets);
-  }
-
-  async clearApiKey(): Promise<void> {
-    const secrets = await this.loadSecrets();
-    delete secrets.gospelEngineKey;
-    await this.saveSecrets(secrets);
   }
 }

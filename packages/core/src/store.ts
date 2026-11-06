@@ -11,7 +11,6 @@ import { LocalStore, type KeyValueStorage } from "./storage";
 
 export interface MemorizeState {
   data: AppData;
-  apiKey: string | null;
 }
 
 export interface MemorizeActions {
@@ -20,8 +19,6 @@ export interface MemorizeActions {
   setDrillProgress(id: string, round: number, peeks: number): Promise<void>;
   completeDrill(id: string, now?: Date): Promise<void>;
   recordReview(id: string, outcome: ReviewOutcome, now?: Date): Promise<void>;
-  setApiKey(key: string): Promise<void>;
-  clearApiKey(): Promise<void>;
   replaceAll(data: AppData): Promise<void>;
 }
 
@@ -40,7 +37,6 @@ export interface MemorizeStore {
 export function createMemorizeStore(storage: KeyValueStorage): MemorizeStore {
   const local = new LocalStore(storage);
   let data: AppData = createEmptyAppData();
-  let apiKey: string | null = null;
   const listeners = new Set<() => void>();
 
   const emit = (): void => {
@@ -94,7 +90,6 @@ export function createMemorizeStore(storage: KeyValueStorage): MemorizeStore {
     if (loaded) {
       data = loaded;
     }
-    apiKey = await local.getApiKey();
     emit();
   })();
 
@@ -200,18 +195,6 @@ export function createMemorizeStore(storage: KeyValueStorage): MemorizeStore {
       return updateVerse(id, (v) => applyReview(v, outcome, now));
     },
 
-    async setApiKey(key: string): Promise<void> {
-      await local.setApiKey(key);
-      apiKey = key;
-      emit();
-    },
-
-    async clearApiKey(): Promise<void> {
-      await local.clearApiKey();
-      apiKey = null;
-      emit();
-    },
-
     async replaceAll(next: AppData): Promise<void> {
       data = next;
       await enqueueSave(async () => {
@@ -223,7 +206,7 @@ export function createMemorizeStore(storage: KeyValueStorage): MemorizeStore {
 
   return {
     ready,
-    getState: (): MemorizeState => ({ data, apiKey }),
+    getState: (): MemorizeState => ({ data }),
     subscribe: (listener: () => void): (() => void) => {
       listeners.add(listener);
       return () => {

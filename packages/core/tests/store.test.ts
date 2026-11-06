@@ -475,24 +475,23 @@ describe("memorize store", () => {
     expect(after?.nextReviewAt).not.toBe(before);
   });
 
-  test("stores the API key separately from synced data", async () => {
+  test("state carries no API key and data round-trips without one (#101)", async () => {
     const storage = memoryStorage();
     const store = createMemorizeStore(storage);
     await store.ready;
-    await store.actions.setApiKey("secret-key");
-    expect(store.getState().apiKey).toBe("secret-key");
+    expect("apiKey" in store.getState()).toBe(false);
+
+    await store.actions.addVerse(VERSE);
+    await flush();
 
     const store2 = createMemorizeStore(storage);
     await store2.ready;
-    expect(store2.getState().apiKey).toBe("secret-key");
+    expect("apiKey" in store2.getState()).toBe(false);
+    expect(store2.getState().data.verses).toHaveLength(1);
+    expect(store2.getState().data.verses[0]?.verse.id).toBe(VERSE.id);
 
     const raw = await new LocalStore(storage).loadData();
-    expect(JSON.stringify(raw)).not.toContain("secret-key");
-
-    await store2.actions.clearApiKey();
-    const store3 = createMemorizeStore(storage);
-    await store3.ready;
-    expect(store3.getState().apiKey).toBeNull();
+    expect(raw?.verses).toHaveLength(1);
   });
 
   test("re-adding a chunkKey-only verse does not persist or advance updatedAt", async () => {

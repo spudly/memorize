@@ -7,9 +7,9 @@ import { defineConfig, devices } from "@playwright/test";
  * `vite preview` (which also stands in for the Vercel edge proxy — see
  * vite.config.ts):
  *
- * - "demo" (port 4173): the default build. With no API key configured the
- *   app uses the built-in DemoDataSource, so flows run fully offline
- *   against the demo verse set.
+ * - "demo" (port 4173): the default build. Without the gospel proxy
+ *   the app uses the built-in DemoDataSource (there is no user API
+ *   key, #101), so flows run fully offline against the demo verse set.
  * - "proxy" (port 4174): built with VITE_USE_GOSPEL_PROXY=1, so search
  *   goes through GospelEngineDataSource against /api/*. The specs
  *   intercept those requests and fulfill them with fixtures in the

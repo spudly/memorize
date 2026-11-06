@@ -88,8 +88,7 @@ export default function App() {
     };
   }, []);
 
-  const { apiKey } = store.getState();
-  const dataSource = useMemo(() => dataSourceFor(apiKey), [apiKey]);
+  const dataSource = useMemo(() => dataSourceFor(), []);
 
   if (!ready || !fontsLoaded) {
     return (
@@ -164,11 +163,11 @@ export default function App() {
           ) : tab === "verses" ? (
             <VersesScreen store={store} />
           ) : tab === "search" ? (
-            <SearchScreen store={store} dataSource={dataSource} usingDemo={!apiKey} />
+            <SearchScreen store={store} dataSource={dataSource} usingDemo />
           ) : tab === "review" ? (
             <ReviewScreen store={store} />
           ) : (
-            <SettingsScreen store={store} />
+            <SettingsScreen />
           )}
         </YStack>
       </SafeAreaView>

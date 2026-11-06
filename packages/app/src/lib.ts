@@ -1,11 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import {
-  DEFAULT_SETTINGS,
-  DemoDataSource,
-  GospelEngineDataSource,
-  type KeyValueStorage,
-  type ScriptureDataSource,
-} from "@memorize/core";
+import { DemoDataSource, type KeyValueStorage, type ScriptureDataSource } from "@memorize/core";
 
 /** KeyValueStorage backed by AsyncStorage. */
 export const appStorage: KeyValueStorage = {
@@ -14,10 +8,12 @@ export const appStorage: KeyValueStorage = {
   removeItem: (key) => AsyncStorage.removeItem(key),
 };
 
-/** Full-library source when a key is set, offline demo data otherwise. */
-export function dataSourceFor(apiKey: string | null): ScriptureDataSource {
-  if (apiKey) {
-    return new GospelEngineDataSource(DEFAULT_SETTINGS.gospelEngineBaseUrl, apiKey);
-  }
+/**
+ * The native scripture data source is always the offline demo set
+ * (#101): there is no user API key anymore — web search is
+ * server-key-only by design through its edge proxy, and native
+ * has no proxy, so no key exists to call the engine directly with.
+ */
+export function dataSourceFor(): ScriptureDataSource {
   return new DemoDataSource();
 }

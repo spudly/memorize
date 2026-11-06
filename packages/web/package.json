@@ -2,7 +2,7 @@
   "dependencies": {
     "@memorize/core": "1.1.4",
     "@memorize/types": "1.1.4",
-    "@spudly/ui": "^5.0.0",
+    "@spudly/ui": "^6.0.0",
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "react-native-web": "^0.21.4",
