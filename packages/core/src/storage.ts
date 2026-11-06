@@ -10,6 +10,15 @@ export interface KeyValueStorage {
 export const DATA_KEY = "memorize:data:v1";
 
 /**
+ * Storage key that held the user API key before #101 removed it
+ * end-to-end. Existing installs may still carry an entry under this
+ * key; the store deletes it on initialization (see
+ * {@link LocalStore.clearLegacySecrets}) so no dead credential is
+ * left on device.
+ */
+export const LEGACY_SECRETS_KEY = "memorize:secrets:v1";
+
+/**
  * Local persistence for the app data snapshot. There is no secret
  * storage anymore (#101): the user API key was removed end-to-end —
  * web search is server-key-only via the edge proxy and native search
@@ -33,5 +42,18 @@ export class LocalStore {
 
   async saveData(data: AppData): Promise<void> {
     await this.storage.setItem(DATA_KEY, JSON.stringify(data));
+  }
+
+  /**
+   * Deletes any pre-#101 secrets entry (the removed user API key).
+   * Best-effort: a storage failure here must never block startup —
+   * the entry is inert either way, since nothing reads it anymore.
+   */
+  async clearLegacySecrets(): Promise<void> {
+    try {
+      await this.storage.removeItem(LEGACY_SECRETS_KEY);
+    } catch {
+      // Swallow: cleanup only; see the doc comment above.
+    }
   }
 }

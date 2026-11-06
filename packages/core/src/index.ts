@@ -38,7 +38,7 @@ export {
 export { BLANK_FRACTIONS, blankedIndices, gradeRound, tokenize } from "./drill";
 
 export type { KeyValueStorage } from "./storage";
-export { DATA_KEY, LocalStore } from "./storage";
+export { DATA_KEY, LEGACY_SECRETS_KEY, LocalStore } from "./storage";
 
 export type { MemorizeActions, MemorizeState, MemorizeStore } from "./store";
 export { createMemorizeStore } from "./store";

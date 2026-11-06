@@ -86,6 +86,7 @@ export function createMemorizeStore(storage: KeyValueStorage): MemorizeStore {
   };
 
   const ready = (async (): Promise<void> => {
+    await local.clearLegacySecrets();
     const loaded = await local.loadData();
     if (loaded) {
       data = loaded;

@@ -1,6 +1,6 @@
 import type { Verse } from "@memorize/types";
 import { mapSearchItem } from "../src/scripture";
-import { DATA_KEY, LocalStore, type KeyValueStorage } from "../src/storage";
+import { DATA_KEY, LEGACY_SECRETS_KEY, LocalStore, type KeyValueStorage } from "../src/storage";
 import { createMemorizeStore } from "../src/store";
 
 function memoryStorage(): KeyValueStorage {
@@ -492,6 +492,27 @@ describe("memorize store", () => {
 
     const raw = await new LocalStore(storage).loadData();
     expect(raw?.verses).toHaveLength(1);
+  });
+
+  test("initialization deletes the legacy pre-#101 secrets entry", async () => {
+    const storage = memoryStorage();
+    await storage.setItem(LEGACY_SECRETS_KEY, JSON.stringify({ apiKey: "old-key" }));
+    const store = createMemorizeStore(storage);
+    await store.ready;
+    expect(await storage.getItem(LEGACY_SECRETS_KEY)).toBeNull();
+  });
+
+  test("a failing legacy-secrets cleanup does not block initialization", async () => {
+    const inner = memoryStorage();
+    const storage: KeyValueStorage = {
+      getItem: inner.getItem,
+      setItem: inner.setItem,
+      removeItem: async () => {
+        throw new Error("storage unavailable");
+      },
+    };
+    const store = createMemorizeStore(storage);
+    await expect(store.ready).resolves.toBeUndefined();
   });
 
   test("re-adding a chunkKey-only verse does not persist or advance updatedAt", async () => {
