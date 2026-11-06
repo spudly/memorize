@@ -1,6 +1,12 @@
 # yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
 language: "en-US"
 reviews:
+  # Automatic Approvals: CodeRabbit approves a PR once its review of the latest
+  # commit is clean, its threads are resolved, and its pre-merge checks pass.
+  # The repo's branch rules require 1 approval before merge; this lets a clean
+  # CodeRabbit review satisfy it.
+  auto_approvals:
+    enabled: true
   path_instructions:
     - path: "**/*.ts"
       instructions: |
