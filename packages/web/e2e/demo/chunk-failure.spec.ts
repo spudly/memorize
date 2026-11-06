@@ -29,10 +29,12 @@ test("a failed lazy-tab chunk shows the frame's reload recovery", async ({ page 
   await expect(page.getByText("This section failed to load.")).toHaveCount(0);
 
   // The recovery action is a full reload: back on Search the chunk
-  // still fails, the app shell itself reloads cleanly, and the
-  // fallback is offered again rather than a blank screen.
+  // still fails, so restore the chunk, reload, and prove the app —
+  // Search included — is fully usable afterwards rather than a
+  // blank or still-broken shell.
   await page.getByRole("tab", { name: "Search" }).click();
   await expect(page.getByText("This section failed to load.")).toBeVisible();
+  await page.unroute(/SearchTab-[^/]*\.js/);
   await Promise.all([
     page.waitForEvent("load"),
     page.getByRole("button", { name: "Reload the app" }).click(),
@@ -40,5 +42,10 @@ test("a failed lazy-tab chunk shows the frame's reload recovery", async ({ page 
   await expect(page.getByText("This section failed to load.")).toHaveCount(0);
   await expect(page.getByText("Memorize", { exact: true })).toBeVisible();
   await expect(page.getByRole("tab", { name: "My verses" })).toBeVisible();
+  await page.getByRole("tab", { name: "Search" }).click();
+  await expect(page.getByText("Searching the built-in demo set.")).toBeVisible();
+  await page.getByPlaceholder(/Ether 12:27/).fill("Ether 12:27");
+  await page.getByRole("button", { name: "Search", exact: true }).click();
+  await expect(page.getByText("Ether 12:27", { exact: true })).toBeVisible();
   expect(errors).toEqual([]);
 });
