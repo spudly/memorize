@@ -7,7 +7,7 @@ no official Church API; this is a third-party service.
 Default base URL: `https://engine.ibeco.me`
 
 > The /api/get shape below is **VERIFIED** (live sample captured 2026-10-16,
-> pinned as a fixture in `tests/scripture.test.ts`). The /api/search shape
+> pinned as a fixture in `src/scripture.test.ts`). The /api/search shape
 > was **VERIFIED** on 2026-11-01 against the production proxy (see Search
 > below); its mapper stays defensive.
 
@@ -141,12 +141,12 @@ client runtime.
 ## What to verify once you have a key
 
 1. ~~The /api/get response shape and parameter name~~ — done 2026-10-16
-   (see above; fixture in `tests/scripture.test.ts`).
+   (see above; fixture in `src/scripture.test.ts`).
 2. ~~The real field names for reference/text in /api/search results~~ — done
-   2026-11-01 (see above; fixture in `tests/scripture.test.ts`).
+   2026-11-01 (see above; fixture in `src/scripture.test.ts`).
 3. Pagination / result limits on search (the app currently takes the first page).
 4. Rate limits (600 requests/minute per token per the project README; the
    client surfaces HTTP 429 as a `ScriptureApiError` with `status` set).
 
 Update `mapSearchItem` / `mapVerseDetail` in `src/scripture.ts` to match, and
-add a test in `tests/` pinning the real shape.
+add a test in `src/` pinning the real shape.

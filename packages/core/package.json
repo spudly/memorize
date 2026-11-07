@@ -24,7 +24,7 @@
     "build": "tsc -p tsconfig.json",
     "clean": "rm -rf dist",
     "lint": "echo 'lint disabled until typescript-eslint supports TypeScript 7 (TS sources are excluded in the root eslint.config.ts; JS tooling files are linted by the root lint script)'",
-    "test": "jest",
+    "test": "jest --config ../../jest.config.cjs --selectProjects core",
     "typecheck": "tsc --noEmit -p tsconfig.check.json"
   },
   "types": "./dist/index.d.ts",

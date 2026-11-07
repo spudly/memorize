@@ -40,5 +40,6 @@ of the rules below; do not flag the patterns they prescribe.
 ## Tests and manual-test docs
 
 - New behavior needs a regression test that fails without the change.
-- Behavior changes should update the "Run when" triggers in
-  `docs/manual-tests.md`.
+- Behavior changes should update the "Run when" triggers in the
+  colocated `*.test.steps.md` files (indexed by
+  `docs/manual-tests.md`).

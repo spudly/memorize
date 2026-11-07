@@ -31,7 +31,7 @@
     "ios": "expo start --ios",
     "lint": "echo 'lint disabled until typescript-eslint supports TypeScript 7 (TS sources are excluded in the root eslint.config.ts; JS tooling files are linted by the root lint script)'",
     "start": "expo start",
-    "test": "jest && node --test test/*.test.mjs",
+    "test": "jest --config ../../jest.config.cjs --selectProjects app && node --test src/*.test.mjs src/screens/*.test.mjs",
     "typecheck": "tsc --noEmit",
     "web": "expo start --web"
   },

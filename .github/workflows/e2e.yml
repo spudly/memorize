@@ -4,7 +4,7 @@ name: e2e
 # real app in a browser; this job builds the web package and exercises the
 # core flows in Chromium — demo-mode flows offline, and gospel-engine
 # flows against fixture-mocked /api responses (no live engine, no real
-# account). See packages/web/playwright.config.ts.
+# account). See playwright.config.ts at the repo root.
 
 on:
   pull_request:
@@ -46,7 +46,7 @@ jobs:
             exit 0
           fi
           git fetch --depth=1 origin "+refs/heads/$BASE_REF:refs/remotes/origin/$BASE_REF"
-          if git diff --name-only "origin/$BASE_REF...HEAD" | grep -Eq '^(packages/web/|packages/core/|packages/types/|package-lock\.json$|\.github/workflows/e2e\.yml$)'; then
+          if git diff --name-only "origin/$BASE_REF...HEAD" | grep -Eq '^(packages/web/|packages/core/|packages/types/|package-lock\.json$|playwright\.config\.ts$|\.github/workflows/e2e\.yml$)'; then
             echo "run-e2e=true" >> "$GITHUB_OUTPUT"
           else
             echo "run-e2e=false" >> "$GITHUB_OUTPUT"
@@ -100,7 +100,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: playwright-traces
-          path: packages/web/test-results
+          path: test-results
           if-no-files-found: ignore
 
   # Always-reporting gate for branch protection: reports on every PR,

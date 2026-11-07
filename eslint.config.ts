@@ -9,7 +9,7 @@ export default [
   {
     ignores: [
       "**/dist/**",
-      // Playwright e2e build outputs (packages/web/playwright.config.ts).
+      // Playwright e2e build outputs (root playwright.config.ts).
       "**/dist-e2e-*/**",
       "**/node_modules/**",
       "**/.turbo/**",
