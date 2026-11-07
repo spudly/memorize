@@ -46,7 +46,7 @@ jobs:
             exit 0
           fi
           git fetch --depth=1 origin "+refs/heads/$BASE_REF:refs/remotes/origin/$BASE_REF"
-          if git diff --name-only "origin/$BASE_REF...HEAD" | grep -Eq '^(packages/web/|packages/core/|packages/types/|package-lock\.json$|\.github/workflows/e2e\.yml$)'; then
+          if git diff --name-only "origin/$BASE_REF...HEAD" | grep -Eq '^(packages/web/|packages/core/|packages/types/|package-lock\.json$|playwright\.config\.ts$|\.github/workflows/e2e\.yml$)'; then
             echo "run-e2e=true" >> "$GITHUB_OUTPUT"
           else
             echo "run-e2e=false" >> "$GITHUB_OUTPUT"

@@ -88,15 +88,15 @@ time.
 
 ## Steps files index
 
-| Area                               | Steps file                                              |
-| ---------------------------------- | ------------------------------------------------------- |
-| My verses                          | `packages/web/src/components/VersesTab.test.steps.md`   |
-| Search & adding verses             | `packages/web/src/components/SearchTab.test.steps.md`   |
-| Review (spaced repetition)         | `packages/web/src/components/ReviewTab.test.steps.md`   |
-| Memorization drill                 | `packages/web/src/components/DrillView.test.steps.md`   |
-| Settings                           | `packages/web/src/components/SettingsTab.test.steps.md` |
-| Data persistence & recovery        | `packages/core/src/storage.test.steps.md`               |
-| Visual, responsive & accessibility | `packages/web/src/App.test.steps.md`                    |
+| Area                               | Steps file                                                                            |
+| ---------------------------------- | ------------------------------------------------------------------------------------- |
+| My verses                          | [VersesTab.test.steps.md](../packages/web/src/components/VersesTab.test.steps.md)     |
+| Search & adding verses             | [SearchTab.test.steps.md](../packages/web/src/components/SearchTab.test.steps.md)     |
+| Review (spaced repetition)         | [ReviewTab.test.steps.md](../packages/web/src/components/ReviewTab.test.steps.md)     |
+| Memorization drill                 | [DrillView.test.steps.md](../packages/web/src/components/DrillView.test.steps.md)     |
+| Settings                           | [SettingsTab.test.steps.md](../packages/web/src/components/SettingsTab.test.steps.md) |
+| Data persistence & recovery        | [storage.test.steps.md](../packages/core/src/storage.test.steps.md)                   |
+| Visual, responsive & accessibility | [App.test.steps.md](../packages/web/src/App.test.steps.md)                            |
 
 ---
 
