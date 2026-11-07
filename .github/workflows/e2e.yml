@@ -4,7 +4,7 @@ name: e2e
 # real app in a browser; this job builds the web package and exercises the
 # core flows in Chromium — demo-mode flows offline, and gospel-engine
 # flows against fixture-mocked /api responses (no live engine, no real
-# account). See packages/web/playwright.config.ts.
+# account). See playwright.config.ts at the repo root.
 
 on:
   pull_request:
@@ -100,7 +100,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: playwright-traces
-          path: packages/web/test-results
+          path: test-results
           if-no-files-found: ignore
 
   # Always-reporting gate for branch protection: reports on every PR,

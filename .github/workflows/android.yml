@@ -13,7 +13,8 @@ name: android
 #
 # Phase 2 of #29 (the android-usecases job below) installs the release
 # APK the build job produced on an emulator and runs the Maestro
-# use-case flows in packages/app/maestro: app launch, scripture search
+# use-case flows colocated as packages/app/src/*.test.e2e.yaml
+# (issue #108): app launch, scripture search
 # + passage display, the word-blanking drill (render + peek input),
 # and session persistence across an app restart. No API key is
 # configured in CI, so the app runs on its bundled demo data — the
@@ -235,8 +236,10 @@ jobs:
           disable-animations: true
           script: >
             adb install -r artifacts/apk/app-release.apk &&
-            maestro test packages/app/maestro
-            --format junit --output maestro-report.xml
+            maestro test packages/app/src/App.test.e2e.yaml
+            packages/app/src/screens/SearchScreen.test.e2e.yaml
+            packages/app/src/screens/DrillScreen.test.e2e.yaml --format
+            junit --output maestro-report.xml
 
       - name: Upload Maestro report
         if: always()

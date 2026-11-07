@@ -21,8 +21,9 @@ thread is unresolved — attesting to either here would be redundant.)
       triggers)
 - [ ] No new console or CI warnings introduced — or a GitHub issue filed
       for each new one
-- [ ] Manual test plan (`docs/manual-tests.md`) updated, or no
-      user-visible behavior change
+- [ ] Manual test plan (the colocated `*.test.steps.md` files,
+      indexed by `docs/manual-tests.md`) updated, or no user-visible
+      behavior change
 - [ ] Manual tests for the changed areas run against this PR's preview
       deployment and passed, or not applicable (no behavior change,
       docs-only, or version-only)
