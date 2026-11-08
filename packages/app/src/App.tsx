@@ -69,7 +69,13 @@ export default function App() {
   useEffect(() => {
     void (async () => {
       try {
-        const stored = await appStorage.getItem(LOCALE_STORAGE_KEY);
+        let stored: string | null = null;
+        try {
+          stored = await appStorage.getItem(LOCALE_STORAGE_KEY);
+        } catch {
+          // A failed stored-choice read must not skip device-locale
+          // negotiation — fall through with no stored choice.
+        }
         await activateForDevice({
           stored,
           deviceLocales: getLocales().map((locale) => locale.languageTag),
