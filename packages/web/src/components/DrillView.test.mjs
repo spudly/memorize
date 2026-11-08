@@ -25,12 +25,15 @@ const drillCode = strip(readFileSync(join(webRoot, "src/components/DrillView.tsx
 test("drill progress saves are awaited inside try/catch", () => {
   const awaitedSaves = drillCode.match(/try \{\s*await store\.actions\.setDrillProgress/g) ?? [];
   assert.equal(awaitedSaves.length, 2);
-  assert.match(drillCode, /catch \{\s*setMessage\("Couldn't save your progress/);
+  assert.match(
+    drillCode,
+    /catch \{\s*setMessage\(\s*i18n\._\(\{\s*id: "drill\.progressSaveFailed"/,
+  );
 });
 
 test("completion save is awaited and failure keeps the user on the drill", () => {
   assert.match(drillCode, /try \{\s*await store\.actions\.completeDrill\(verseId\);/);
-  assert.match(drillCode, /catch \{\s*setMessage\("Couldn't save finishing the drill/);
+  assert.match(drillCode, /catch \{\s*setMessage\(\s*i18n\._\(\{\s*id: "drill\.finishSaveFailed"/);
 });
 
 test("completion navigates back only while the view is still mounted", () => {

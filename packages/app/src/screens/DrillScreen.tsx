@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { MemorizationSessionPage } from "@spudly/ui";
+import { useLingui } from "@lingui/react";
 import {
   BLANK_FRACTIONS,
   blankedIndices,
@@ -27,6 +28,7 @@ type Props = {
  * not-found branch.
  */
 export default function DrillScreen({ store, verseId, onBack }: Props) {
+  const { i18n } = useLingui();
   const entry = store.getState().data.verses.find((v) => v.verse.id === verseId);
   const [round, setRound] = useState(entry?.drillRound ?? 0);
   const [peeks, setPeeks] = useState(entry?.drillPeeks ?? 0);
@@ -66,7 +68,12 @@ export default function DrillScreen({ store, verseId, onBack }: Props) {
     try {
       await store.actions.setDrillProgress(verseId, round, nextPeeks);
     } catch {
-      setMessage("Couldn't save your progress — it isn't saved yet if you leave now.");
+      setMessage(
+        i18n._({
+          id: "drill.progressSaveFailed",
+          message: "Couldn't save your progress — it isn't saved yet if you leave now.",
+        }),
+      );
     }
   };
 
@@ -81,7 +88,12 @@ export default function DrillScreen({ store, verseId, onBack }: Props) {
         isActive: () => activeRef.current,
         onBack,
         onSaveError: () => {
-          setMessage("Couldn't save finishing the drill. Try again before leaving.");
+          setMessage(
+            i18n._({
+              id: "drill.finishSaveFailed",
+              message: "Couldn't save finishing the drill. Try again before leaving.",
+            }),
+          );
         },
       });
       return;
@@ -94,7 +106,12 @@ export default function DrillScreen({ store, verseId, onBack }: Props) {
     try {
       await store.actions.setDrillProgress(verseId, next, 0);
     } catch {
-      setMessage("Couldn't save your progress — it isn't saved yet if you leave now.");
+      setMessage(
+        i18n._({
+          id: "drill.progressSaveFailed",
+          message: "Couldn't save your progress — it isn't saved yet if you leave now.",
+        }),
+      );
     }
   };
 

@@ -20,6 +20,28 @@ const transform = {
   ],
 };
 
+// The app package's i18n modules (#110) import @lingui/core, which is
+// ESM-only; Jest's CommonJS registry cannot require it untransformed.
+// The app project therefore also transpiles the Lingui ESM packages
+// in node_modules to CommonJS. (The core project imports no Lingui
+// code and keeps the plain transform.)
+const esmTransform = [
+  "@swc/jest",
+  {
+    jsc: {
+      parser: { syntax: "ecmascript" },
+      target: "es2022",
+    },
+    module: { type: "commonjs" },
+  },
+];
+
+const appTransform = {
+  ...transform,
+  "^.+\\.mjs$": esmTransform,
+  "^.+\\.js$": esmTransform,
+};
+
 module.exports = {
   projects: [
     {
@@ -34,7 +56,8 @@ module.exports = {
       rootDir: "<rootDir>/packages/app",
       testEnvironment: "node",
       testMatch: ["<rootDir>/src/**/*.test.ts"],
-      transform,
+      transform: appTransform,
+      transformIgnorePatterns: ["node_modules/(?!(@lingui|@messageformat|@noble)/)"],
     },
   ],
 };

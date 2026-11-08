@@ -108,10 +108,10 @@ describe("finishDrill (#91)", () => {
 describe("retryFeedback", () => {
   test("composes the retry message with the peek and blank counts", () => {
     expect(retryFeedback(4, 9)).toBe(
-      "Not quite — you peeked 4 time(s) on 9 blank(s). Try the round again.",
+      "Not quite — you peeked 4 times on 9 blanks. Try the round again.",
     );
     expect(retryFeedback(1, 2)).toBe(
-      "Not quite — you peeked 1 time(s) on 2 blank(s). Try the round again.",
+      "Not quite — you peeked 1 time on 2 blanks. Try the round again.",
     );
   });
 });

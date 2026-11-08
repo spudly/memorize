@@ -1,5 +1,6 @@
 import type { MyVersesPageItem } from "@spudly/ui";
 import type { MemorizedVerse } from "@memorize/types";
+import { i18n } from "../locales/i18n";
 
 /**
  * Compose one store entry into MyVersesPage's row view-model
@@ -29,7 +30,11 @@ export function toMyVersesPageItem(entry: MemorizedVerse): MyVersesPageItem {
     status: entry.status,
     ...(entry.nextReviewAt
       ? {
-          nextReviewLabel: `Next review: ${new Date(entry.nextReviewAt).toLocaleDateString()}`,
+          nextReviewLabel: i18n._({
+            id: "verses.nextReview",
+            message: "Next review: {date}",
+            values: { date: new Date(entry.nextReviewAt).toLocaleDateString(i18n.locale) },
+          }),
         }
       : {}),
   };

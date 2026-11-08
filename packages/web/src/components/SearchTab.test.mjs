@@ -42,7 +42,10 @@ test("a failed search clears results and is not a completed search", () => {
 
 test("fire-and-forget saves handle addVerse rejections on the error channel", () => {
   assert.match(code, /store\.actions\.addVerse\(verse\)\.catch\(/);
-  assert.match(code, /e instanceof Error \? e\.message : "Couldn't save that verse"/);
+  assert.match(
+    code,
+    /e instanceof Error\s+\?\s+e\.message\s+:\s+i18n\._\(\{ id: "search\.saveFailed", message: "Couldn't save that verse" \}\)/,
+  );
   assert.match(code, /saveVerse\(result\)/, "the reconcile loop saves through the handled path");
   assert.match(code, /saveVerse\(verse\)/, "a reported add saves through the handled path");
   assert.doesNotMatch(code, /void store\.actions\.addVerse/);

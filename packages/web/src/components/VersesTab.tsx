@@ -1,5 +1,6 @@
 import { MyVersesPage, type MyVersesPageItem } from "@spudly/ui";
 import type { MemorizeStore } from "@memorize/core";
+import { useLingui } from "@lingui/react";
 
 type Props = {
   store: MemorizeStore;
@@ -17,6 +18,7 @@ type Props = {
  * line renders (the page's contract).
  */
 export default function VersesTab({ store }: Props) {
+  const { i18n } = useLingui();
   const { verses } = store.getState().data;
 
   const items: MyVersesPageItem[] = verses.map((entry) => ({
@@ -27,7 +29,11 @@ export default function VersesTab({ store }: Props) {
     status: entry.status,
     ...(entry.nextReviewAt
       ? {
-          nextReviewLabel: `Next review: ${new Date(entry.nextReviewAt).toLocaleDateString()}`,
+          nextReviewLabel: i18n._({
+            id: "verses.nextReview",
+            message: "Next review: {date}",
+            values: { date: new Date(entry.nextReviewAt).toLocaleDateString(i18n.locale) },
+          }),
         }
       : {}),
   }));

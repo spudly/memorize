@@ -1,0 +1,77 @@
+msgid ""
+msgstr ""
+"POT-Creation-Date: 2026-11-08 00:17+0000\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: @lingui/cli\n"
+"Language: en-US\n"
+
+#. js-lingui-explicit-id
+#: src/components/DrillView.tsx
+msgid "drill.finishSaveFailed"
+msgstr "Couldn't save finishing the drill. Try again before leaving."
+
+#. js-lingui-explicit-id
+#: src/components/SearchTab.tsx
+msgid "search.saveFailed"
+msgstr "Couldn't save that verse"
+
+#. js-lingui-explicit-id
+#: src/components/DrillView.tsx
+msgid "drill.progressSaveFailed"
+msgstr "Couldn't save your progress — it isn't saved yet if you leave now."
+
+#. js-lingui-explicit-id
+#: src/App.tsx
+msgid "app.loading"
+msgstr "Loading Memorize"
+
+#. js-lingui-explicit-id
+#: src/App.tsx
+msgid "app.title"
+msgstr "Memorize"
+
+#: src/App.tsx
+#~ msgid "Memorize"
+#~ msgstr "Memorize"
+
+#. js-lingui-explicit-id
+#: src/App.tsx
+msgid "app.tabsLabel"
+msgstr "Memorize sections"
+
+#. js-lingui-explicit-id
+#: src/App.tsx
+msgid "tab.myVerses"
+msgstr "My verses"
+
+#. js-lingui-explicit-id
+#: src/components/VersesTab.tsx
+msgid "verses.nextReview"
+msgstr "Next review: {date}"
+
+#. js-lingui-explicit-id
+#: src/components/DrillView.tsx
+msgid "drill.retryFeedback"
+msgstr "Not quite — you peeked {peeks, plural, one {# time} other {# times}} on {blanks, plural, one {# blank} other {# blanks}}. Try the round again."
+
+#. js-lingui-explicit-id
+#: src/App.tsx
+msgid "tab.review"
+msgstr "Review"
+
+#. js-lingui-explicit-id
+#: src/App.tsx
+msgid "tab.search"
+msgstr "Search"
+
+#. js-lingui-explicit-id
+#: src/components/SearchTab.tsx
+msgid "search.failed"
+msgstr "Search failed"
+
+#. js-lingui-explicit-id
+#: src/App.tsx
+msgid "tab.settings"
+msgstr "Settings"

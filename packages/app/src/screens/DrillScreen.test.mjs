@@ -24,7 +24,10 @@ const screenCode = strip(readFileSync(join(here, "DrillScreen.tsx"), "utf8"));
 test("drill progress saves are awaited inside try/catch", () => {
   const awaitedSaves = screenCode.match(/try \{\s*await store\.actions\.setDrillProgress/g) ?? [];
   assert.equal(awaitedSaves.length, 2);
-  assert.match(screenCode, /catch \{\s*setMessage\("Couldn't save your progress/);
+  assert.match(
+    screenCode,
+    /catch \{\s*setMessage\(\s*i18n\._\(\{\s*id: "drill\.progressSaveFailed"/,
+  );
 });
 
 test("completion goes through finishDrill with the still-active guard", () => {
@@ -33,7 +36,7 @@ test("completion goes through finishDrill with the still-active guard", () => {
   assert.match(screenCode, /isActive: \(\) => activeRef\.current/);
   assert.match(
     screenCode,
-    /onSaveError: \(\) => \{\s*setMessage\("Couldn't save finishing the drill/,
+    /onSaveError: \(\) => \{\s*setMessage\(\s*i18n\._\(\{\s*id: "drill\.finishSaveFailed"/,
   );
 });
 

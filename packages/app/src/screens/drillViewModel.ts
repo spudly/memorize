@@ -1,4 +1,5 @@
 import type { MemorizationSessionPageWord } from "@spudly/ui";
+import { i18n } from "../locales/i18n";
 
 /**
  * View-model mapping for the memorization session (#49): the pure
@@ -66,5 +67,10 @@ export function isFinalRound(roundIndex: number, roundCount: number): boolean {
  * the page renders it as the warning alert.
  */
 export function retryFeedback(peeks: number, blankCount: number): string {
-  return `Not quite — you peeked ${peeks} time(s) on ${blankCount} blank(s). Try the round again.`;
+  return i18n._({
+    id: "drill.retryFeedback",
+    message:
+      "Not quite — you peeked {peeks, plural, one {# time} other {# times}} on {blanks, plural, one {# blank} other {# blanks}}. Try the round again.",
+    values: { peeks, blanks: blankCount },
+  });
 }
