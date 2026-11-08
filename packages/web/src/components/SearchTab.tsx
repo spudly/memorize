@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { VerseSearchPage, type VerseSearchPageItem } from "@spudly/ui";
 import { isSameVerse, suppliesMissingVerseIdentity } from "@memorize/core";
+import { useLingui } from "@lingui/react";
 import type { MemorizeStore, ScriptureDataSource, Verse } from "@memorize/core";
 
 type Props = {
@@ -18,6 +19,7 @@ type Props = {
  * resolves back to the full Verse the store action takes.
  */
 export default function SearchTab({ store, dataSource, usingDemo }: Props) {
+  const { i18n } = useLingui();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Verse[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -43,7 +45,11 @@ export default function SearchTab({ store, dataSource, usingDemo }: Props) {
   // rejection with the verse silently unsaved.
   const saveVerse = (verse: Verse): void => {
     store.actions.addVerse(verse).catch((e: unknown) => {
-      setError(e instanceof Error ? e.message : "Couldn't save that verse");
+      setError(
+        e instanceof Error
+          ? e.message
+          : i18n._({ id: "search.saveFailed", message: "Couldn't save that verse" }),
+      );
     });
   };
 
@@ -84,7 +90,9 @@ export default function SearchTab({ store, dataSource, usingDemo }: Props) {
       // an empty-result message next to it.
       setResults([]);
       setSearched(false);
-      setError(e instanceof Error ? e.message : "Search failed");
+      setError(
+        e instanceof Error ? e.message : i18n._({ id: "search.failed", message: "Search failed" }),
+      );
     } finally {
       setBusy(false);
     }

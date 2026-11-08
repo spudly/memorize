@@ -1,0 +1,111 @@
+msgid ""
+msgstr ""
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: scripts/generatePseudoLocale.mjs\n"
+"Language: en-XA\n"
+
+#~ msgid "app.loading"
+#~ msgstr "⟦Lóádíñg Mémórízé······⟧"
+
+#~ msgid "app.tabsLabel"
+#~ msgstr "⟦Mémórízé šéçţíóñš·······⟧"
+
+#~ msgid "app.title"
+#~ msgstr "⟦Mémórízé···⟧"
+
+#. js-lingui-explicit-id
+#: src/components/DrillView.tsx
+msgid "drill.finishSaveFailed"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/components/SearchTab.tsx
+msgid "search.saveFailed"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/components/DrillView.tsx
+msgid "drill.progressSaveFailed"
+msgstr ""
+
+#~ msgid "drill.finishSaveFailed"
+#~ msgstr "⟦Çóúldñ'ţ šávé fíñíšhíñg ţhé dríll. Ţrý ágáíñ béfóré léávíñg.························⟧"
+
+#~ msgid "drill.progressSaveFailed"
+#~ msgstr "⟦Çóúldñ'ţ šávé ýóúr prógréšš — íţ íšñ'ţ šávéd ýéţ íf ýóú léávé ñów.··························⟧"
+
+#~ msgid "drill.retryFeedback"
+#~ msgstr "⟦Ñóţ qúíţé — ýóú péékéd ·········⟧{peeks, plural, one {⟦# ţímé··⟧} other {⟦# ţíméš···⟧}}⟦ óñ ··⟧{blanks, plural, one {⟦# bláñk···⟧} other {⟦# bláñkš···⟧}}⟦. Ţrý ţhé róúñd ágáíñ.·········⟧"
+
+#. js-lingui-explicit-id
+#: src/App.tsx
+msgid "app.loading"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/App.tsx
+msgid "app.title"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/App.tsx
+msgid "app.tabsLabel"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/App.tsx
+msgid "tab.myVerses"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/components/VersesTab.tsx
+msgid "verses.nextReview"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/components/DrillView.tsx
+msgid "drill.retryFeedback"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/App.tsx
+msgid "tab.review"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/App.tsx
+msgid "tab.search"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/components/SearchTab.tsx
+msgid "search.failed"
+msgstr ""
+
+#~ msgid "search.failed"
+#~ msgstr "⟦Šéárçh fáíléd·····⟧"
+
+#~ msgid "search.saveFailed"
+#~ msgstr "⟦Çóúldñ'ţ šávé ţháţ véršé··········⟧"
+
+#. js-lingui-explicit-id
+#: src/App.tsx
+msgid "tab.settings"
+msgstr ""
+
+#~ msgid "tab.myVerses"
+#~ msgstr "⟦Mý véršéš····⟧"
+
+#~ msgid "tab.review"
+#~ msgstr "⟦Révíéw··⟧"
+
+#~ msgid "tab.search"
+#~ msgstr "⟦Šéárçh··⟧"
+
+#~ msgid "tab.settings"
+#~ msgstr "⟦Šéţţíñgš···⟧"
+
+#~ msgid "verses.nextReview"
+#~ msgstr "⟦Ñéxţ révíéw: ·····⟧{date}"

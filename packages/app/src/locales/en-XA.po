@@ -1,0 +1,68 @@
+msgid ""
+msgstr ""
+"POT-Creation-Date: 2026-11-08 00:24+0000\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: @lingui/cli\n"
+"Language: en-XA\n"
+
+#. js-lingui-explicit-id
+#: src/screens/DrillScreen.tsx
+msgid "drill.finishSaveFailed"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/screens/SearchScreen.tsx
+msgid "search.saveFailed"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/screens/DrillScreen.tsx
+msgid "drill.progressSaveFailed"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/App.tsx
+msgid "app.title"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/App.tsx
+msgid "app.tabsLabel"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/screens/versesPageModel.ts
+msgid "verses.nextReview"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/screens/drillViewModel.ts
+msgid "drill.retryFeedback"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/App.tsx
+msgid "tab.review"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/App.tsx
+msgid "tab.search"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/screens/SearchScreen.tsx
+msgid "search.failed"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/App.tsx
+msgid "tab.settings"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/App.tsx
+msgid "tab.verses"
+msgstr ""

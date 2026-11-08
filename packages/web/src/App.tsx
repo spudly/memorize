@@ -17,6 +17,8 @@ const SearchTab = lazy(() => import("./components/SearchTab"));
 const SettingsTab = lazy(() => import("./components/SettingsTab"));
 import { dataSourceFor, isDemoDataSource } from "./lib/gospel";
 import { webStorage } from "./lib/storage";
+import { I18nProvider } from "@lingui/react";
+import { i18n } from "./locales/i18n";
 
 type Tab = "verses" | "search" | "review" | "settings";
 
@@ -90,39 +92,58 @@ export default function App() {
 
   if (!ready) {
     return (
-      <TamaguiProvider config={webTamaguiConfig} defaultTheme="light">
-        <YStack flex={1} alignItems="center" justifyContent="center" gap="$3" padding="$4">
-          <Spinner size="large" accessibilityLabel="Loading Memorize" />
-          <Text>Loading Memorize</Text>
-        </YStack>
-      </TamaguiProvider>
+      <I18nProvider i18n={i18n}>
+        <TamaguiProvider config={webTamaguiConfig} defaultTheme="light">
+          <YStack flex={1} alignItems="center" justifyContent="center" gap="$3" padding="$4">
+            <Spinner
+              size="large"
+              accessibilityLabel={i18n._({ id: "app.loading", message: "Loading Memorize" })}
+            />
+            <Text>{i18n._({ id: "app.loading", message: "Loading Memorize" })}</Text>
+          </YStack>
+        </TamaguiProvider>
+      </I18nProvider>
     );
   }
 
   const tabs: TabbedShellPageTab[] = [
-    { id: "verses", label: "My verses", content: <VersesTab store={store} /> },
+    {
+      id: "verses",
+      label: i18n._({ id: "tab.myVerses", message: "My verses" }),
+      content: <VersesTab store={store} />,
+    },
     {
       id: "search",
-      label: "Search",
+      label: i18n._({ id: "tab.search", message: "Search" }),
       content: <SearchTab store={store} dataSource={dataSource} usingDemo={isDemoDataSource()} />,
     },
-    { id: "review", label: "Review", content: <ReviewTab store={store} /> },
-    { id: "settings", label: "Settings", content: <SettingsTab /> },
+    {
+      id: "review",
+      label: i18n._({ id: "tab.review", message: "Review" }),
+      content: <ReviewTab store={store} />,
+    },
+    {
+      id: "settings",
+      label: i18n._({ id: "tab.settings", message: "Settings" }),
+      content: <SettingsTab />,
+    },
   ];
 
   return (
-    <TamaguiProvider config={webTamaguiConfig} defaultTheme="light">
-      <TabbedShellPage
-        title="Memorize"
-        tabsLabel="Memorize sections"
-        tabs={tabs}
-        activeTabId={drillingId ? null : tab}
-        onTabSelect={handleTabChange}
-      >
-        {drillingId ? (
-          <DrillView store={store} verseId={drillingId} onBack={closeDrill} />
-        ) : undefined}
-      </TabbedShellPage>
-    </TamaguiProvider>
+    <I18nProvider i18n={i18n}>
+      <TamaguiProvider config={webTamaguiConfig} defaultTheme="light">
+        <TabbedShellPage
+          title={i18n._({ id: "app.title", message: "Memorize" })}
+          tabsLabel={i18n._({ id: "app.tabsLabel", message: "Memorize sections" })}
+          tabs={tabs}
+          activeTabId={drillingId ? null : tab}
+          onTabSelect={handleTabChange}
+        >
+          {drillingId ? (
+            <DrillView store={store} verseId={drillingId} onBack={closeDrill} />
+          ) : undefined}
+        </TabbedShellPage>
+      </TamaguiProvider>
+    </I18nProvider>
   );
 }

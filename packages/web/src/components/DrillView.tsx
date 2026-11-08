@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { MemorizationSessionPage, type MemorizationSessionPageWord } from "@spudly/ui";
+import { useLingui } from "@lingui/react";
 import {
   BLANK_FRACTIONS,
   blankedIndices,
@@ -25,6 +26,7 @@ type Props = {
  * verse is the page's not-found branch.
  */
 export default function DrillView({ store, verseId, onBack }: Props) {
+  const { i18n } = useLingui();
   const entry = store.getState().data.verses.find((v) => v.verse.id === verseId);
   const [round, setRound] = useState(entry?.drillRound ?? 0);
   const [peeks, setPeeks] = useState(entry?.drillPeeks ?? 0);
@@ -65,14 +67,24 @@ export default function DrillView({ store, verseId, onBack }: Props) {
     try {
       await store.actions.setDrillProgress(verseId, round, nextPeeks);
     } catch {
-      setMessage("Couldn't save your progress — it isn't saved yet if you leave now.");
+      setMessage(
+        i18n._({
+          id: "drill.progressSaveFailed",
+          message: "Couldn't save your progress — it isn't saved yet if you leave now.",
+        }),
+      );
     }
   };
 
   const nextRound = async (): Promise<void> => {
     if (gradeRound(blanks.size, peeks) === "retry") {
       setMessage(
-        `Not quite — you peeked ${peeks} time(s) on ${blanks.size} blank(s). Try the round again.`,
+        i18n._({
+          id: "drill.retryFeedback",
+          message:
+            "Not quite — you peeked {peeks, plural, one {# time} other {# times}} on {blanks, plural, one {# blank} other {# blanks}}. Try the round again.",
+          values: { peeks, blanks: blanks.size },
+        }),
       );
       return;
     }
@@ -80,7 +92,12 @@ export default function DrillView({ store, verseId, onBack }: Props) {
       try {
         await store.actions.completeDrill(verseId);
       } catch {
-        setMessage("Couldn't save finishing the drill. Try again before leaving.");
+        setMessage(
+          i18n._({
+            id: "drill.finishSaveFailed",
+            message: "Couldn't save finishing the drill. Try again before leaving.",
+          }),
+        );
         return;
       }
       if (activeRef.current) {
@@ -96,7 +113,12 @@ export default function DrillView({ store, verseId, onBack }: Props) {
     try {
       await store.actions.setDrillProgress(verseId, next, 0);
     } catch {
-      setMessage("Couldn't save your progress — it isn't saved yet if you leave now.");
+      setMessage(
+        i18n._({
+          id: "drill.progressSaveFailed",
+          message: "Couldn't save your progress — it isn't saved yet if you leave now.",
+        }),
+      );
     }
   };
 

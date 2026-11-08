@@ -1,6 +1,8 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { join } from "node:path";
 import react from "@vitejs/plugin-react";
+import { lingui, linguiTransformerBabelPreset } from "@lingui/vite-plugin";
+import babel from "@rolldown/plugin-babel";
 import { defineConfig, loadEnv } from "vite";
 import type { Plugin } from "vite";
 import { handleGospelRequest } from "./api/_handler.js";
@@ -81,7 +83,16 @@ export default defineConfig(({ mode }) => {
   const svgSoundModuleStub = join(process.cwd(), "scripts/svgSoundModuleStub.ts");
   const assetsRegistryStub = join(process.cwd(), "scripts/assetsRegistryStub.ts");
   return {
-    plugins: [react(), gospelApiDevProxy(gospelServerKey)],
+    plugins: [
+      // Lingui (#110): @vitejs/plugin-react v6 is OXC-based with no
+      // babel option, so the macro transform runs through
+      // @rolldown/plugin-babel with Lingui's preset; the Vite plugin
+      // compiles .po catalogs on the fly for any direct .po imports.
+      react(),
+      lingui(),
+      babel({ presets: [linguiTransformerBabelPreset()] }),
+      gospelApiDevProxy(gospelServerKey),
+    ],
     build: {
       rolldownOptions: {
         output: {

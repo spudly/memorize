@@ -1,6 +1,10 @@
 {
   "dependencies": {
     "@expo/metro-runtime": "~58.0.15",
+    "@formatjs/intl-locale": "^5.4.2",
+    "@formatjs/intl-pluralrules": "^7.0.2",
+    "@lingui/core": "^6.12.0",
+    "@lingui/react": "^6.12.0",
     "@memorize/core": "1.1.4",
     "@memorize/types": "1.1.4",
     "@react-native-async-storage/async-storage": "3.1.1",
@@ -8,6 +12,7 @@
     "expo": "~58.0.21",
     "expo-crypto": "~58.0.7",
     "expo-font": "~58.0.8",
+    "expo-localization": "~58.0.5",
     "expo-status-bar": "~58.0.4",
     "react": "19.3.1",
     "react-native": "0.88.1",
@@ -16,6 +21,9 @@
     "tamagui": "^3.1.9"
   },
   "devDependencies": {
+    "@lingui/babel-plugin-lingui-macro": "^6.12.0",
+    "@lingui/cli": "^6.12.0",
+    "@lingui/format-po": "^6.12.0",
     "@swc/core": "^1.16.20",
     "@swc/jest": "^0.2.39",
     "@types/jest": "^30.0.0",
@@ -31,9 +39,12 @@
     "ios": "expo start --ios",
     "lint": "echo 'lint disabled until typescript-eslint supports TypeScript 7 (TS sources are excluded in the root eslint.config.ts; JS tooling files are linted by the root lint script)'",
     "start": "expo start",
-    "test": "jest --config ../../jest.config.cjs --selectProjects app && node --test src/*.test.mjs src/screens/*.test.mjs",
+    "test": "npm run i18n:check && lingui compile --strict && jest --config ../../jest.config.cjs --selectProjects app && node --test src/*.test.mjs src/screens/*.test.mjs",
     "typecheck": "tsc --noEmit",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "i18n:extract": "lingui extract && lingui compile",
+    "i18n:compile": "lingui compile",
+    "i18n:check": "node scripts/checkI18n.mjs"
   },
   "version": "1.1.4"
 }
