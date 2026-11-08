@@ -1,4 +1,5 @@
 import type { MemorizedVerse } from "@memorize/types";
+import { i18n } from "../locales/i18n";
 import { toMyVersesPageItem, toMyVersesPageItems } from "./versesPageModel";
 
 const ENTRY: MemorizedVerse = {
@@ -40,7 +41,7 @@ describe("toMyVersesPageItem", () => {
     const nextReviewAt = "2026-10-25T12:00:00.000Z";
     const item = toMyVersesPageItem({ ...ENTRY, nextReviewAt });
     expect(item.nextReviewLabel).toBe(
-      `Next review: ${new Date(nextReviewAt).toLocaleDateString()}`,
+      `Next review: ${new Date(nextReviewAt).toLocaleDateString(i18n.locale)}`,
     );
   });
 });
