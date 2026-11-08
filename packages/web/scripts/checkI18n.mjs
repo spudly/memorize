@@ -74,7 +74,7 @@ function* sourceFiles(dir) {
 const referenced = new Set();
 for (const file of sourceFiles(join(root, "src"))) {
   const source = readFileSync(file, "utf8");
-  for (const match of source.matchAll(/\bid:\s*"([a-z]+(?:\.[a-zA-Z]+)+)"/g)) {
+  for (const match of source.matchAll(/\bid:\s*"([a-z][\w-]*(?:\.[\w-]+)+)"/g)) {
     referenced.add(match[1]);
   }
 }
