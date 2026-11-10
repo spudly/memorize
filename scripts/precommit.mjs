@@ -48,14 +48,19 @@ function stagedTypeScriptFiles() {
 
 // A consumer's typecheck/tests resolve workspace dependencies through
 // their dist output; build any missing one first (a fresh checkout has
-// none). Builds are plain `tsc -p`, so this is a no-op in a warm tree.
-function ensureDependencyBuilds(touchedDirs) {
-  const needsTypes = touchedDirs.some((dir) => dir !== "types");
-  const needsCore = touchedDirs.some((dir) => dir === "web" || dir === "app");
+// none). A dependency whose own source is staged must also rebuild even
+// when dist exists, or consumers resolve the previous declarations.
+// Builds are plain `tsc -p`, so this is a no-op in a warm tree whose
+// dependencies are untouched and already built.
+function ensureDependencyBuilds(typecheckDirs, touchedDirs) {
+  const needsTypes = typecheckDirs.some((dir) => dir !== "types");
+  const needsCore = typecheckDirs.some((dir) => dir === "web" || dir === "app");
   for (const dir of BUILDABLE_DEPS) {
     const needed = dir === "types" ? needsTypes : needsCore;
     if (!needed) continue;
-    if (existsSync(join(repoRoot, "packages", dir, "dist", "index.d.ts"))) continue;
+    const sourceChanged = touchedDirs.includes(dir);
+    if (!sourceChanged && existsSync(join(repoRoot, "packages", dir, "dist", "index.d.ts")))
+      continue;
     run("npm", ["run", "build", `--workspace=${readManifest(dir).name}`]);
   }
 }
@@ -73,7 +78,7 @@ function main() {
   const hasRootTypeScript = staged.some((file) => !file.startsWith("packages/"));
   const typecheckDirs = hasRootTypeScript ? PACKAGES.map(({ dir }) => dir) : touchedDirs;
 
-  ensureDependencyBuilds(typecheckDirs);
+  ensureDependencyBuilds(typecheckDirs, touchedDirs);
 
   for (const { dir, tsconfig } of PACKAGES) {
     if (!typecheckDirs.includes(dir)) continue;
