@@ -20,7 +20,7 @@
       "prettier --write"
     ],
     "*.{ts,tsx}": [
-      "eslint --fix"
+      "eslint --fix --cache --cache-location .eslintcache"
     ]
   },
   "name": "memorize",
