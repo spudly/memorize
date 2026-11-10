@@ -42,15 +42,21 @@ const appTransform = {
   "^.+\\.js$": esmTransform,
 };
 
+const os = require("node:os");
+
 module.exports = {
-  // Cap the local worker pool at 2: Jest sizes its pool from the host's
+  // Cap the local worker pool: Jest sizes its pool from the host's
   // reported core count, which oversubscribes constrained dev machines
   // (a host reporting 4 cores behind a much smaller CPU allocation gets
   // a pool that thrashes instead of helping). maxWorkers is a global
   // option, so set here it governs the shared pool across both projects
-  // below. CI keeps full parallelism — GitHub Actions sets CI=true
-  // automatically, and "50%" is Jest's usual CI sizing.
-  maxWorkers: process.env.CI ? "50%" : 2,
+  // below. The local cap is the lesser of 2 and Jest's own default
+  // sizing (cores − 1), so a one-CPU machine keeps its single worker.
+  // In CI the option is omitted entirely, leaving Jest's default —
+  // and CI parallelism — exactly as before.
+  ...(process.env.CI
+    ? {}
+    : { maxWorkers: Math.max(1, Math.min(2, os.availableParallelism() - 1)) }),
   projects: [
     {
       displayName: "core",
