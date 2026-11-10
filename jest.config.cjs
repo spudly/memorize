@@ -43,6 +43,14 @@ const appTransform = {
 };
 
 module.exports = {
+  // Cap the local worker pool at 2: Jest sizes its pool from the host's
+  // reported core count, which oversubscribes constrained dev machines
+  // (a host reporting 4 cores behind a much smaller CPU allocation gets
+  // a pool that thrashes instead of helping). maxWorkers is a global
+  // option, so set here it governs the shared pool across both projects
+  // below. CI keeps full parallelism — GitHub Actions sets CI=true
+  // automatically, and "50%" is Jest's usual CI sizing.
+  maxWorkers: process.env.CI ? "50%" : 2,
   projects: [
     {
       displayName: "core",
