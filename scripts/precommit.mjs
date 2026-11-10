@@ -47,7 +47,7 @@ function stagedTypeScriptFiles() {
 }
 
 function unstagedFiles() {
-  const out = execFileSync("git", ["diff", "--name-only", "--diff-filter=ACMR"], {
+  const out = execFileSync("git", ["diff", "--name-only", "--diff-filter=ACMRD"], {
     cwd: repoRoot,
     encoding: "utf8",
   });
@@ -66,8 +66,11 @@ function ensureDependencyBuilds(typecheckDirs, touchedDirs, staged) {
   const unstaged = unstagedFiles();
   for (const dir of BUILDABLE_DEPS) {
     const needed = dir === "types" ? needsTypes : needsCore;
-    if (!needed) continue;
     const sourceChanged = touchedDirs.includes(dir);
+    // A touched dependency rebuilds even when no consumer is being
+    // checked in this commit, so its dist cannot stay stale for a
+    // later consumer-only commit to reuse.
+    if (!needed && !sourceChanged) continue;
     if (!sourceChanged && existsSync(join(repoRoot, "packages", dir, "dist", "index.d.ts")))
       continue;
     // The build reads the working tree, but the commit takes the index.
