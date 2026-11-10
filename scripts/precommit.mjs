@@ -6,7 +6,7 @@
  * skipped, so the hook stays fast; CI remains the full-suite authority.
  */
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -39,7 +39,9 @@ function readManifest(dir) {
 }
 
 function stagedTypeScriptFiles() {
-  const out = execFileSync("git", ["diff", "--cached", "--name-only", "--diff-filter=ACMR"], {
+  // Deletions count: a commit that only deletes a TypeScript file still
+  // has to typecheck and test the package the file belonged to.
+  const out = execFileSync("git", ["diff", "--cached", "--name-only", "--diff-filter=ACMRD"], {
     cwd: repoRoot,
     encoding: "utf8",
   });
@@ -54,40 +56,45 @@ function unstagedFiles() {
   return out.split("\n").filter(Boolean);
 }
 
+function untrackedFiles(dir) {
+  const out = execFileSync(
+    "git",
+    ["ls-files", "--others", "--exclude-standard", `packages/${dir}`],
+    { cwd: repoRoot, encoding: "utf8" },
+  );
+  return out.split("\n").filter((file) => file.endsWith(".ts") || file.endsWith(".tsx"));
+}
+
 // A consumer's typecheck/tests resolve workspace dependencies through
-// their dist output; build any missing one first (a fresh checkout has
-// none). A dependency whose own source is staged must also rebuild even
-// when dist exists, or consumers resolve the previous declarations.
-// Builds are plain `tsc -p`, so this is a no-op in a warm tree whose
-// dependencies are untouched and already built.
-function ensureDependencyBuilds(typecheckDirs, touchedDirs, staged) {
+// their dist output. An existing dist is never trusted as current — a
+// branch switch or an earlier commit can leave it describing other
+// source — so every dependency a gated commit needs (a consumer is
+// being checked, or the dependency itself is touched) is rebuilt from
+// the current tree first. Builds are plain `tsc -p`.
+function ensureDependencyBuilds(typecheckDirs, touchedDirs) {
   const needsTypes = typecheckDirs.some((dir) => dir !== "types");
   const needsCore = typecheckDirs.some((dir) => dir === "web" || dir === "app");
   const unstaged = unstagedFiles();
   for (const dir of BUILDABLE_DEPS) {
     const needed = dir === "types" ? needsTypes : needsCore;
     const sourceChanged = touchedDirs.includes(dir);
-    // A touched dependency rebuilds even when no consumer is being
-    // checked in this commit, so its dist cannot stay stale for a
-    // later consumer-only commit to reuse.
     if (!needed && !sourceChanged) continue;
-    if (!sourceChanged && existsSync(join(repoRoot, "packages", dir, "dist", "index.d.ts")))
-      continue;
-    // The build reads the working tree, but the commit takes the index.
-    // A partially staged dependency file would build declarations from
-    // content that is not being committed, and that dist would then be
-    // reused by later commits — refuse until the file is staged in full.
-    if (sourceChanged) {
-      const partial = staged.filter(
-        (file) => file.startsWith(`packages/${dir}/`) && unstaged.includes(file),
+    // The build reads the working tree, but the commit takes the index,
+    // and the dist it writes outlives this commit. Any dependency file
+    // whose working-tree content differs from the index (unstaged edits
+    // or deletions, partially staged files, untracked sources) would
+    // bake uncommitted content into that dist — refuse until the
+    // package's tree matches what is being committed.
+    const dirty = [
+      ...unstaged.filter((file) => file.startsWith(`packages/${dir}/`)),
+      ...untrackedFiles(dir),
+    ];
+    if (dirty.length > 0) {
+      console.error(
+        `\n[pre-commit] packages/${dir} has uncommitted changes (${dirty.join(", ")}); ` +
+          "stage or stash them so the dependency build matches the commit.",
       );
-      if (partial.length > 0) {
-        console.error(
-          `\n[pre-commit] packages/${dir} has partially staged changes (${partial.join(", ")}); ` +
-            "stage each file in full so the dependency build matches the commit.",
-        );
-        throw new Error("partially staged workspace dependency");
-      }
+      throw new Error("uncommitted changes in workspace dependency");
     }
     run("npm", ["run", "build", `--workspace=${readManifest(dir).name}`]);
   }
@@ -106,7 +113,7 @@ function main() {
   const hasRootTypeScript = staged.some((file) => !file.startsWith("packages/"));
   const typecheckDirs = hasRootTypeScript ? PACKAGES.map(({ dir }) => dir) : touchedDirs;
 
-  ensureDependencyBuilds(typecheckDirs, touchedDirs, staged);
+  ensureDependencyBuilds(typecheckDirs, touchedDirs);
 
   for (const { dir, tsconfig } of PACKAGES) {
     if (!typecheckDirs.includes(dir)) continue;
