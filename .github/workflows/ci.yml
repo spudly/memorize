@@ -44,6 +44,8 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_READ_TOKEN }}
       - run: npm run typecheck
       - run: npm run lint
+      - run: npm run workflows:lint
+      - run: npm run check-drift
       - run: npm run test
       - run: npx turbo build --filter=@memorize/web
 
