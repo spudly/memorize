@@ -72,11 +72,10 @@ jobs:
           npm run jscpd -- --output "${RUNNER_TEMP}/jscpd-report"
           jq -r '.statistics.total | "## jscpd duplication (warn mode, memorize#117 Phase 1)\n\n| Files analyzed | Total lines | Clones found | Duplicated lines | Duplicated tokens |\n|---|---|---|---|---|\n| \(.sources) | \(.lines) | \(.clones) | \(.duplicatedLines) (\(.percentage * 100 | round / 100))% | \(.duplicatedTokens) (\(.percentageTokens * 100 | round / 100))% |"' "${RUNNER_TEMP}/jscpd-report/jscpd-report.json" >> "$GITHUB_STEP_SUMMARY"
 
-  # Dead-code detection in WARN MODE (memorize#116, Phase 1): reports
-  # findings to the job summary but can never fail a PR — the step is
-  # continue-on-error, this job is NOT in ci-gate's needs, and no
-  # threshold is configured. Enforcement (Phase 3) flips this in its
-  # own PR.
+  # Dead-code detection in ENFORCE MODE (memorize#116, Phase 3): the
+  # Phase 2 burn-down (#121) took the baseline to zero findings, so
+  # this job now blocks PRs — it IS in ci-gate's needs and its step
+  # exits with knip's own status, failing on any new dead code.
   knip:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -92,14 +91,24 @@ jobs:
       - run: npm ci
         env:
           NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_READ_TOKEN }}
-      - name: Report dead code (warn mode — never blocks)
-        continue-on-error: true
+      - name: Check dead code (enforce mode — blocks on findings)
+        env:
+          # Knip loads packages/web/vite.config.ts from the repo root,
+          # where Lingui's cwd-based config search finds no config and
+          # knip exits 2 on the load error even with zero findings (the
+          # Phase 1–2 warn mode masked this). Point Lingui at the web
+          # package's config for this run only; Vite's own runs, whose
+          # cwd is packages/web, are unaffected.
+          LINGUI_CONFIG: ${{ github.workspace }}/packages/web/lingui.config.js
         run: |
-          npm run knip > "${RUNNER_TEMP}/knip-report.txt" 2>&1 || true
+          set +e
+          npm run knip > "${RUNNER_TEMP}/knip-report.txt" 2>&1
+          knip_status=$?
+          set -e
           {
-            echo "## knip dead-code report (warn mode, memorize#116 Phase 1)"
+            echo "## knip dead-code report (enforce mode, memorize#116 Phase 3)"
             echo
-            grep -E '\([0-9]+\)$' "${RUNNER_TEMP}/knip-report.txt" | sed 's/^/- /'
+            grep -E '\([0-9]+\)$' "${RUNNER_TEMP}/knip-report.txt" | sed 's/^/- /' || true
             echo
             echo "<details><summary>Full report</summary>"
             echo
@@ -108,14 +117,16 @@ jobs:
             echo '```'
             echo "</details>"
           } >> "$GITHUB_STEP_SUMMARY"
+          exit "$knip_status"
 
-  # Always-reporting gate for branch protection: needs every job in
-  # this workflow and reports on every run. It fails only when a needed
-  # job failed or was cancelled, and passes when the rest succeeded or
-  # were legitimately skipped.
+  # Always-reporting gate for branch protection: needs every blocking
+  # job in this workflow and reports on every run. It fails only when
+  # a needed job failed or was cancelled, and passes when the rest
+  # succeeded or were legitimately skipped. (The warn-mode jscpd job
+  # stays out of the gate until its own Phase 3 enforcement.)
   ci-gate:
     name: ci-gate
-    needs: [ci]
+    needs: [ci, knip]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
