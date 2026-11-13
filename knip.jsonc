@@ -22,12 +22,20 @@
     // the platform rather than by imports, so it is an explicit entry.
     "packages/web": {
       "entry": ["api/**/*.ts"],
-      "project": ["src/**", "api/**"]
+      "project": ["src/**", "api/**"],
+      // react-native-web is never imported by name: vite.config.ts
+      // aliases every "react-native" import to it, so it must stay a
+      // direct dependency even though no source file references it.
+      "ignoreDependencies": ["react-native-web"]
     },
     // @memorize/app is an Expo app whose package entry index.ts re-exports
     // src/App.tsx (a knip default); Expo/Metro resolve the rest dynamically.
     "packages/app": {
-      "project": ["src/**"]
+      "project": ["src/**"],
+      // expo-updates is reported from app.json by knip's Expo plugin,
+      // but the app configures no updates service and no code imports
+      // it; the SDK's built-in updates module needs no direct dep.
+      "ignoreDependencies": ["expo-updates"]
     }
   }
 }
