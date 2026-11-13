@@ -302,6 +302,26 @@ type CodeSpanMarkers = {
   end: string;
 };
 
+/**
+ * Decode one numeric character reference (``&#123;`` / ``&#x7b;``):
+ * an encoded U+FFFD decodes to nothing (the replacement artifacts are
+ * dropped anyway), a valid scalar value decodes to its character, and
+ * anything else stays as the literal entity text.
+ */
+function decodeNumericEntity(
+  entity: string,
+  decimal: string | undefined,
+  hex: string | undefined,
+): string {
+  const codePoint = Number.parseInt(decimal ?? hex ?? "", decimal !== undefined ? 10 : 16);
+  if (codePoint === 0xfffd) {
+    return "";
+  }
+  return codePoint >= 1 && codePoint <= 0x10ffff && !(codePoint >= 0xd800 && codePoint <= 0xdfff)
+    ? String.fromCodePoint(codePoint)
+    : entity;
+}
+
 function codeSpanMarkerPattern(start: string, end: string): RegExp {
   return new RegExp(`${start}\\d+${end}`);
 }
@@ -317,20 +337,7 @@ function chooseCodeSpanMarkers(text: string): CodeSpanMarkers {
   // the same way. The probe decoder therefore mirrors the real one,
   // including its U+FFFD-to-nothing rule.
   const decodeProbe = (value: string): string =>
-    value.replace(
-      /&#(\d+);|&#x([0-9a-fA-F]+);/g,
-      (entity, decimal: string | undefined, hex: string | undefined) => {
-        const codePoint = Number.parseInt(decimal ?? hex ?? "", decimal !== undefined ? 10 : 16);
-        if (codePoint === 0xfffd) {
-          return "";
-        }
-        return codePoint >= 1 &&
-          codePoint <= 0x10ffff &&
-          !(codePoint >= 0xd800 && codePoint <= 0xdfff)
-          ? String.fromCodePoint(codePoint)
-          : entity;
-      },
-    );
+    value.replace(/&#(\d+);|&#x([0-9a-fA-F]+);/g, decodeNumericEntity);
   const decodedProbe = decodeProbe(text);
   const cleanedProbe = dropReplacementArtifacts(text);
   const probe = [
@@ -1019,15 +1026,7 @@ function toPlainText(raw: string): string {
       if (decimal === undefined && hex === undefined) {
         return HTML_ENTITIES[entity] ?? entity;
       }
-      const codePoint = Number.parseInt(decimal ?? hex, decimal !== undefined ? 10 : 16);
-      if (codePoint === 0xfffd) {
-        return "";
-      }
-      return codePoint >= 1 &&
-        codePoint <= 0x10ffff &&
-        !(codePoint >= 0xd800 && codePoint <= 0xdfff)
-        ? String.fromCodePoint(codePoint)
-        : entity;
+      return decodeNumericEntity(entity, decimal, hex);
     },
   );
   // Normalize whitespace: no trailing spaces, no run of blank lines.

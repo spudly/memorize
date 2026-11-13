@@ -10,10 +10,13 @@
  */
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 
-const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+// Shared by @memorize/app and @memorize/web (#117 Phase 2: the two
+// per-package copies were byte-identical). Each package invokes this
+// script from its own directory via its `i18n:check` script, so the
+// package root is the working directory.
+const root = process.cwd();
 
 function parsePo(name) {
   const content = readFileSync(join(root, "src", "locales", name), "utf8");

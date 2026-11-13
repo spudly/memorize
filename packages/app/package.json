@@ -42,7 +42,7 @@
     "web": "expo start --web",
     "i18n:extract": "lingui extract && lingui compile",
     "i18n:compile": "lingui compile",
-    "i18n:check": "node scripts/checkI18n.mjs"
+    "i18n:check": "node ../../scripts/checkI18n.mjs"
   },
   "version": "1.1.4"
 }
