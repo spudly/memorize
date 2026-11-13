@@ -92,6 +92,14 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_READ_TOKEN }}
       - name: Check dead code (enforce mode — blocks on findings)
+        env:
+          # Knip loads packages/web/vite.config.ts from the repo root,
+          # where Lingui's cwd-based config search finds no config and
+          # knip exits 2 on the load error even with zero findings (the
+          # Phase 1–2 warn mode masked this). Point Lingui at the web
+          # package's config for this run only; Vite's own runs, whose
+          # cwd is packages/web, are unaffected.
+          LINGUI_CONFIG: ${{ github.workspace }}/packages/web/lingui.config.js
         run: |
           set +e
           npm run knip > "${RUNNER_TEMP}/knip-report.txt" 2>&1
