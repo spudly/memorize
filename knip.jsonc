@@ -1,0 +1,33 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "workspaces": {
+    // Root workspace: the repo scripts are entry points in their own right
+    // (the root `test` script runs scripts/lockfileSync.test.mjs directly),
+    // so script-only references must count as usage.
+    ".": {
+      "entry": ["scripts/*.{js,mjs,cjs}"],
+      "project": ["scripts/**"]
+    },
+    // @memorize/types and @memorize/core are published packages whose public
+    // surface is src/index.ts (exports "." -> dist); knip's defaults already
+    // treat that entry as the public API, so no per-workspace entry is needed.
+    "packages/types": {
+      "project": ["src/**"]
+    },
+    "packages/core": {
+      "project": ["src/**"]
+    },
+    // @memorize/web is a Vite app (entry src/main.tsx via index.html, a
+    // knip default); the api/ directory holds Vercel functions invoked by
+    // the platform rather than by imports, so it is an explicit entry.
+    "packages/web": {
+      "entry": ["api/**/*.ts"],
+      "project": ["src/**", "api/**"]
+    },
+    // @memorize/app is an Expo app whose package entry index.ts re-exports
+    // src/App.tsx (a knip default); Expo/Metro resolve the rest dynamically.
+    "packages/app": {
+      "project": ["src/**"]
+    }
+  }
+}
