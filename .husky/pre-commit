@@ -1,3 +1,4 @@
 #!/bin/sh
 npx lint-staged
-node scripts/precommit.mjs
+node scripts/precommitTypecheck.mjs
+npm run precommit:affected-tests
