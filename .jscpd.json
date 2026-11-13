@@ -1,11 +1,7 @@
 {
   "minTokens": 50,
   "minLines": 5,
-  "format": [
-    "typescript",
-    "tsx",
-    "javascript"
-  ],
+  "format": ["typescript", "tsx", "javascript"],
   "ignore": [
     "**/node_modules/**",
     "**/dist/**",
@@ -13,12 +9,10 @@
     "**/.turbo/**",
     "**/.expo/**",
     "**/test-results/**",
-    "**/playwright-report/**"
+    "**/playwright-report/**",
+    "**/lingui.config.js"
   ],
-  "reporters": [
-    "console",
-    "json"
-  ],
+  "reporters": ["console", "json"],
   "output": "jscpd-report",
   "gitignore": true
 }
