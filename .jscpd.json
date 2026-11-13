@@ -1,0 +1,24 @@
+{
+  "minTokens": 50,
+  "minLines": 5,
+  "format": [
+    "typescript",
+    "tsx",
+    "javascript"
+  ],
+  "ignore": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/coverage/**",
+    "**/.turbo/**",
+    "**/.expo/**",
+    "**/test-results/**",
+    "**/playwright-report/**"
+  ],
+  "reporters": [
+    "console",
+    "json"
+  ],
+  "output": "jscpd-report",
+  "gitignore": true
+}

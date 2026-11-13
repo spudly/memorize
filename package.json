@@ -7,6 +7,7 @@
     "@swc/jest": "^0.2.39",
     "eslint": "^10.13.0",
     "husky": "^9.1.7",
+    "jscpd": "^5.4.3",
     "knip": "^6.45.1",
     "lint-staged": "^17.6.0",
     "prettier": "^3.9.10",
@@ -31,6 +32,7 @@
   "scripts": {
     "build": "turbo build",
     "dev:web": "turbo dev --filter=@memorize/web",
+    "jscpd": "jscpd packages",
     "knip": "knip",
     "lint": "eslint packages --max-warnings 0",
     "lint:fix": "eslint packages --fix",
