@@ -11,3 +11,6 @@ coverage/
 *.tsbuildinfo
 .DS_Store
 playwright-report/
+
+# jscpd local report output
+jscpd-report/
