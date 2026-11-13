@@ -47,10 +47,12 @@ jobs:
       - run: npm run test
       - run: npx turbo build --filter=@memorize/web
 
-  # Copy-paste detection in WARN MODE (memorize#117, Phase 1): reports
-  # duplication to the job summary but can never fail a PR — the step is
-  # continue-on-error, this job is NOT in ci-gate's needs, and no threshold
-  # is configured. Enforcement (Phase 3) flips this in its own PR.
+  # Copy-paste detection in ENFORCE MODE (memorize#117, Phase 3): the
+  # Phase 2 burn-down (#123) set the baseline at 40 clones / 671
+  # duplicated lines (8.08% of lines), and .jscpd.json now carries
+  # threshold: 9 — this job blocks PRs whose duplication share rises
+  # above that threshold. It IS in ci-gate's needs and its step exits
+  # with jscpd's own status.
   jscpd:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -66,11 +68,14 @@ jobs:
       - run: npm ci
         env:
           NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_READ_TOKEN }}
-      - name: Report duplication (warn mode — never blocks)
-        continue-on-error: true
+      - name: Check duplication (enforce mode — blocks above threshold)
         run: |
+          set +e
           npm run jscpd -- --output "${RUNNER_TEMP}/jscpd-report"
-          jq -r '.statistics.total | "## jscpd duplication (warn mode, memorize#117 Phase 1)\n\n| Files analyzed | Total lines | Clones found | Duplicated lines | Duplicated tokens |\n|---|---|---|---|---|\n| \(.sources) | \(.lines) | \(.clones) | \(.duplicatedLines) (\(.percentage * 100 | round / 100))% | \(.duplicatedTokens) (\(.percentageTokens * 100 | round / 100))% |"' "${RUNNER_TEMP}/jscpd-report/jscpd-report.json" >> "$GITHUB_STEP_SUMMARY"
+          jscpd_status=$?
+          set -e
+          jq -r '.statistics.total | "## jscpd duplication (enforce mode, memorize#117 Phase 3; threshold 9%)\n\n| Files analyzed | Total lines | Clones found | Duplicated lines | Duplicated tokens |\n|---|---|---|---|---|\n| \(.sources) | \(.lines) | \(.clones) | \(.duplicatedLines) (\(.percentage * 100 | round / 100))% | \(.duplicatedTokens) (\(.percentageTokens * 100 | round / 100))% |"' "${RUNNER_TEMP}/jscpd-report/jscpd-report.json" >> "$GITHUB_STEP_SUMMARY"
+          exit "$jscpd_status"
 
   # Dead-code detection in ENFORCE MODE (memorize#116, Phase 3): the
   # Phase 2 burn-down (#121) took the baseline to zero findings, so
@@ -122,11 +127,10 @@ jobs:
   # Always-reporting gate for branch protection: needs every blocking
   # job in this workflow and reports on every run. It fails only when
   # a needed job failed or was cancelled, and passes when the rest
-  # succeeded or were legitimately skipped. (The warn-mode jscpd job
-  # stays out of the gate until its own Phase 3 enforcement.)
+  # succeeded or were legitimately skipped.
   ci-gate:
     name: ci-gate
-    needs: [ci, knip]
+    needs: [ci, knip, jscpd]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5

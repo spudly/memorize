@@ -14,5 +14,6 @@
   ],
   "reporters": ["console", "json"],
   "output": "jscpd-report",
-  "gitignore": true
+  "gitignore": true,
+  "threshold": 9
 }
