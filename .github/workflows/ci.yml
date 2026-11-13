@@ -65,12 +65,12 @@ jobs:
         run: corepack enable npm
       - run: npm ci
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_READ_TOKEN }}
       - name: Report duplication (warn mode — never blocks)
         continue-on-error: true
         run: |
           npm run jscpd -- --output "${RUNNER_TEMP}/jscpd-report"
-          jq -r '"## jscpd duplication (warn mode, memorize#117 Phase 1)\n\n| Files analyzed | Total lines | Clones found | Duplicated lines | Duplicated tokens |\n|---|---|---|---|---|\n| \(.total.sources) | \(.total.lines) | \(.total.clones) | \(.total.duplicatedLines) (\(.total.percentage * 100 | round / 100))% | \(.total.duplicatedTokens) (\(.total.percentageTokens * 100 | round / 100))% |"' "${RUNNER_TEMP}/jscpd-report/jscpd-report.json" >> "$GITHUB_STEP_SUMMARY"
+          jq -r '.statistics.total | "## jscpd duplication (warn mode, memorize#117 Phase 1)\n\n| Files analyzed | Total lines | Clones found | Duplicated lines | Duplicated tokens |\n|---|---|---|---|---|\n| \(.sources) | \(.lines) | \(.clones) | \(.duplicatedLines) (\(.percentage * 100 | round / 100))% | \(.duplicatedTokens) (\(.percentageTokens * 100 | round / 100))% |"' "${RUNNER_TEMP}/jscpd-report/jscpd-report.json" >> "$GITHUB_STEP_SUMMARY"
 
   # Always-reporting gate for branch protection: needs every job in
   # this workflow and reports on every run. It fails only when a needed
