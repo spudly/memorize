@@ -44,7 +44,7 @@
     "lint": "eslint packages",
     "lint:fix": "eslint packages --fix",
     "workflows:lint": "prettier --check .github/workflows && npm run actionlint",
-    "actionlint": "github-actionlint .github/workflows/*.yml",
+    "actionlint": "github-actionlint",
     "precommit:affected-tests": "node scripts/precommitAffectedTests.mjs",
     "check-drift": "spudly-tooling check-drift",
     "prepare": "husky || true",
