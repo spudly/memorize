@@ -15,13 +15,18 @@ import { messages as enUSMessages } from "./en-US";
  * {@link loadCatalog}. The exported `i18n` singleton is the
  * client-side instance; callers that render on the server should
  * create their own instance with an explicit locale argument.
+ * @public — i18n foundation API (#110): public surface retained for the sequenced DS #539 voice wiring; exercised by the packages' i18n contract tests.
  */
 export const SUPPORTED_LOCALES = ["en-US", "en-XA"] as const;
 export type SupportedLocale = (typeof SUPPORTED_LOCALES)[number];
 
+/**
+ * @public — i18n foundation API (#110): public surface retained for the sequenced DS #539 voice wiring; exercised by the packages' i18n contract tests.
+ */
 export const DEFAULT_LOCALE: SupportedLocale = "en-US";
 
-/** Storage key for the user's explicit locale choice. */
+/** Storage key for the user's explicit locale choice. * @public — i18n foundation API (#110): public surface retained for the sequenced DS #539 voice wiring; exercised by the packages' i18n contract tests.
+ */
 export const LOCALE_STORAGE_KEY = "memorize.locale";
 
 /**
@@ -38,6 +43,7 @@ const catalogs: Partial<Record<SupportedLocale, Messages>> = {
  * Map an arbitrary language tag to a supported locale, or null when
  * nothing matches. Matching is by primary language: any `en-*`
  * variant resolves to en-US, except the pseudo-locale itself.
+ * @public — i18n foundation API (#110): public surface retained for the sequenced DS #539 voice wiring; exercised by the packages' i18n contract tests.
  */
 export function normalizeLocale(candidate: string | null | undefined): SupportedLocale | null {
   if (!candidate) {
@@ -60,6 +66,7 @@ export function normalizeLocale(candidate: string | null | undefined): Supported
 /**
  * Resolve the active locale: stored choice first, then each
  * device/header candidate in order, then the default.
+ * @public — i18n foundation API (#110): public surface retained for the sequenced DS #539 voice wiring; exercised by the packages' i18n contract tests.
  */
 export function resolveLocale(args: {
   stored?: string | null | undefined;
@@ -78,7 +85,8 @@ export function resolveLocale(args: {
   return DEFAULT_LOCALE;
 }
 
-/** Dynamically load a locale's compiled catalog (cached). */
+/** Dynamically load a locale's compiled catalog (cached). * @public — i18n foundation API (#110): public surface retained for the sequenced DS #539 voice wiring; exercised by the packages' i18n contract tests.
+ */
 export async function loadCatalog(locale: SupportedLocale): Promise<Messages> {
   const cached = catalogs[locale];
   if (cached) {
@@ -93,6 +101,7 @@ export async function loadCatalog(locale: SupportedLocale): Promise<Messages> {
  * Create an activated i18n instance for an explicit locale. Pass
  * the catalog from {@link loadCatalog} for any locale that is not
  * loaded yet; the default locale is always available synchronously.
+ * @public — i18n foundation API (#110): public surface retained for the sequenced DS #539 voice wiring; exercised by the packages' i18n contract tests.
  */
 export function createI18n(locale: SupportedLocale = DEFAULT_LOCALE, messages?: Messages): I18n {
   const instance = setupI18n();
@@ -116,7 +125,8 @@ export function createI18n(locale: SupportedLocale = DEFAULT_LOCALE, messages?: 
 export const i18n: I18n = globalI18n;
 i18n.loadAndActivate({ locale: DEFAULT_LOCALE, messages: enUSMessages });
 
-/** Load a locale's catalog dynamically and activate it on the singleton. */
+/** Load a locale's catalog dynamically and activate it on the singleton. * @public — i18n foundation API (#110): public surface retained for the sequenced DS #539 voice wiring; exercised by the packages' i18n contract tests.
+ */
 export async function activateI18n(locale: SupportedLocale): Promise<I18n> {
   const messages = await loadCatalog(locale);
   i18n.loadAndActivate({ locale, messages });

@@ -15,10 +15,14 @@ import { messages as enUSMessages } from "./en-US";
  * {@link loadCatalog}. The exported `i18n` singleton is the
  * client-side instance; callers that render on the server should
  * create their own instance with an explicit locale argument.
+ * @public — i18n foundation API (#110): public surface retained for the sequenced DS #539 voice wiring; exercised by the packages' i18n contract tests.
  */
 export const SUPPORTED_LOCALES = ["en-US", "en-XA"] as const;
 export type SupportedLocale = (typeof SUPPORTED_LOCALES)[number];
 
+/**
+ * @public — i18n foundation API (#110): public surface retained for the sequenced DS #539 voice wiring; exercised by the packages' i18n contract tests.
+ */
 export const DEFAULT_LOCALE: SupportedLocale = "en-US";
 
 /** Storage key for the user's explicit locale choice. */

@@ -859,7 +859,7 @@ function stripMarkdownLinks(text: string, definedRefs: Set<string> = new Set<str
  * the syntax around them. Plain text passes through unchanged apart
  * from whitespace normalization.
  */
-export function toPlainText(raw: string): string {
+function toPlainText(raw: string): string {
   let text = raw.replace(/\r\n?/g, "\n");
   // Protect code spans FIRST: backslash escapes are not interpreted
   // inside a code span, so span content must be captured before
@@ -1308,7 +1308,7 @@ export function suppliesMissingVerseIdentity(saved: Verse, incoming: Verse): boo
  * so a verse renumbered here keeps its persisted identity for
  * {@link isSameVerse} regardless of the id a given list gave it.
  */
-export function withUniqueIds(verses: Verse[]): Verse[] {
+function withUniqueIds(verses: Verse[]): Verse[] {
   const assigned = new Set<string>();
   return verses.map((verse) => {
     if (!assigned.has(verse.id)) {
