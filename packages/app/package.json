@@ -1,23 +1,23 @@
 {
   "dependencies": {
     "@expo/metro-runtime": "~58.0.15",
-    "@formatjs/intl-locale": "^5.4.2",
-    "@formatjs/intl-pluralrules": "^7.0.2",
+    "@formatjs/intl-locale": "^5.4.3",
+    "@formatjs/intl-pluralrules": "^7.0.4",
     "@lingui/core": "^6.12.0",
     "@lingui/react": "^6.12.0",
     "@memorize/core": "1.1.4",
     "@memorize/types": "1.1.4",
     "@react-native-async-storage/async-storage": "3.1.1",
     "@spudly/ui": "^6.0.0",
-    "expo": "~58.0.21",
+    "expo": "~58.0.25",
     "expo-font": "~58.0.8",
     "expo-localization": "~58.0.5",
-    "expo-status-bar": "~58.0.4",
+    "expo-status-bar": "~58.0.5",
     "react": "19.3.1",
     "react-native": "0.88.1",
     "react-native-safe-area-context": "~5.11.1",
     "react-native-web": "~0.21.0",
-    "tamagui": "^3.1.9"
+    "tamagui": "^3.3.2"
   },
   "devDependencies": {
     "@lingui/babel-plugin-lingui-macro": "^6.12.0",
