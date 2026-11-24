@@ -4,7 +4,7 @@
     "@commitlint/cli": "^21.2.4",
     "@playwright/test": "^1.65.1",
     "@spudly/commitlint-config": "^0.2.0",
-    "@spudly/eslint-config": "^0.2.0",
+    "@spudly/eslint-config": "^0.7.1",
     "@spudly/tooling": "^0.2.0",
     "@swc/core": "^1.16.20",
     "@swc/jest": "^0.2.39",
@@ -17,7 +17,8 @@
     "prettier": "^3.10.1",
     "semver": "^7.8.5",
     "turbo": "^2.11.13",
-    "typescript": "^7.0.2"
+    "typescript": "npm:@typescript/typescript6@^6.0.2",
+    "typescript7": "npm:typescript@^7.0.2"
   },
   "engines": {
     "node": ">=22"

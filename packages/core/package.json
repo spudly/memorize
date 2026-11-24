@@ -19,11 +19,11 @@
   "name": "@memorize/core",
   "private": true,
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "node ../../node_modules/typescript7/bin/tsc -p tsconfig.json",
     "clean": "rm -rf dist",
-    "lint": "echo 'lint disabled until typescript-eslint supports TypeScript 7 (TS sources are excluded in the root eslint.config.ts; JS tooling files are linted by the root lint script)'",
+    "lint": "eslint src --max-warnings 0",
     "test": "jest --config ../../jest.config.cjs --selectProjects core",
-    "typecheck": "tsc --noEmit -p tsconfig.check.json"
+    "typecheck": "node ../../node_modules/typescript7/bin/tsc --noEmit -p tsconfig.check.json"
   },
   "types": "./dist/index.d.ts",
   "version": "1.1.4"

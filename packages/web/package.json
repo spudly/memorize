@@ -26,11 +26,11 @@
     "build": "vite build",
     "predev": "node scripts/clearStaleViteCache.mjs",
     "dev": "vite",
-    "lint": "echo 'lint disabled until typescript-eslint supports TypeScript 7 (TS sources are excluded in the root eslint.config.ts; JS tooling files are linted by the root lint script)'",
+    "lint": "eslint src --max-warnings 0",
     "preview": "vite preview",
     "test": "npm run i18n:check && lingui compile --strict && node --test src/components/*.test.mjs src/locales/*.test.mjs vite.config.test.mjs",
     "test:e2e": "playwright test --config ../../playwright.config.ts",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "node ../../node_modules/typescript7/bin/tsc --noEmit",
     "i18n:extract": "lingui extract && lingui compile",
     "i18n:compile": "lingui compile",
     "i18n:check": "node ../../scripts/checkI18n.mjs"
