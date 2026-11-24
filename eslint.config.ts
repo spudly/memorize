@@ -1,4 +1,5 @@
 import { base, jest, react, reactNative, typescriptPendingIgnores } from "@spudly/eslint-config";
+import { reactPending } from "@spudly/eslint-config/react-pending";
 
 // Shared config: @spudly/eslint-config (ported from Eciperay's
 // eslint.config.ts). This repo composes the subsets that match its code:
@@ -19,13 +20,18 @@ export default [
   },
   // typescript-eslint does not support TypeScript 7 yet (it caps
   // TypeScript at <6.1) and it was the only TS parser, so TS/TSX files
-  // are not linted for now — `npm run typecheck` is the correctness
-  // gate until typescript-eslint ships TS7 support and the package
-  // gains a real typescript section (see the package README's restore
-  // path). Plain JS files (.cjs/.mjs) are still linted.
+  // are not linted for now — `npm run typecheck` (which invokes the
+  // TypeScript 7 compiler by path via the `typescript7` alias) is the
+  // correctness gate until typescript-eslint ships TS7 support and the
+  // package gains a real typescript section (see the package README's
+  // restore path). Plain JS files (.cjs/.mjs) are still linted. The
+  // side-by-side setup (resolvable `typescript` aliased to
+  // @typescript/typescript6) lets the @eslint-react rule set load
+  // again, so `reactPending` is composed alongside `react` below.
   ...typescriptPendingIgnores,
   ...base,
   ...react,
+  ...reactPending,
   ...reactNative,
   ...jest,
   {

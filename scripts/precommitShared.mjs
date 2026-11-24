@@ -16,7 +16,10 @@ import { fileURLToPath } from "node:url";
 import { affectedWorkspaces } from "@spudly/tooling";
 
 export const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
-export const tscBin = join(repoRoot, "node_modules", ".bin", "tsc");
+// TypeScript 7 compiler by path: resolvable `typescript` is aliased to
+// @typescript/typescript6 for the lint chain (see memorize#128), so the
+// bare `.bin/tsc` would silently be the TS 6 compiler.
+export const tscBin = join(repoRoot, "node_modules", "typescript7", "bin", "tsc");
 
 // Dependency order: workspace consumers come after the packages they
 // import, so a dependency's typecheck lands before its consumers'.
