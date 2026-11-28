@@ -30,7 +30,8 @@ test("the screen renders the DS MemorizeReviewPage from the package root", () =>
 });
 
 test("the due list is computed app-side and crosses as { id, reference, text }", () => {
-  assert.match(screenCode, /dueVerses\(store\.getState\(\)\.data\.verses, new Date\(\)\)/);
+  assert.match(screenCode, /const \[now\] = useState\(\(\) => new Date\(\)\)/);
+  assert.match(screenCode, /dueVerses\(store\.getState\(\)\.data\.verses, now\)/);
   assert.match(screenCode, /id: item\.verse\.id/);
   assert.match(screenCode, /reference: item\.verse\.reference/);
   assert.match(screenCode, /text: item\.verse\.text/);
