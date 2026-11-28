@@ -92,8 +92,9 @@ describe("finishDrill (#91)", () => {
     const onBack = jest.fn();
     const onSaveError = jest.fn();
     const pending = finishDrill({
-      complete: async () => {
+      complete: () => {
         active = false;
+        return Promise.resolve();
       },
       isActive: () => active,
       onBack,

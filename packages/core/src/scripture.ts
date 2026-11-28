@@ -1,7 +1,7 @@
 import type { Verse } from "@memorize/types";
 
 /** Abstraction over wherever verse text comes from. */
-export interface ScriptureDataSource {
+export type ScriptureDataSource = {
   search(query: string): Promise<Verse[]>;
   getVerse(reference: string): Promise<Verse>;
 }
@@ -18,10 +18,10 @@ export class ScriptureApiError extends Error {
 
 /** "Ether  12:27" -> "ether-12-27". Used as the stable verse id. */
 export function normalizeReference(ref: string): string {
-  const collapsed = ref.trim().replace(/\s+/g, " ");
+  const collapsed = ref.trim().replaceAll(/\s+/g, " ");
   return collapsed
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
+    .replaceAll(/[^a-z0-9]+/g, "-")
     .replace(/^-+/, "")
     .replace(/-+$/, "");
 }
@@ -39,7 +39,7 @@ const BOOK_ALIASES: Record<string, string> = {
  * bearing queries need no such check — an explicit chapter:verse is
  * unambiguously a reference attempt whatever the book part says.
  */
-const KNOWN_BOOK_NAMES: Set<string> = new Set(
+const KNOWN_BOOK_NAMES = new Set<string>(
   [
     // Old Testament
     "Genesis",
@@ -134,7 +134,7 @@ const KNOWN_BOOK_NAMES: Set<string> = new Set(
     "Joseph Smith—Matthew",
     "Joseph Smith—History",
     "Articles of Faith",
-  ].map((name) => name.toLowerCase().replace(/[—–]/g, "-")),
+  ].map((name) => name.toLowerCase().replaceAll(/[—–]/g, "-")),
 );
 
 // The engine also accepts spoken ordinals ("First Nephi", "1st Nephi"
@@ -152,7 +152,7 @@ const ORDINAL_SUFFIXES: Record<string, string> = {
   "3": "rd",
   "4": "th",
 };
-for (const name of [...KNOWN_BOOK_NAMES]) {
+for (const name of KNOWN_BOOK_NAMES) {
   const numbered = /^([1-4]) (.+)$/.exec(name);
   const digit = numbered?.[1];
   const rest = numbered?.[2];
@@ -171,7 +171,7 @@ function referenceBookName(reference: string): string {
   const match = /^(.+?) \d+(?::\d+(?:\s*[-–]\s*\d+)?)?$/.exec(reference);
   // Normalize dash variants so "Joseph Smith-History" matches the
   // em-dash form in the known-book set (and vice versa).
-  return (match?.[1] ?? reference).toLowerCase().replace(/[—–]/g, "-");
+  return (match?.[1] ?? reference).toLowerCase().replaceAll(/[—–]/g, "-");
 }
 
 /**
@@ -185,7 +185,7 @@ function referenceBookName(reference: string): string {
  * only when the lookup itself errors.
  */
 export function parseReference(query: string): string | null {
-  const collapsed = query.trim().replace(/\s+/g, " ");
+  const collapsed = query.trim().replaceAll(/\s+/g, " ");
   const match = /^(.+?)\s+(\d+)(?::(\d+)(?:\s*[-–]\s*(\d+))?)?$/.exec(collapsed);
   if (!match) {
     return null;
@@ -247,18 +247,18 @@ const HTML_ENTITIES: Record<string, string> = {
  * to the literal text `&amp;` rather than decoding to `&`.
  */
 const ESCAPED_PUNCTUATION = "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~";
-const ESCAPE_PLACEHOLDER_BASE = 0xe000;
+const ESCAPE_PLACEHOLDER_BASE = 0xe0_00;
 
 function protectEscapedPunctuation(text: string): string {
-  return text.replace(/\\([!"#$%&'()*+,\-./:;<=>?@\[\\\]^_`{|}~])/g, (_match, ch: string) =>
-    String.fromCharCode(ESCAPE_PLACEHOLDER_BASE + ESCAPED_PUNCTUATION.indexOf(ch)),
+  return text.replaceAll(/\\([!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~])/g, (_match, ch: string) =>
+    String.fromCodePoint(ESCAPE_PLACEHOLDER_BASE + ESCAPED_PUNCTUATION.indexOf(ch)),
   );
 }
 
 function restoreEscapedPunctuation(text: string): string {
-  return text.replace(
+  return text.replaceAll(
     /[\uE000-\uE01F]/g,
-    (ch) => ESCAPED_PUNCTUATION[ch.charCodeAt(0) - ESCAPE_PLACEHOLDER_BASE] ?? ch,
+    (ch) => ESCAPED_PUNCTUATION[(ch.codePointAt(0) ?? 0) - ESCAPE_PLACEHOLDER_BASE] ?? ch,
   );
 }
 
@@ -276,8 +276,8 @@ function restoreEscapedPunctuation(text: string): string {
  */
 function dropReplacementArtifacts(text: string): string {
   return text
-    .replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, "")
-    .replace(/\uFFFD/g, "");
+    .replaceAll(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, "")
+    .replaceAll('\uFFFD', "");
 }
 
 /**
@@ -313,17 +313,21 @@ function decodeNumericEntity(
   decimal: string | undefined,
   hex: string | undefined,
 ): string {
-  const codePoint = Number.parseInt(decimal ?? hex ?? "", decimal !== undefined ? 10 : 16);
-  if (codePoint === 0xfffd) {
+  const codePoint = Number.parseInt(decimal ?? hex ?? "", decimal === undefined ? 16 : 10);
+  if (codePoint === 0xff_fd) {
     return "";
   }
-  return codePoint >= 1 && codePoint <= 0x10ffff && !(codePoint >= 0xd800 && codePoint <= 0xdfff)
+  return codePoint >= 1 && codePoint <= 0x10_ff_ff && !(codePoint >= 0xd8_00 && codePoint <= 0xdf_ff)
     ? String.fromCodePoint(codePoint)
     : entity;
 }
 
+function decodeProbe(value: string): string {
+  return value.replaceAll(/&#(\d+);|&#x([0-9a-fA-F]+);/g, decodeNumericEntity);
+}
+
 function codeSpanMarkerPattern(start: string, end: string): RegExp {
-  return new RegExp(`${start}\\d+${end}`);
+  return new RegExp(String.raw`${start}\d+${end}`);
 }
 
 function chooseCodeSpanMarkers(text: string): CodeSpanMarkers {
@@ -336,8 +340,6 @@ function chooseCodeSpanMarkers(text: string): CodeSpanMarkers {
   // U+FFFD ("&#65533;") decodes to nothing, joining encoded markers
   // the same way. The probe decoder therefore mirrors the real one,
   // including its U+FFFD-to-nothing rule.
-  const decodeProbe = (value: string): string =>
-    value.replace(/&#(\d+);|&#x([0-9a-fA-F]+);/g, decodeNumericEntity);
   const decodedProbe = decodeProbe(text);
   const cleanedProbe = dropReplacementArtifacts(text);
   const probe = [
@@ -347,16 +349,16 @@ function chooseCodeSpanMarkers(text: string): CodeSpanMarkers {
     dropReplacementArtifacts(decodedProbe),
     decodeProbe(cleanedProbe),
   ].join("\n");
-  for (let code = 0xe066; code <= 0xf8fd; code += 2) {
-    const start = String.fromCharCode(code);
-    const end = String.fromCharCode(code + 1);
+  for (let code = 0xe0_66; code <= 0xf8_fd; code += 2) {
+    const start = String.fromCodePoint(code);
+    const end = String.fromCodePoint(code + 1);
     if (!codeSpanMarkerPattern(start, end).test(probe)) {
       return { start, end };
     }
   }
-  for (let code = 0xe020; code < 0xe066; code += 2) {
-    const start = String.fromCharCode(code);
-    const end = String.fromCharCode(code + 1);
+  for (let code = 0xe0_20; code < 0xe0_66; code += 2) {
+    const start = String.fromCodePoint(code);
+    const end = String.fromCodePoint(code + 1);
     if (!codeSpanMarkerPattern(start, end).test(probe)) {
       return { start, end };
     }
@@ -389,20 +391,20 @@ function chooseCodeSpanMarkers(text: string): CodeSpanMarkers {
  */
 function unwrapEmptiedCodeSpans(text: string, spans: string[], markers: CodeSpanMarkers): string {
   const emptied = new Map<number, string>();
-  spans.forEach((span, idx) => {
+  for (const [idx, span] of spans.entries()) {
     const cleaned = dropReplacementArtifacts(span);
     if (cleaned.trim().length === 0) {
       emptied.set(idx, cleaned);
     }
-  });
+  }
   if (emptied.size === 0) {
     return text;
   }
   // One pass over the text, not one full-document scan per emptied
   // span: this pipeline also runs over full chapter text, where a
   // per-span scan is quadratic in the number of emptied spans.
-  return text.replace(
-    new RegExp(`${markers.start}(\\d+)${markers.end}`, "g"),
+  return text.replaceAll(
+    new RegExp(String.raw`${markers.start}(\d+)${markers.end}`, "g"),
     (match, idxStr: string) => emptied.get(Number.parseInt(idxStr, 10)) ?? match,
   );
 }
@@ -465,8 +467,8 @@ function protectCodeSpans(text: string, spans: string[], markers: CodeSpanMarker
 }
 
 function restoreCodeSpans(text: string, spans: string[], markers: CodeSpanMarkers): string {
-  return text.replace(
-    new RegExp(`${markers.start}(\\d+)${markers.end}`, "g"),
+  return text.replaceAll(
+    new RegExp(String.raw`${markers.start}(\d+)${markers.end}`, "g"),
     (_m, idxStr: string) => {
       const idx = Number.parseInt(idxStr, 10);
       const span = spans[idx];
@@ -476,7 +478,7 @@ function restoreCodeSpans(text: string, spans: string[], markers: CodeSpanMarker
 }
 
 function normalizeLinkLabel(label: string): string {
-  return label.trim().replace(/\s+/g, " ").toLowerCase();
+  return label.trim().replaceAll(/\s+/g, " ").toLowerCase();
 }
 
 /** All paragraph-boundary start indices in `text`, computed in one pass. */
@@ -518,7 +520,10 @@ function bracketMatches(text: string, boundaries: number[]): Map<number, number>
     } else if (ch === "[") {
       stack.push(i);
     } else if (ch === "]" && stack.length > 0) {
-      matches.set(stack.pop() as number, i);
+      const popped = stack.pop();
+      if (popped !== undefined) {
+        matches.set(popped, i);
+      }
     }
   }
   return matches;
@@ -562,7 +567,8 @@ function inlineLinkEnd(text: string, open: number, limit: number): number {
       let j = i;
       while (j < limit && (text[j] === " " || text[j] === "\t")) j++;
       if (j >= limit) return -1;
-      const opener = text[j] as string;
+      const opener = text[j];
+      if (opener === undefined) return -1;
       if (opener === '"' || opener === "'") {
         let k = j + 1;
         while (k < limit && text[k] !== opener) {
@@ -616,13 +622,24 @@ function parenDepthEnd(text: string, open: number, limit: number): number {
   let depth = 0;
   for (let i = open; i < end; i++) {
     const ch = text[i];
-    if (ch === "\\") {
+    switch (ch) {
+    case "\\": {
       i++;
-    } else if (ch === "(") {
+    
+    break;
+    }
+    case "(": {
       depth++;
-    } else if (ch === ")") {
+    
+    break;
+    }
+    case ")": {
       depth--;
       if (depth === 0) return i;
+    
+    break;
+    }
+    // No default
     }
   }
   return -1;
@@ -703,9 +720,9 @@ function stripMarkdownLinks(text: string, definedRefs: Set<string> = new Set<str
       // every unmatched bracket's suffix would be quadratic on a run
       // of "["s.
       const isTrailingFragmentShape =
-        text.indexOf("[", open + 1) === -1 &&
-        text.indexOf("]", open + 1) === -1 &&
-        text.indexOf("\n", open + 1) === -1 &&
+        !text.includes("[", open + 1) &&
+        !text.includes("]", open + 1) &&
+        !text.includes("\n", open + 1) &&
         text[open - 1] !== "[";
       let hasUnmatchedCloseParen = false;
       let hasHtmlLineBreak = false;
@@ -719,10 +736,10 @@ function stripMarkdownLinks(text: string, definedRefs: Set<string> = new Set<str
         // scan and its bracket is misread as a truncated fragment,
         // while an escaped "\(" in a truncated label ("[Faith \(part")
         // is miscounted the other way.
-        const openParenPlaceholder = String.fromCharCode(
+        const openParenPlaceholder = String.fromCodePoint(
           ESCAPE_PLACEHOLDER_BASE + ESCAPED_PUNCTUATION.indexOf("("),
         );
-        const closeParenPlaceholder = String.fromCharCode(
+        const closeParenPlaceholder = String.fromCodePoint(
           ESCAPE_PLACEHOLDER_BASE + ESCAPED_PUNCTUATION.indexOf(")"),
         );
         let parenDepth = 0;
@@ -774,12 +791,16 @@ function stripMarkdownLinks(text: string, definedRefs: Set<string> = new Set<str
             while (q < limit && (text[q] === " " || text[q] === "\t")) q++;
             let malformed = false;
             if (q < limit && (text[q] === '"' || text[q] === "'")) {
-              const quote = text[q] as string;
-              const endQuote = text.indexOf(quote, q + 1);
-              if (endQuote === -1 || endQuote >= limit) malformed = true;
-              else {
-                q = endQuote + 1;
-                while (q < limit && (text[q] === " " || text[q] === "\t")) q++;
+              const quote = text[q];
+              if (quote === undefined) {
+                malformed = true;
+              } else {
+                const endQuote = text.indexOf(quote, q + 1);
+                if (endQuote === -1 || endQuote >= limit) malformed = true;
+                else {
+                  q = endQuote + 1;
+                  while (q < limit && (text[q] === " " || text[q] === "\t")) q++;
+                }
               }
             } else if (q < limit && text[q] === "(") {
               const endParen = text.indexOf(")", q + 1);
@@ -799,7 +820,7 @@ function stripMarkdownLinks(text: string, definedRefs: Set<string> = new Set<str
       }
       if (angleHandled) continue;
       const titleAwareEnd = inlineLinkEnd(text, after, limit);
-      const closeParen = titleAwareEnd !== -1 ? titleAwareEnd : parenDepthEnd(text, after, limit);
+      const closeParen = titleAwareEnd === -1 ? parenDepthEnd(text, after, limit) : titleAwareEnd;
       if (closeParen !== -1 && closeParen < limit) {
         out += label;
         i = closeParen + 1;
@@ -867,7 +888,7 @@ function stripMarkdownLinks(text: string, definedRefs: Set<string> = new Set<str
  * from whitespace normalization.
  */
 function toPlainText(raw: string): string {
-  let text = raw.replace(/\r\n?/g, "\n");
+  let text = raw.replaceAll(/\r\n?/g, "\n");
   // Protect code spans FIRST: backslash escapes are not interpreted
   // inside a code span, so span content must be captured before
   // escape protection runs — otherwise "\*faith\*" inside backticks
@@ -905,13 +926,13 @@ function toPlainText(raw: string): string {
   text = protectEscapedPunctuation(text);
   // HTML comments are not content; remove them (code spans already
   // protected, so comments inside code spans survive literally).
-  text = text.replace(/<!--[\s\S]*?-->/g, "");
+  text = text.replaceAll(/<!--[\s\S]*?-->/g, "");
   // Footnote reference markers are pure clutter in a result card; drop
   // the whole <sup>…</sup> span, link syntax inside included. Only the
   // footnote form ("<sup>[1](#fn-1)</sup>") goes: any other superscript
   // (an exponent, an ordinal suffix like "19<sup>th</sup>") is content,
   // and the generic tag strip below keeps its text.
-  text = text.replace(/<sup\b[^>]*>\s*\[[^\]]*\]\(#fn-[^)\s]*\)\s*<\/sup\s*>/gi, "");
+  text = text.replaceAll(/<sup\b[^>]*>\s*\[[^\]]*\]\(#fn-[^)\s]*\)\s*<\/sup\s*>/gi, "");
   // Autolinks are unwrapped after stripMarkdownLinks below, not here:
   // unwrapping here would also unwrap an angle-bracket link
   // destination ("[Read](<https://…a)b>)"), destroying its ">" so the
@@ -942,11 +963,11 @@ function toPlainText(raw: string): string {
       }
     }
   }
-  text = text.replace(
+  text = text.replaceAll(
     /^ {0,3}\[[^\]]+\]:[ \t]*(?:<[^>\n]*>|\S+)(?:[ \t]+(?:"[^"\n]*"|'[^'\n]*'|\([^()\n]*\)))?[ \t]*$/gm,
     "",
   );
-  text = text.replace(/^[ \t]*\[\^[^\]]+\]:.*$/gm, "");
+  text = text.replaceAll(/^[ \t]*\[\^[^\]]+\]:.*$/gm, "");
   // Markdown images and links (inline and reference style) keep only
   // their alt/link text; empty-text forms ("[](06_lecture_6.md)") drop
   // entirely. A scanner, not a regex: real engine destinations defeat
@@ -959,8 +980,8 @@ function toPlainText(raw: string): string {
   text = stripMarkdownLinks(text, definedRefs);
   // Autolinks (<https://…>, <someone@example.org>) would otherwise be
   // eaten as HTML tags by the generic tag strip below.
-  text = text.replace(/<(https?:\/\/[^>\s]+)>/g, "$1");
-  text = text.replace(/<([\w.+-]+@[\w-]+(?:\.[\w-]+)+)>/g, "$1");
+  text = text.replaceAll(/<(https?:\/\/[^>\s]+)>/g, "$1");
+  text = text.replaceAll(/<([\w.+-]+@[\w-]+(?:\.[\w-]+)+)>/g, "$1");
   // Line-break and block tags separate words: turn them into
   // whitespace before stripping, or "<p>Faith</p><p>hope</p>" would
   // come out as "Faithhope". Opening block tags separate too, not
@@ -969,12 +990,12 @@ function toPlainText(raw: string): string {
   // still joined them into "Faithhope". Opening tags become a space
   // rather than a newline so an adjacent closing tag's newline is
   // not doubled into a paragraph break.
-  text = text.replace(/<br\b[^>]*>/gi, "\n");
-  text = text.replace(
+  text = text.replaceAll(/<br\b[^>]*>/gi, "\n");
+  text = text.replaceAll(
     /<\/(?:p|div|li|ul|ol|h[1-6]|blockquote|tr|td|th|section|article)\s*>/gi,
     "\n",
   );
-  text = text.replace(
+  text = text.replaceAll(
     /<(?:p|div|li|ul|ol|h[1-6]|blockquote|tr|td|th|section|article|table|thead|tbody|pre|figure|figcaption|dl|dt|dd|header|footer|main|nav|aside|form|fieldset|hr)\b[^>]*>/gi,
     (_tag, offset: number, whole: string) =>
       // No separator needed right after a newline (e.g. the one a
@@ -982,10 +1003,10 @@ function toPlainText(raw: string): string {
       offset > 0 && whole[offset - 1] === "\n" ? "" : " ",
   );
   // Any remaining HTML tags go, keeping the text they wrapped.
-  text = text.replace(/<\/?[a-zA-Z][^>]*>/g, "");
+  text = text.replaceAll(/<\/?[a-zA-Z][^>]*>/g, "");
   // Markdown line structure: headings and blockquotes keep their words.
-  text = text.replace(/^[ \t]{0,3}#{1,6}[ \t]+/gm, "");
-  text = text.replace(/^[ \t]*>[ \t]?/gm, "");
+  text = text.replaceAll(/^[ \t]{0,3}#{1,6}[ \t]+/gm, "");
+  text = text.replaceAll(/^[ \t]*>[ \t]?/gm, "");
   // Emphasis and code markers keep the words they wrap. Delimiters
   // must hug non-whitespace content, so literal operators in ordinary
   // text (e.g. "2 * 3 * 4") are not mistaken for emphasis.
@@ -997,16 +1018,16 @@ function toPlainText(raw: string): string {
   // pair, so when the digit guard rejects a closing pair the match
   // fails there instead of swallowing a later emphasis span
   // ("2**3**4 and **faith**" keeps the operator, unwraps "faith").
-  text = text.replace(/(\*\*|__)(?!\s)((?:(?!\1)[\s\S])*?)(?<!\s)\1(?!\d)/g, "$2");
-  text = text.replace(/~~(?!\s)([\s\S]*?)(?<!\s)~~/g, "$1");
-  text = text.replace(/(?<!\*)\*(?!\s)([^*\n]+?)(?<!\s)\*(?!\d)(?!\*)/g, "$1");
-  text = text.replace(/(?<![\w])_(?!\s)([^_\n]+?)(?<!\s)_(?![\w])/g, "$1");
-  text = text.replace(/`([^`\n]+)`/g, "$1");
+  text = text.replaceAll(/(\*\*|__)(?!\s)((?:(?!\1)[\s\S])*?)(?<!\s)\1(?!\d)/g, "$2");
+  text = text.replaceAll(/~~(?!\s)([\s\S]*?)(?<!\s)~~/g, "$1");
+  text = text.replaceAll(/(?<!\*)\*(?!\s)([^*\n]+?)(?<!\s)\*(?!\d)(?!\*)/g, "$1");
+  text = text.replaceAll(/(?<![\w])_(?!\s)([^_\n]+?)(?<!\s)_(?![\w])/g, "$1");
+  text = text.replaceAll(/`([^`\n]+)`/g, "$1");
   // Any backslash escape still in its raw form at this point was not
   // present in the source (source escapes were protected above and
   // are restored at the end); resolve it the same way so a character
   // is never mistaken for markup by the passes above.
-  text = text.replace(/\\([!"#$%&'()*+,\-./:;<=>?@\[\\\]^_`{|}~])/g, "$1");
+  text = text.replaceAll(/\\([!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~])/g, "$1");
   // Decode entities only after Markdown cleanup: decoded characters
   // are literal text (an encoded "#" is not a heading marker and an
   // encoded "*" is not emphasis), while an escaped "&lt;sup&gt;" still
@@ -1020,9 +1041,9 @@ function toPlainText(raw: string): string {
   // One combined pass: decoding numeric and named references in two
   // passes would reinterpret characters the first pass produced
   // ("&#38;lt;" must stay the literal text "&lt;", not become "<").
-  text = text.replace(
+  text = text.replaceAll(
     /&#(\d+);|&#x([0-9a-fA-F]+);|&(?:amp|lt|gt|quot|apos|nbsp);/g,
-    (entity, decimal, hex) => {
+    (entity: string, decimal: string | undefined, hex: string | undefined) => {
       if (decimal === undefined && hex === undefined) {
         return HTML_ENTITIES[entity] ?? entity;
       }
@@ -1030,9 +1051,9 @@ function toPlainText(raw: string): string {
     },
   );
   // Normalize whitespace: no trailing spaces, no run of blank lines.
-  text = text.replace(/[ \t]+/g, " ");
-  text = text.replace(/ +\n/g, "\n");
-  text = text.replace(/\n{3,}/g, "\n\n");
+  text = text.replaceAll(/[ \t]+/g, " ");
+  text = text.replaceAll(/ +\n/g, "\n");
+  text = text.replaceAll(/\n{3,}/g, "\n\n");
   // Restore the protected escaped punctuation last: restored
   // characters are literal text and must not be reinterpreted as
   // markup, entities ("\&amp;" is the literal text "&amp;"), or
@@ -1089,7 +1110,7 @@ function searchResultId(obj: Record<string, unknown>): string | null {
  * guessed back from the Verse id's shape (#79 review rounds).
  */
 function sourceIdentity(obj: Record<string, unknown>): { type: string; id: string } | null {
-  const sourceId = obj["source_id"];
+  const sourceId = obj.source_id;
   if (
     typeof sourceId !== "number" &&
     !(typeof sourceId === "string" && sourceId.trim().length > 0)
@@ -1136,11 +1157,11 @@ function deriveChunkKey(
 ): string {
   const explicitType = firstString(obj, ["source_type"]);
   const isScripturePassage =
-    explicitType !== undefined
-      ? explicitType === "scriptures"
-      : identity?.type === "scriptures" ||
-        obj["verse"] !== undefined ||
-        (parseReference(reference)?.includes(":") ?? false);
+    explicitType === undefined
+      ? identity?.type === "scriptures" ||
+        obj.verse !== undefined ||
+        (parseReference(reference)?.includes(":") ?? false)
+      : explicitType === "scriptures";
   if (isScripturePassage) {
     const key = scriptureChunkKey(reference);
     if (key !== null) {
@@ -1155,10 +1176,10 @@ function deriveChunkKey(
 
 /** Deterministic 32-bit FNV-1a hash of a verse's text, base-36. */
 function textHash(text: string): string {
-  let hash = 0x811c9dc5;
+  let hash = 0x81_1c_9d_c5;
   for (let i = 0; i < text.length; i++) {
-    hash ^= text.charCodeAt(i);
-    hash = Math.imul(hash, 0x01000193);
+    hash ^= text.codePointAt(i) ?? 0;
+    hash = Math.imul(hash, 0x01_00_01_93);
   }
   return (hash >>> 0).toString(36);
 }
@@ -1173,9 +1194,12 @@ function textHash(text: string): string {
  * punctuation differences — and it never replaces the persisted
  * `chunkKey` identity.
  */
+function normalizeForReferenceMatch(ref: string): string {
+  return ref.trim().replaceAll(/\s+/g, " ").toLowerCase();
+}
+
 function referencesMatch(a: string, b: string): boolean {
-  const normalize = (ref: string): string => ref.trim().replace(/\s+/g, " ").toLowerCase();
-  return normalize(a) === normalize(b);
+  return normalizeForReferenceMatch(a) === normalizeForReferenceMatch(b);
 }
 
 /**
@@ -1249,9 +1273,9 @@ export function isSameVerse(a: Verse, b: Verse): boolean {
     return a.text === b.text;
   }
   if (keyA !== undefined || keyB !== undefined) {
-    const keyed = keyA !== undefined ? a : b;
-    const legacy = keyA !== undefined ? b : a;
-    const key = keyA !== undefined ? keyA : keyB;
+    const keyed = keyA === undefined ? b : a;
+    const legacy = keyA === undefined ? a : b;
+    const key = keyA === undefined ? keyB : keyA;
     if (key !== undefined && key.startsWith("scripture:")) {
       return scriptureChunkKey(legacy.reference) === key;
     }
@@ -1345,7 +1369,7 @@ function buildVerse(reference: string, text: string, obj: Record<string, unknown
   // passages and source-less shapes keep the reference-slug id, which
   // is already unique per passage.
   const verse: Verse = {
-    id: documentId !== null ? `${documentId}~${textHash(plain)}` : normalizeReference(reference),
+    id: documentId === null ? normalizeReference(reference) : `${documentId}~${textHash(plain)}`,
     reference,
     text: plain,
     chunkKey: deriveChunkKey(reference, plain, obj, identity),
@@ -1359,7 +1383,7 @@ function buildVerse(reference: string, text: string, obj: Record<string, unknown
     verse.book = book;
   }
   // The verified /api/get shape carries chapter as a JSON number.
-  const chapterRaw = obj["chapter"] ?? obj["chapter_number"];
+  const chapterRaw = obj.chapter ?? obj.chapter_number;
   if (typeof chapterRaw === "string" && chapterRaw.trim().length > 0) {
     verse.chapter = chapterRaw.trim();
   } else if (typeof chapterRaw === "number") {
@@ -1410,7 +1434,7 @@ export function mapVerseDetail(raw: unknown): Verse | null {
 
 function resultItems(data: unknown): unknown[] | null {
   if (Array.isArray(data)) {
-    return data;
+    return data as unknown[];
   }
   const obj = asRecord(data);
   if (!obj) {
@@ -1419,7 +1443,7 @@ function resultItems(data: unknown): unknown[] | null {
   for (const key of ["results", "items", "verses", "data"]) {
     const value = obj[key];
     if (Array.isArray(value)) {
-      return value;
+      return value as unknown[];
     }
   }
   return null;
@@ -1442,7 +1466,7 @@ export function mapChapterResponse(data: unknown): Verse | null {
   if (!obj) {
     return null;
   }
-  const chapter = asRecord(obj["chapter"]);
+  const chapter = asRecord(obj.chapter);
   if (!chapter) {
     return null;
   }
@@ -1465,11 +1489,11 @@ export function mapChapterResponse(data: unknown): Verse | null {
   // (the chapter object's own fields win where present); the text
   // hash and every other field come from the chapter as before.
   const identified: Record<string, unknown> = { ...chapter };
-  if (identified["source_type"] === undefined) {
-    identified["source_type"] = firstString(obj, ["source_type"]) ?? "chapters";
+  if (identified.source_type === undefined) {
+    identified.source_type = firstString(obj, ["source_type"]) ?? "chapters";
   }
-  if (identified["source_id"] === undefined && chapter["id"] !== undefined) {
-    identified["source_id"] = chapter["id"];
+  if (identified.source_id === undefined && chapter.id !== undefined) {
+    identified.source_id = chapter.id;
   }
   return buildVerse(reference, text, identified);
 }
@@ -1664,10 +1688,10 @@ export const DEMO_VERSES: Verse[] = DEMO_VERSE_TUPLES.map(([reference, text]) =>
  * the app is fully usable offline.
  */
 export class DemoDataSource implements ScriptureDataSource {
-  async search(query: string): Promise<Verse[]> {
+  search(query: string): Promise<Verse[]> {
     const q = query.trim().toLowerCase();
     if (q.length === 0) {
-      return [];
+      return Promise.resolve([]);
     }
     // Same reference-first behavior as the live source: an exact
     // reference returns just that verse, not every verse containing
@@ -1676,18 +1700,22 @@ export class DemoDataSource implements ScriptureDataSource {
     if (reference !== null) {
       const exact = DEMO_VERSES.find((v) => v.id === normalizeReference(reference));
       if (exact) {
-        return [exact];
+        return Promise.resolve([exact]);
       }
     }
-    return DEMO_VERSES.filter((v) => `${v.reference} ${v.text}`.toLowerCase().includes(q));
+    return Promise.resolve(
+      DEMO_VERSES.filter((v) => `${v.reference} ${v.text}`.toLowerCase().includes(q)),
+    );
   }
 
-  async getVerse(reference: string): Promise<Verse> {
+  getVerse(reference: string): Promise<Verse> {
     const id = normalizeReference(reference);
     const verse = DEMO_VERSES.find((v) => v.id === id);
     if (!verse) {
-      throw new ScriptureApiError(`Verse not found in demo data: ${reference}`, 404);
+      return Promise.reject(
+        new ScriptureApiError(`Verse not found in demo data: ${reference}`, 404),
+      );
     }
-    return verse;
+    return Promise.resolve(verse);
   }
 }

@@ -1,32 +1,29 @@
 import "./locales/polyfills";
 import { useEffect, useMemo, useState } from "react";
-import { Linking, Pressable, SafeAreaView } from "react-native";
+import { Linking, StyleSheet } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { useFonts } from "expo-font";
-import Raleway from "../assets/fonts/Raleway.ttf";
-import Alegreya from "../assets/fonts/Alegreya.ttf";
 import { Spinner, TamaguiProvider, Text, XStack, YStack } from "tamagui";
-import { memorizeTheme } from "@spudly/ui";
-import { appTamaguiConfig } from "./tamaguiConfig";
 import { createMemorizeStore, type MemorizeStore } from "@memorize/core";
-import { appStorage, dataSourceFor } from "./lib";
 import { I18nProvider } from "@lingui/react";
 import { getLocales } from "expo-localization";
+
+import Alegreya from "../assets/fonts/Alegreya.ttf";
+import Raleway from "../assets/fonts/Raleway.ttf";
+
+import { appStorage, dataSourceFor } from "./lib";
+import { appTamaguiConfig } from "./tamaguiConfig";
 import { activateForDevice, i18n, LOCALE_STORAGE_KEY } from "./locales/i18n";
 import DrillScreen from "./screens/DrillScreen";
 import ReviewScreen from "./screens/ReviewScreen";
 import SearchScreen from "./screens/SearchScreen";
 import SettingsScreen from "./screens/SettingsScreen";
 import VersesScreen from "./screens/VersesScreen";
+import TabButton, { TABS, type Tab } from "./screens/TabButton";
 
-type Tab = "verses" | "search" | "review" | "settings";
+const styles = StyleSheet.create({ safeArea: { flex: 1 } });
 
-const TABS: { value: Tab; label: () => string }[] = [
-  { value: "verses", label: () => i18n._({ id: "tab.verses", message: "Verses" }) },
-  { value: "search", label: () => i18n._({ id: "tab.search", message: "Search" }) },
-  { value: "review", label: () => i18n._({ id: "tab.review", message: "Review" }) },
-  { value: "settings", label: () => i18n._({ id: "tab.settings", message: "Settings" }) },
-];
 
 /**
  * The canonical drill destination on native (DS #425):
@@ -91,8 +88,8 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const unsubscribe = store.subscribe(() => setTick((t) => t + 1));
-    void store.ready.then(() => setReady(true));
+    const unsubscribe = store.subscribe(() => { setTick((t) => t + 1); });
+    void store.ready.then(() => { setReady(true); });
     return unsubscribe;
   }, [store]);
 
@@ -126,7 +123,7 @@ export default function App() {
     return (
       <I18nProvider i18n={i18n}>
         <TamaguiProvider config={appTamaguiConfig} defaultTheme="light">
-          <SafeAreaView style={{ flex: 1 }}>
+          <SafeAreaView style={styles.safeArea}>
             <YStack flex={1} alignItems="center" justifyContent="center" padding="$4">
               <Spinner size="large" />
             </YStack>
@@ -139,7 +136,7 @@ export default function App() {
   return (
     <I18nProvider i18n={i18n}>
       <TamaguiProvider config={appTamaguiConfig} defaultTheme="light">
-        <SafeAreaView style={{ flex: 1 }}>
+        <SafeAreaView style={styles.safeArea}>
           <StatusBar style="auto" />
           <YStack flex={1} padding="$4" gap="$3" backgroundColor="$background">
             <Text fontSize="$8" fontWeight="700" color="$color">
@@ -151,39 +148,17 @@ export default function App() {
               accessibilityRole="tablist"
               aria-label={i18n._({ id: "app.tabsLabel", message: "Memorize sections" })}
             >
-              {TABS.map((t) => {
-                const selected = !drillingId && tab === t.value;
-                return (
-                  <Pressable
-                    key={t.value}
-                    accessibilityRole="tab"
-                    accessibilityState={{ selected }}
-                    aria-selected={selected}
-                    onPress={() => {
-                      setTab(t.value);
-                      setDrillingId(null);
-                    }}
-                    style={{
-                      backgroundColor: selected
-                        ? memorizeTheme.semantic.primary
-                        : memorizeTheme.semantic.surface,
-                      borderColor: memorizeTheme.semantic.border,
-                      borderWidth: 1,
-                      borderRadius: 8,
-                      paddingHorizontal: 14,
-                      paddingVertical: 8,
-                    }}
-                  >
-                    <Text
-                      color={
-                        selected ? memorizeTheme.semantic.onPrimary : memorizeTheme.semantic.text
-                      }
-                    >
-                      {t.label()}
-                    </Text>
-                  </Pressable>
-                );
-              })}
+              {TABS.map((t) => (
+                <TabButton
+                  key={t.value}
+                  label={t.label()}
+                  selected={!drillingId && tab === t.value}
+                  onPress={() => {
+                    setTab(t.value);
+                    setDrillingId(null);
+                  }}
+                />
+              ))}
             </XStack>
             {drillingId ? (
               // Keyed by the verse id: a warm drill link for a different
@@ -193,7 +168,7 @@ export default function App() {
                 key={drillingId}
                 store={store}
                 verseId={drillingId}
-                onBack={() => setDrillingId(null)}
+                onBack={() => { setDrillingId(null); }}
               />
             ) : tab === "verses" ? (
               <VersesScreen store={store} />

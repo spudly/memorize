@@ -1,5 +1,5 @@
 /** A single scripture verse that can be memorized. */
-export interface Verse {
+export type Verse = {
   /**
    * Unique id: the normalized reference slug for scriptures, e.g.
    * `ether-12-27` (kept for scripture search hits too, so search and
@@ -63,7 +63,7 @@ export interface Verse {
 export type VerseStatus = "learning" | "memorized";
 
 /** A verse on the user's list, with drill + review progress. */
-export interface MemorizedVerse {
+export type MemorizedVerse = {
   verse: Verse;
   status: VerseStatus;
   /** ISO-8601 timestamp of when the verse was added. */
@@ -88,12 +88,12 @@ export interface MemorizedVerse {
  * native search uses the offline demo set, so no key is stored
  * anywhere in the app state.
  */
-export interface AppSettings {
+export type AppSettings = {
   gospelEngineBaseUrl: string;
 }
 
 /** Everything persisted locally. */
-export interface AppData {
+export type AppData = {
   version: 1;
   verses: MemorizedVerse[];
   settings: AppSettings;

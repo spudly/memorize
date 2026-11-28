@@ -5,29 +5,13 @@ import {
   type ReviewOutcome,
   type Verse,
 } from "@memorize/types";
+
 import { applyReview, markMemorized, nextReviewDate } from "./schedule";
 import { isSameVerse, suppliesMissingVerseIdentity } from "./scripture";
 import { LocalStore, type KeyValueStorage } from "./storage";
+import type { MemorizeActions, MemorizeState, MemorizeStore } from "./storeTypes";
 
-export interface MemorizeState {
-  data: AppData;
-}
-
-export interface MemorizeActions {
-  addVerse(verse: Verse): Promise<void>;
-  removeVerse(id: string): Promise<void>;
-  setDrillProgress(id: string, round: number, peeks: number): Promise<void>;
-  completeDrill(id: string, now?: Date): Promise<void>;
-  recordReview(id: string, outcome: ReviewOutcome, now?: Date): Promise<void>;
-  replaceAll(data: AppData): Promise<void>;
-}
-
-export interface MemorizeStore {
-  readonly ready: Promise<void>;
-  getState(): MemorizeState;
-  subscribe(listener: () => void): () => void;
-  actions: MemorizeActions;
-}
+export type { MemorizeActions, MemorizeState, MemorizeStore } from "./storeTypes";
 
 /**
  * Framework-agnostic app store. Persists every mutation through LocalStore and
@@ -40,9 +24,9 @@ export function createMemorizeStore(storage: KeyValueStorage): MemorizeStore {
   const listeners = new Set<() => void>();
 
   const emit = (): void => {
-    listeners.forEach((listener) => {
+    for (const listener of listeners) {
       listener();
-    });
+    }
   };
 
   // Saves are serialized through a chain. Storage backends do not
@@ -57,7 +41,7 @@ export function createMemorizeStore(storage: KeyValueStorage): MemorizeStore {
   let saveChain: Promise<void> = Promise.resolve();
   const enqueueSave = (save: () => Promise<void>): Promise<void> => {
     const run = saveChain.then(save);
-    saveChain = run.catch(() => undefined);
+    saveChain = run.catch(() => {});
     return run;
   };
 
@@ -102,7 +86,7 @@ export function createMemorizeStore(storage: KeyValueStorage): MemorizeStore {
       // — a different chunk of an already-saved document is NOT a
       // duplicate and stays addable below.
       const matchIndex = data.verses.findIndex((entry) => isSameVerse(entry.verse, verse));
-      if (matchIndex >= 0) {
+      if (matchIndex !== -1) {
         // Legacy reconciliation (#79): a pre-chunkKey save matched by
         // the bridge in isSameVerse has now been VERIFIED as this
         // chunk, so persist the incoming verse's source + chunk

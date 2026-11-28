@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { MemorizeReviewPage, type MemorizeReviewPageVerse } from "@spudly/ui";
 import { dueVerses, type MemorizeStore } from "@memorize/core";
 
@@ -16,7 +17,8 @@ type Props = {
  * loading state here.
  */
 export default function ReviewScreen({ store }: Props) {
-  const verses: MemorizeReviewPageVerse[] = dueVerses(store.getState().data.verses, new Date()).map(
+  const [now] = useState(() => new Date());
+  const verses: MemorizeReviewPageVerse[] = dueVerses(store.getState().data.verses, now).map(
     (item) => ({
       id: item.verse.id,
       reference: item.verse.reference,

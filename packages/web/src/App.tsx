@@ -1,9 +1,14 @@
 import { lazy, useEffect, useMemo, useState } from "react";
 import { Spinner, TamaguiProvider, Text, YStack } from "tamagui";
 import { TabbedShellPage, type TabbedShellPageTab } from "@spudly/ui";
-import { webTamaguiConfig } from "./tamaguiConfig";
 import { createMemorizeStore, type MemorizeStore } from "@memorize/core";
+import { I18nProvider } from "@lingui/react";
+
+import { webTamaguiConfig } from "./tamaguiConfig";
 import VersesTab from "./components/VersesTab";
+import { dataSourceFor, isDemoDataSource } from "./lib/gospel";
+import { webStorage } from "./lib/storage";
+import { i18n } from "./locales/i18n";
 
 // Code-split the non-initial surfaces (memorize#54, Option B): the verses tab
 // is the landing view and stays in the initial chunk; drill, search, review
@@ -15,10 +20,6 @@ const DrillView = lazy(() => import("./components/DrillView"));
 const ReviewTab = lazy(() => import("./components/ReviewTab"));
 const SearchTab = lazy(() => import("./components/SearchTab"));
 const SettingsTab = lazy(() => import("./components/SettingsTab"));
-import { dataSourceFor, isDemoDataSource } from "./lib/gospel";
-import { webStorage } from "./lib/storage";
-import { I18nProvider } from "@lingui/react";
-import { i18n } from "./locales/i18n";
 
 type Tab = "verses" | "search" | "review" | "settings";
 
@@ -57,8 +58,8 @@ export default function App() {
   );
 
   useEffect(() => {
-    const unsubscribe = store.subscribe(() => setTick((t) => t + 1));
-    void store.ready.then(() => setReady(true));
+    const unsubscribe = store.subscribe(() => { setTick((t) => t + 1); });
+    void store.ready.then(() => { setReady(true); });
     return unsubscribe;
   }, [store]);
 
@@ -70,7 +71,7 @@ export default function App() {
       setDrillingId(drillIdFromPath(window.location.pathname));
     };
     window.addEventListener("popstate", onPopState);
-    return () => window.removeEventListener("popstate", onPopState);
+    return () => { window.removeEventListener("popstate", onPopState); };
   }, []);
 
   const dataSource = useMemo(() => dataSourceFor(), []);

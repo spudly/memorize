@@ -55,7 +55,7 @@ test("search state and execution stay app-side", () => {
   assert.match(code, /dataSource\.search\(query\)/);
   assert.match(
     code,
-    /e instanceof Error\s+\?\s+e\.message\s+:\s+i18n\._\(\{ id: "search\.failed", message: "Search failed" \}\)/,
+    /error_ instanceof Error\s+\?\s+error_\.message\s+:\s+i18n\._\(\{ id: "search\.failed", message: "Search failed" \}\)/,
   );
 });
 
@@ -74,11 +74,11 @@ test("an add by id resolves back to the full Verse for the store", () => {
 
 test("a failed search clears results and is not a completed search", () => {
   const runSearch = code.slice(code.indexOf("const runSearch"), code.indexOf("const items"));
-  const catchBlock = runSearch.slice(runSearch.indexOf("} catch (e) {"));
+  const catchBlock = runSearch.slice(runSearch.indexOf("} catch (error_) {"));
   assert.match(catchBlock, /setResults\(\[\]\)/);
   assert.match(catchBlock, /setSearched\(false\)/);
   assert.doesNotMatch(catchBlock, /setSearched\(true\)/);
-  const successBlock = runSearch.slice(0, runSearch.indexOf("} catch (e) {"));
+  const successBlock = runSearch.slice(0, runSearch.indexOf("} catch (error_) {"));
   const resultsIndex = successBlock.indexOf("setResults(found)");
   const searchedIndex = successBlock.indexOf("setSearched(true)");
   assert.ok(resultsIndex !== -1, "a successful search sets its results");
@@ -90,7 +90,7 @@ test("fire-and-forget saves handle addVerse rejections on the error channel", ()
   assert.match(code, /store\.actions\.addVerse\(verse\)\.catch\(/);
   assert.match(
     code,
-    /e instanceof Error\s+\?\s+e\.message\s+:\s+i18n\._\(\{ id: "search\.saveFailed", message: "Couldn't save that verse" \}\)/,
+    /error_ instanceof Error\s+\?\s+error_\.message\s+:\s+i18n\._\(\{ id: "search\.saveFailed", message: "Couldn't save that verse" \}\)/,
   );
   assert.match(code, /saveVerse\(result\)/, "the reconcile loop saves through the handled path");
   assert.match(code, /saveVerse\(verse\)/, "a reported add saves through the handled path");

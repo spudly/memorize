@@ -67,7 +67,7 @@ const SAMPLE_SEARCH_RESPONSE = {
   results: [{ reference: "Moroni 7:47", text: "But charity is the pure love of Christ." }],
 };
 
-interface StubResult {
+type StubResult = {
   ok: boolean;
   status: number;
   body: unknown;
@@ -78,12 +78,14 @@ const realFetch = globalThis.fetch;
 /** Replace global fetch with a recorder; returns the requested URLs. */
 function stubFetch(handler: (url: string) => StubResult): string[] {
   const calls: string[] = [];
-  globalThis.fetch = (async (input: unknown) => {
+  globalThis.fetch = (input: unknown) => {
     const url = String(input);
     calls.push(url);
     const r = handler(url);
-    return { ok: r.ok, status: r.status, json: async () => r.body } as Response;
-  }) as typeof fetch;
+    return Promise.resolve(
+      new Response(JSON.stringify(r.body), { status: r.status }),
+    );
+  };
   return calls;
 }
 
@@ -1058,10 +1060,10 @@ describe("toPlainText manual-pass cases (#74)", () => {
   });
 
   it("unescapes backslash-escaped punctuation", () => {
-    expect(mapOne("1\\. Faith is knowing the sun will rise")).toBe(
+    expect(mapOne(String.raw`1\. Faith is knowing the sun will rise`)).toBe(
       "1. Faith is knowing the sun will rise",
     );
-    expect(mapOne("\\[Obedience\\] is a gospel principle")).toBe(
+    expect(mapOne(String.raw`\[Obedience\] is a gospel principle`)).toBe(
       "[Obedience] is a gospel principle",
     );
   });
@@ -1090,15 +1092,15 @@ describe("toPlainText round-3 cases (#74)", () => {
   });
 
   it("preserves backslash-escaped punctuation as literal punctuation", () => {
-    expect(mapOne("\\*faith\\*")).toBe("*faith*");
-    expect(mapOne("\\_faith\\_")).toBe("_faith_");
+    expect(mapOne(String.raw`\*faith\*`)).toBe("*faith*");
+    expect(mapOne(String.raw`\_faith\_`)).toBe("_faith_");
     expect(mapOne("\\`code\\`")).toBe("`code`");
-    expect(mapOne("\\*\\*faith\\*\\*")).toBe("**faith**");
-    expect(mapOne("\\[not a link](https://example.test/x)")).toBe(
+    expect(mapOne(String.raw`\*\*faith\*\*`)).toBe("**faith**");
+    expect(mapOne(String.raw`\[not a link](https://example.test/x)`)).toBe(
       "[not a link](https://example.test/x)",
     );
     // An escaped ampersand is literal, so what follows it is not an entity.
-    expect(mapOne("\\&amp; chips")).toBe("&amp; chips");
+    expect(mapOne(String.raw`\&amp; chips`)).toBe("&amp; chips");
   });
 
   it("drops results whose converted text is empty", () => {
@@ -1172,7 +1174,7 @@ describe("toPlainText round-5 cases (#74)", () => {
   });
 
   it("preserves backslashes inside code spans", () => {
-    expect(mapOne("The code `\\*faith\\*` here")).toBe("The code \\*faith\\* here");
+    expect(mapOne("The code `\\*faith\\*` here")).toBe(String.raw`The code \*faith\* here`);
     // An escaped backtick outside a span is still a literal backtick.
     expect(mapOne("Faith \\` hope")).toBe("Faith ` hope");
   });
@@ -1189,7 +1191,7 @@ describe("toPlainText round-5 cases (#74)", () => {
   });
 
   it("handles many unmatched opening brackets without quadratic rescans", () => {
-    const input = "[".repeat(20000) + "Faith";
+    const input = `${"[".repeat(20_000)  }Faith`;
     expect(mapOne(input)).toBe(input);
   });
 
@@ -1330,8 +1332,8 @@ describe("toPlainText truncated-link cases (#76)", () => {
     // "(" in the fragment opened, so the literal bracket stays; an
     // escaped "(" in a truncated label still leaves the bracket
     // dangling, so it drops like the unescaped case above.
-    expect(mapOne("Value in [0, 1\\) is valid.")).toBe("Value in [0, 1) is valid.");
-    expect(mapOne("See [Faith \\(part")).toBe("See Faith (part");
+    expect(mapOne(String.raw`Value in [0, 1\) is valid.`)).toBe("Value in [0, 1) is valid.");
+    expect(mapOne(String.raw`See [Faith \(part`)).toBe("See Faith (part");
   });
 
   it("drops the dangling bracket when a truncated label contains a parenthesis", () => {
@@ -1461,7 +1463,7 @@ describe("toPlainText replacement-character round-3 cases (#77)", () => {
     // the U+FFFD after it; moving the cleanup behind that scan must
     // not change the outcome (a lone backslash stays, as it does for
     // any non-punctuation escape).
-    expect(mapOne("Faith \\\uFFFD hope")).toBe("Faith \\ hope");
+    expect(mapOne("Faith \\\uFFFD hope")).toBe(String.raw`Faith \ hope`);
   });
 });
 

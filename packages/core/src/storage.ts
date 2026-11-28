@@ -1,7 +1,7 @@
 import type { AppData } from "@memorize/types";
 
 /** Minimal async key-value interface; implemented per platform. */
-export interface KeyValueStorage {
+export type KeyValueStorage = {
   getItem(key: string): Promise<string | null>;
   setItem(key: string, value: string): Promise<void>;
   removeItem(key: string): Promise<void>;

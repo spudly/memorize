@@ -1,5 +1,6 @@
 import type { MyVersesPageItem } from "@spudly/ui";
 import type { MemorizedVerse } from "@memorize/types";
+
 import { i18n } from "../locales/i18n";
 
 /**

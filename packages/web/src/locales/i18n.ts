@@ -1,4 +1,5 @@
 import { i18n as globalI18n, setupI18n, type I18n, type Messages } from "@lingui/core";
+
 import { messages as enUSMessages } from "./en-US";
 
 /**
@@ -92,7 +93,8 @@ export async function loadCatalog(locale: SupportedLocale): Promise<Messages> {
   if (cached) {
     return cached;
   }
-  const loaded = (await import("./en-XA")).messages;
+  const loadedModule = await import("./en-XA");
+  const loaded = loadedModule.messages;
   catalogs[locale] = loaded;
   return loaded;
 }
@@ -147,7 +149,7 @@ export async function activateForClient(): Promise<SupportedLocale> {
   }
   const locale = resolveLocale({
     stored,
-    candidates: typeof navigator !== "undefined" ? navigator.languages : [],
+    candidates: typeof navigator === "undefined" ? [] : navigator.languages,
   });
   await activateI18n(locale);
   return locale;

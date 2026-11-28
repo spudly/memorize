@@ -2,11 +2,13 @@ import type { KeyValueStorage } from "@memorize/core";
 
 /** KeyValueStorage backed by window.localStorage. */
 export const webStorage: KeyValueStorage = {
-  getItem: async (key) => window.localStorage.getItem(key),
-  setItem: async (key, value) => {
+  getItem: (key) => Promise.resolve(window.localStorage.getItem(key)),
+  setItem: (key, value) => {
     window.localStorage.setItem(key, value);
+    return Promise.resolve();
   },
-  removeItem: async (key) => {
+  removeItem: (key) => {
     window.localStorage.removeItem(key);
+    return Promise.resolve();
   },
 };

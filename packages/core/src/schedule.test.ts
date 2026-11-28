@@ -1,4 +1,5 @@
 import type { MemorizedVerse } from "@memorize/types";
+
 import {
   REVIEW_INTERVALS_DAYS,
   applyReview,
@@ -50,7 +51,7 @@ describe("nextReviewDate", () => {
   test("interval table has the expected shape", () => {
     expect(REVIEW_INTERVALS_DAYS.slice(0, 7)).toEqual([1, 1, 1, 1, 1, 1, 1]);
     expect(REVIEW_INTERVALS_DAYS.slice(7, 11)).toEqual([7, 7, 7, 7]);
-    expect(REVIEW_INTERVALS_DAYS.slice(11, 23)).toEqual(new Array(12).fill(30));
+    expect(REVIEW_INTERVALS_DAYS.slice(11, 23)).toEqual(Array.from({length: 12}).fill(30));
   });
 });
 

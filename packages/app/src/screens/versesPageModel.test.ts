@@ -1,5 +1,7 @@
 import type { MemorizedVerse } from "@memorize/types";
+
 import { i18n } from "../locales/i18n";
+
 import { toMyVersesPageItem, toMyVersesPageItems } from "./versesPageModel";
 
 const ENTRY: MemorizedVerse = {

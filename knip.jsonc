@@ -6,7 +6,11 @@
     // so script-only references must count as usage.
     ".": {
       "entry": ["scripts/*.{js,mjs,cjs}"],
-      "project": ["scripts/**"]
+      "project": ["scripts/**"],
+      // eslint-import-resolver-node is never imported by name: it is
+      // eslint-plugin-import-x's default Node resolver, loaded by the
+      // plugin at lint time once TypeScript files are linted (#128).
+      "ignoreDependencies": ["eslint-import-resolver-node"]
     },
     // @memorize/types and @memorize/core are published packages whose public
     // surface is src/index.ts (exports "." -> dist); knip's defaults already

@@ -9,7 +9,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 const DATA_KEY = "memorize:data:v1";
 
-interface SeedVerse {
+type SeedVerse = {
   id: string;
   reference: string;
   text: string;

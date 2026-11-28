@@ -1,4 +1,5 @@
 import type { MemorizationSessionPageWord } from "@spudly/ui";
+
 import { i18n } from "../locales/i18n";
 
 /**
