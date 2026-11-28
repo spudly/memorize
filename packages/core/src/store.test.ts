@@ -1,4 +1,5 @@
 import type { Verse } from "@memorize/types";
+
 import { mapSearchItem } from "./scripture";
 import { DATA_KEY, LEGACY_SECRETS_KEY, LocalStore, type KeyValueStorage } from "./storage";
 import { createMemorizeStore } from "./store";
@@ -6,12 +7,14 @@ import { createMemorizeStore } from "./store";
 function memoryStorage(): KeyValueStorage {
   const map = new Map<string, string>();
   return {
-    getItem: async (key) => map.get(key) ?? null,
-    setItem: async (key, value) => {
+    getItem: (key) => Promise.resolve(map.get(key) ?? null),
+    setItem: (key, value) => {
       map.set(key, value);
+      return Promise.resolve();
     },
-    removeItem: async (key) => {
+    removeItem: (key) => {
       map.delete(key);
+      return Promise.resolve();
     },
   };
 }
@@ -35,7 +38,7 @@ describe("memorize store", () => {
     const store = createMemorizeStore(storage);
     await store.ready;
 
-    store.actions.addVerse(VERSE);
+    void store.actions.addVerse(VERSE);
     await flush();
     expect(store.getState().data.verses).toHaveLength(1);
 
@@ -54,7 +57,7 @@ describe("memorize store", () => {
     const gate: { release: (() => void) | null } = { release: null };
     let holdWrites = false;
     const storage: KeyValueStorage = {
-      getItem: async (key) => map.get(key) ?? null,
+      getItem: (key) => Promise.resolve(map.get(key) ?? null),
       setItem: async (key, value) => {
         if (holdWrites) {
           await new Promise<void>((resolve) => {
@@ -63,8 +66,9 @@ describe("memorize store", () => {
         }
         map.set(key, value);
       },
-      removeItem: async (key) => {
+      removeItem: (key) => {
         map.delete(key);
+        return Promise.resolve();
       },
     };
     const store = createMemorizeStore(storage);
@@ -104,7 +108,7 @@ describe("memorize store", () => {
     const writes: { value: string; release: () => void }[] = [];
     let holdWrites = false;
     const storage: KeyValueStorage = {
-      getItem: async (key) => map.get(key) ?? null,
+      getItem: (key) => Promise.resolve(map.get(key) ?? null),
       setItem: (key, value) => {
         if (holdWrites && key === DATA_KEY) {
           return new Promise<void>((resolve) => {
@@ -116,8 +120,9 @@ describe("memorize store", () => {
         map.set(key, value);
         return Promise.resolve();
       },
-      removeItem: async (key) => {
+      removeItem: (key) => {
         map.delete(key);
+        return Promise.resolve();
       },
     };
     const store = createMemorizeStore(storage);
@@ -148,8 +153,8 @@ describe("memorize store", () => {
   test("does not add the same verse twice", async () => {
     const store = createMemorizeStore(memoryStorage());
     await store.ready;
-    store.actions.addVerse(VERSE);
-    store.actions.addVerse(VERSE);
+    void store.actions.addVerse(VERSE);
+    void store.actions.addVerse(VERSE);
     await flush();
     expect(store.getState().data.verses).toHaveLength(1);
   });
@@ -166,13 +171,13 @@ describe("memorize store", () => {
       reference: "Charity Never Faileth",
       text: "Plead for a desire to be filled with the gift of charity.",
     };
-    legacyStore.actions.addVerse(legacy);
-    legacyStore.actions.setDrillProgress(legacy.id, 2, 1);
+    void legacyStore.actions.addVerse(legacy);
+    void legacyStore.actions.setDrillProgress(legacy.id, 2, 1);
     await flush();
 
     const store = createMemorizeStore(storage);
     await store.ready;
-    store.actions.addVerse({ ...legacy, id: "talks-3161" });
+    void store.actions.addVerse({ ...legacy, id: "talks-3161" });
     await flush();
     const verses = store.getState().data.verses;
     expect(verses).toHaveLength(1);
@@ -186,12 +191,12 @@ describe("memorize store", () => {
     // and must remain addable — legacy matching is never title-only.
     const store = createMemorizeStore(memoryStorage());
     await store.ready;
-    store.actions.addVerse({
+    void store.actions.addVerse({
       id: "charity-never-faileth",
       reference: "Charity Never Faileth",
       text: "Plead for a desire to be filled with the gift of charity.",
     });
-    store.actions.addVerse({
+    void store.actions.addVerse({
       id: "talks-3086",
       reference: "Charity Never Faileth",
       text: "Charity is not a single act or a single virtue.",
@@ -212,9 +217,9 @@ describe("memorize store", () => {
     };
     const store = createMemorizeStore(memoryStorage());
     await store.ready;
-    store.actions.addVerse(chunk);
-    store.actions.addVerse({ ...chunk, id: "charity-never-faileth" });
-    store.actions.addVerse({ ...chunk, id: "charity-never-faileth-3" });
+    void store.actions.addVerse(chunk);
+    void store.actions.addVerse({ ...chunk, id: "charity-never-faileth" });
+    void store.actions.addVerse({ ...chunk, id: "charity-never-faileth-3" });
     await flush();
     expect(store.getState().data.verses).toHaveLength(1);
   });
@@ -237,11 +242,11 @@ describe("memorize store", () => {
     };
     const store = createMemorizeStore(memoryStorage());
     await store.ready;
-    store.actions.addVerse(chunkB);
+    void store.actions.addVerse(chunkB);
     // Reordered response: B arrives under the canonical id, A under
     // a content suffix — neither id equals B's saved id positionally.
-    store.actions.addVerse({ ...chunkB, id: "charity-never-faileth" });
-    store.actions.addVerse({ ...chunkA, id: "charity-never-faileth~def456" });
+    void store.actions.addVerse({ ...chunkB, id: "charity-never-faileth" });
+    void store.actions.addVerse({ ...chunkA, id: "charity-never-faileth~def456" });
     await flush();
     const verses = store.getState().data.verses;
     expect(verses).toHaveLength(2);
@@ -274,15 +279,15 @@ describe("memorize store", () => {
 
     const store = createMemorizeStore(memoryStorage());
     await store.ready;
-    store.actions.addVerse(chunkA);
-    store.actions.addVerse(chunkBAlone);
+    void store.actions.addVerse(chunkA);
+    void store.actions.addVerse(chunkBAlone);
     await flush();
     expect(store.getState().data.verses).toHaveLength(2);
     // Re-adding either chunk (freshly mapped, same identity) dedupes.
     const chunkAAgain = mapSearchItem(chunkAItem);
     const chunkBAgain = mapSearchItem(chunkBItem);
-    if (chunkAAgain) store.actions.addVerse(chunkAAgain);
-    if (chunkBAgain) store.actions.addVerse(chunkBAgain);
+    if (chunkAAgain) void store.actions.addVerse(chunkAAgain);
+    if (chunkBAgain) void store.actions.addVerse(chunkBAgain);
     await flush();
     expect(store.getState().data.verses).toHaveLength(2);
   });
@@ -313,8 +318,8 @@ describe("memorize store", () => {
 
     const store = createMemorizeStore(memoryStorage());
     await store.ready;
-    store.actions.addVerse(chunkA);
-    store.actions.addVerse(chunkBAlone);
+    void store.actions.addVerse(chunkA);
+    void store.actions.addVerse(chunkBAlone);
     await flush();
     const verses = store.getState().data.verses;
     expect(verses).toHaveLength(2);
@@ -326,18 +331,18 @@ describe("memorize store", () => {
     if (!chunkBId) return;
 
     // Progress by id touches only its own entry.
-    store.actions.setDrillProgress(chunkBId, 3, 1);
+    void store.actions.setDrillProgress(chunkBId, 3, 1);
     await flush();
     expect(store.getState().data.verses[0]?.drillRound).toBe(0);
     expect(store.getState().data.verses[1]?.drillRound).toBe(3);
 
     // Re-adding chunk B dedupes by chunkKey despite the allocated id.
-    store.actions.addVerse(chunkBAlone);
+    void store.actions.addVerse(chunkBAlone);
     await flush();
     expect(store.getState().data.verses).toHaveLength(2);
 
     // Removal by id removes only chunk B.
-    store.actions.removeVerse(chunkBId);
+    void store.actions.removeVerse(chunkBId);
     await flush();
     const remaining = store.getState().data.verses;
     expect(remaining).toHaveLength(1);
@@ -359,8 +364,8 @@ describe("memorize store", () => {
       reference: "Charity Never Faileth",
       text: "Second chunk of the Allred talk.",
     };
-    legacyStore.actions.addVerse(legacy);
-    legacyStore.actions.setDrillProgress(legacy.id, 2, 1);
+    void legacyStore.actions.addVerse(legacy);
+    void legacyStore.actions.setDrillProgress(legacy.id, 2, 1);
     await flush();
 
     const chunkB = mapSearchItem({
@@ -381,7 +386,7 @@ describe("memorize store", () => {
 
     const store = createMemorizeStore(storage);
     await store.ready;
-    store.actions.addVerse(chunkB);
+    void store.actions.addVerse(chunkB);
     await flush();
     let verses = store.getState().data.verses;
     expect(verses).toHaveLength(1);
@@ -396,7 +401,7 @@ describe("memorize store", () => {
     const store2 = createMemorizeStore(storage);
     await store2.ready;
     expect(store2.getState().data.verses[0]?.verse.chunkKey).toBe(chunkB.chunkKey);
-    store2.actions.addVerse(chunkA);
+    void store2.actions.addVerse(chunkA);
     await flush();
     verses = store2.getState().data.verses;
     expect(verses).toHaveLength(2);
@@ -407,7 +412,7 @@ describe("memorize store", () => {
     const storage = memoryStorage();
     const legacyStore = createMemorizeStore(storage);
     await legacyStore.ready;
-    legacyStore.actions.addVerse({
+    void legacyStore.actions.addVerse({
       id: "charity-never-faileth",
       reference: "Charity Never Faileth",
       text: "Plead for a desire to be filled with the gift of charity.",
@@ -427,7 +432,7 @@ describe("memorize store", () => {
     });
     expect(incoming).not.toBeNull();
     if (!incoming) return;
-    store.actions.addVerse(incoming);
+    void store.actions.addVerse(incoming);
     await flush();
     expect(store.getState().data.verses).toHaveLength(1);
   });
@@ -435,9 +440,9 @@ describe("memorize store", () => {
   test("removes a verse", async () => {
     const store = createMemorizeStore(memoryStorage());
     await store.ready;
-    store.actions.addVerse(VERSE);
+    void store.actions.addVerse(VERSE);
     await flush();
-    store.actions.removeVerse(VERSE.id);
+    void store.actions.removeVerse(VERSE.id);
     await flush();
     expect(store.getState().data.verses).toHaveLength(0);
   });
@@ -445,16 +450,16 @@ describe("memorize store", () => {
   test("tracks drill progress and completion", async () => {
     const store = createMemorizeStore(memoryStorage());
     await store.ready;
-    store.actions.addVerse(VERSE);
+    void store.actions.addVerse(VERSE);
     await flush();
 
-    store.actions.setDrillProgress(VERSE.id, 2, 1);
+    void store.actions.setDrillProgress(VERSE.id, 2, 1);
     await flush();
     expect(store.getState().data.verses[0]?.drillRound).toBe(2);
     expect(store.getState().data.verses[0]?.drillPeeks).toBe(1);
 
     const now = new Date("2026-05-01T00:00:00.000Z");
-    store.actions.completeDrill(VERSE.id, now);
+    void store.actions.completeDrill(VERSE.id, now);
     await flush();
     const entry = store.getState().data.verses[0];
     expect(entry?.status).toBe("memorized");
@@ -464,11 +469,11 @@ describe("memorize store", () => {
   test("records reviews and advances the schedule", async () => {
     const store = createMemorizeStore(memoryStorage());
     await store.ready;
-    store.actions.addVerse(VERSE);
+    void store.actions.addVerse(VERSE);
     await flush();
 
     const before = store.getState().data.verses[0]?.nextReviewAt;
-    store.actions.recordReview(VERSE.id, "remembered", new Date("2026-06-01T00:00:00.000Z"));
+    void store.actions.recordReview(VERSE.id, "remembered", new Date("2026-06-01T00:00:00.000Z"));
     await flush();
     const after = store.getState().data.verses[0];
     expect(after?.reviewsCompleted).toBe(1);
@@ -505,11 +510,9 @@ describe("memorize store", () => {
   test("a failing legacy-secrets cleanup does not block initialization", async () => {
     const inner = memoryStorage();
     const storage: KeyValueStorage = {
-      getItem: inner.getItem,
-      setItem: inner.setItem,
-      removeItem: async () => {
-        throw new Error("storage unavailable");
-      },
+      getItem: (key) => inner.getItem(key),
+      setItem: (key, value) => inner.setItem(key, value),
+      removeItem: () => Promise.reject(new Error("storage unavailable")),
     };
     const store = createMemorizeStore(storage);
     await expect(store.ready).resolves.toBeUndefined();
@@ -523,8 +526,8 @@ describe("memorize store", () => {
     let writes = 0;
     const inner = memoryStorage();
     const storage: KeyValueStorage = {
-      getItem: inner.getItem,
-      removeItem: inner.removeItem,
+      getItem: (key) => inner.getItem(key),
+      removeItem: (key) => inner.removeItem(key),
       setItem: async (key, value) => {
         writes += 1;
         await inner.setItem(key, value);
@@ -541,13 +544,13 @@ describe("memorize store", () => {
     expect(getResult.chunkKey).toBeDefined();
     expect(getResult.sourceType).toBeUndefined();
 
-    store.actions.addVerse(getResult);
+    void store.actions.addVerse(getResult);
     await flush();
     expect(store.getState().data.verses).toHaveLength(1);
     const writesAfterAdd = writes;
     const updatedAtAfterAdd = store.getState().data.updatedAt;
 
-    store.actions.addVerse(getResult);
+    void store.actions.addVerse(getResult);
     await flush();
     expect(store.getState().data.verses).toHaveLength(1);
     expect(writes).toBe(writesAfterAdd);
@@ -561,8 +564,8 @@ describe("memorize store", () => {
     let writes = 0;
     const inner = memoryStorage();
     const storage: KeyValueStorage = {
-      getItem: inner.getItem,
-      removeItem: inner.removeItem,
+      getItem: (key) => inner.getItem(key),
+      removeItem: (key) => inner.removeItem(key),
       setItem: async (key, value) => {
         writes += 1;
         await inner.setItem(key, value);
@@ -579,12 +582,12 @@ describe("memorize store", () => {
     expect(chunk).not.toBeNull();
     if (!chunk) return;
 
-    store.actions.addVerse(chunk);
+    void store.actions.addVerse(chunk);
     await flush();
     const writesAfterAdd = writes;
     const updatedAtAfterAdd = store.getState().data.updatedAt;
 
-    store.actions.addVerse(chunk);
+    void store.actions.addVerse(chunk);
     await flush();
     expect(store.getState().data.verses).toHaveLength(1);
     expect(writes).toBe(writesAfterAdd);
@@ -605,11 +608,11 @@ describe("memorize store", () => {
       text: "Plead for a desire to be filled with the gift of charity.",
       chunkKey: "talks:3161:abc123",
     };
-    store.actions.addVerse(keyOnly);
-    store.actions.setDrillProgress(keyOnly.id, 2, 1);
+    void store.actions.addVerse(keyOnly);
+    void store.actions.setDrillProgress(keyOnly.id, 2, 1);
     await flush();
 
-    store.actions.addVerse({ ...keyOnly, sourceType: "talks", sourceId: "3161" });
+    void store.actions.addVerse({ ...keyOnly, sourceType: "talks", sourceId: "3161" });
     await flush();
     const verses = store.getState().data.verses;
     expect(verses).toHaveLength(1);

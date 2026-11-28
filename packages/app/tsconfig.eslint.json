@@ -1,0 +1,9 @@
+{
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node", "jest"]
+  },
+  "extends": "./tsconfig.json",
+  "include": ["src", "index.ts"],
+  "exclude": []
+}

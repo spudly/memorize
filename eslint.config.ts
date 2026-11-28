@@ -1,4 +1,4 @@
-import { base, jest, react, reactNative, typescriptPendingIgnores } from "@spudly/eslint-config";
+import { base, jest, react, reactNative, typescript } from "@spudly/eslint-config";
 import { reactPending } from "@spudly/eslint-config/react-pending";
 
 // Shared config: @spudly/eslint-config (ported from Eciperay's
@@ -16,19 +16,22 @@ export default [
       "**/.turbo/**",
       "**/.expo/**",
       "**/coverage/**",
+      // Compiled Lingui catalogs: generated files, not authored code.
+      "**/locales/en-US.ts",
+      "**/locales/en-XA.ts",
     ],
   },
-  // typescript-eslint does not support TypeScript 7 yet (it caps
-  // TypeScript at <6.1) and it was the only TS parser, so TS/TSX files
-  // are not linted for now — `npm run typecheck` (which invokes the
-  // TypeScript 7 compiler by path via the `typescript7` alias) is the
-  // correctness gate until typescript-eslint ships TS7 support and the
-  // package gains a real typescript section (see the package README's
-  // restore path). Plain JS files (.cjs/.mjs) are still linted. The
-  // side-by-side setup (resolvable `typescript` aliased to
-  // @typescript/typescript6) lets the @eslint-react rule set load
-  // again, so `reactPending` is composed alongside `react` below.
-  ...typescriptPendingIgnores,
+  // TypeScript files are linted with type-aware rules again:
+  // @spudly/eslint-config 0.8.0 restored its real `typescript` section
+  // (eslint-config #67). It works without waiting for typescript-eslint
+  // to support TypeScript 7 because the side-by-side setup aliases the
+  // resolvable `typescript` package to @typescript/typescript6 (which
+  // satisfies typescript-eslint's <6.1 peer cap), while compilation and
+  // `npm run typecheck` run the TypeScript 7 compiler by path via the
+  // `typescript7` alias. The same side-by-side setup lets the
+  // @eslint-react rule set load, so `reactPending` is composed
+  // alongside `react` below.
+  ...typescript,
   ...base,
   ...react,
   ...reactPending,
@@ -49,6 +52,60 @@ export default [
     },
     rules: {
       "no-console": "off",
+    },
+  },
+
+  {
+    // Files excluded from their package tsconfig (tests are excluded
+    // from the typecheck programs) or outside any tsconfig (the web
+    // api/ edge functions and scripts/ stubs): lint them type-aware
+    // against dedicated eslint tsconfigs that include them, instead of
+    // the project service, which cannot find them.
+    files: [
+      "**/*.test.ts",
+      "**/*.test.tsx",
+      "packages/web/api/**/*.ts",
+      "packages/web/scripts/**/*.ts",
+    ],
+    languageOptions: {
+      parserOptions: {
+        projectService: false,
+        project: [
+          "./packages/app/tsconfig.eslint.json",
+          "./packages/core/tsconfig.eslint.json",
+          "./packages/web/tsconfig.eslint.json",
+        ],
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+  },
+  {
+    // Vite's conventional client-types filename: renaming it would
+    // break the convention every Vite tool expects.
+    files: ["packages/web/src/vite-env.d.ts"],
+    rules: {
+      "unicorn/filename-case": "off",
+    },
+  },
+  {
+    // scripture.ts is a single-module scripture/markdown parser whose
+    // public API is class-based by design (ScriptureApiError extends
+    // Error for instanceof checks; the data sources are constructed
+    // with `new` by both apps and the test suite), and whose length
+    // is dominated by its book/alias data tables. Splitting it and
+    // converting its classes are their own refactors, not lint fixes.
+    files: ["packages/core/src/scripture.ts"],
+    rules: {
+      "max-lines": "off",
+      "no-restricted-syntax": "off",
+    },
+  },
+  {
+    // LocalStore is likewise a constructed public API (`new
+    // LocalStore(storage)` in the store factory and tests).
+    files: ["packages/core/src/storage.ts"],
+    rules: {
+      "no-restricted-syntax": "off",
     },
   },
 ];

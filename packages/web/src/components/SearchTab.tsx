@@ -44,10 +44,10 @@ export default function SearchTab({ store, dataSource, usingDemo }: Props) {
   // the page's error channel instead of dying as an unhandled
   // rejection with the verse silently unsaved.
   const saveVerse = (verse: Verse): void => {
-    store.actions.addVerse(verse).catch((e: unknown) => {
+    store.actions.addVerse(verse).catch((error_: unknown) => {
       setError(
-        e instanceof Error
-          ? e.message
+        error_ instanceof Error
+          ? error_.message
           : i18n._({ id: "search.saveFailed", message: "Couldn't save that verse" }),
       );
     });
@@ -84,14 +84,14 @@ export default function SearchTab({ store, dataSource, usingDemo }: Props) {
       }
       setResults(found);
       setSearched(true);
-    } catch (e) {
+    } catch (error_) {
       // A failed search is not a completed one: clear stale results and
       // keep hasSearched false so the page shows the error alone, never
       // an empty-result message next to it.
       setResults([]);
       setSearched(false);
       setError(
-        e instanceof Error ? e.message : i18n._({ id: "search.failed", message: "Search failed" }),
+        error_ instanceof Error ? error_.message : i18n._({ id: "search.failed", message: "Search failed" }),
       );
     } finally {
       setBusy(false);

@@ -40,7 +40,7 @@ describe("blankedIndices", () => {
       const curr = counts[i];
       expect(prev).toBeDefined();
       expect(curr).toBeDefined();
-      expect(curr as number).toBeGreaterThanOrEqual(prev as number);
+      expect(curr ?? -1).toBeGreaterThanOrEqual(prev ?? 0);
     }
   });
 

@@ -5,10 +5,10 @@ import type { MemorizedVerse, ReviewOutcome } from "@memorize/types";
  * daily for a week, weekly for a month, monthly for a year, then annually.
  */
 export const REVIEW_INTERVALS_DAYS: number[] = [
-  ...new Array<number>(7).fill(1),
-  ...new Array<number>(4).fill(7),
-  ...new Array<number>(12).fill(30),
-  ...new Array<number>(10).fill(365),
+  ...Array.from({length: 7}).fill(1),
+  ...Array.from({length: 4}).fill(7),
+  ...Array.from({length: 12}).fill(30),
+  ...Array.from({length: 10}).fill(365),
 ];
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;

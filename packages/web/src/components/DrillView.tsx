@@ -12,7 +12,7 @@ import {
 type Props = {
   store: MemorizeStore;
   verseId: string;
-  onBack(): void;
+  onBack: () => void;
 };
 
 /**

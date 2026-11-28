@@ -1,3 +1,5 @@
+import { retryFeedback } from "../screens/drillViewModel";
+
 import {
   activateI18n,
   createI18n,
@@ -6,7 +8,6 @@ import {
   normalizeLocale,
   resolveLocale,
 } from "./i18n";
-import { retryFeedback } from "../screens/drillViewModel";
 
 /**
  * Locale negotiation + catalog activation tests (#110): the

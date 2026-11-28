@@ -145,7 +145,7 @@ test(
       // whole verse (several words), whatever wrappers sit in between —
       // the blank is not a direct sibling of the word elements.
       let container: Element | null = blank.parentElement;
-      while (container && (container.textContent ?? "").trim().split(/\s+/).length < 5) {
+      while (container && container.textContent.trim().split(/\s+/).length < 5) {
         container = container.parentElement;
       }
       if (!container) return null;

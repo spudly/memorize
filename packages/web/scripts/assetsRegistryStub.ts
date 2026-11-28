@@ -12,5 +12,5 @@
  * the design system's own web Storybook wiring (.storybook/main.ts).
  */
 export function getAssetByID(): undefined {
-  return undefined;
+  
 }

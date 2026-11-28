@@ -8,12 +8,13 @@ import {
   tokenize,
   type MemorizeStore,
 } from "@memorize/core";
+
 import { finishDrill, isFinalRound, retryFeedback, toSessionWords } from "./drillViewModel";
 
 type Props = {
   store: MemorizeStore;
   verseId: string;
-  onBack(): void;
+  onBack: () => void;
 };
 
 /**
@@ -125,8 +126,12 @@ export default function DrillScreen({ store, verseId, onBack }: Props) {
       feedback={message}
       isFinalRound={isFinalRound(round, BLANK_FRACTIONS.length)}
       onBack={onBack}
-      onBlankReveal={peek}
-      onAdvance={nextRound}
+      onBlankReveal={(index) => {
+        void peek(index);
+      }}
+      onAdvance={() => {
+        void nextRound();
+      }}
     />
   );
 }
