@@ -28,11 +28,11 @@ const code = stripComments(readFileSync(tabPath, "utf8"));
 
 test("a failed search clears results and is not a completed search", () => {
   const runSearch = code.slice(code.indexOf("const runSearch"), code.indexOf("const items"));
-  const catchBlock = runSearch.slice(runSearch.indexOf("} catch (e) {"));
+  const catchBlock = runSearch.slice(runSearch.indexOf("} catch (error_) {"));
   assert.match(catchBlock, /setResults\(\[\]\)/);
   assert.match(catchBlock, /setSearched\(false\)/);
   assert.doesNotMatch(catchBlock, /setSearched\(true\)/);
-  const successBlock = runSearch.slice(0, runSearch.indexOf("} catch (e) {"));
+  const successBlock = runSearch.slice(0, runSearch.indexOf("} catch (error_) {"));
   const resultsIndex = successBlock.indexOf("setResults(found)");
   const searchedIndex = successBlock.indexOf("setSearched(true)");
   assert.ok(resultsIndex !== -1, "a successful search sets its results");
@@ -44,7 +44,7 @@ test("fire-and-forget saves handle addVerse rejections on the error channel", ()
   assert.match(code, /store\.actions\.addVerse\(verse\)\.catch\(/);
   assert.match(
     code,
-    /e instanceof Error\s+\?\s+e\.message\s+:\s+i18n\._\(\{ id: "search\.saveFailed", message: "Couldn't save that verse" \}\)/,
+    /error_ instanceof Error\s+\?\s+error_\.message\s+:\s+i18n\._\(\{ id: "search\.saveFailed", message: "Couldn't save that verse" \}\)/,
   );
   assert.match(code, /saveVerse\(result\)/, "the reconcile loop saves through the handled path");
   assert.match(code, /saveVerse\(verse\)/, "a reported add saves through the handled path");
