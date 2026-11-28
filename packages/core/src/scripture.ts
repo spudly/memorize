@@ -250,7 +250,7 @@ const ESCAPED_PUNCTUATION = "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~";
 const ESCAPE_PLACEHOLDER_BASE = 0xe0_00;
 
 function protectEscapedPunctuation(text: string): string {
-  return text.replaceAll(/\\([!"#$%&'()*+,\-./:;<=>?@[\\]^_`{|}~])/g, (_match, ch: string) =>
+  return text.replaceAll(/\\([!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~])/g, (_match, ch: string) =>
     String.fromCodePoint(ESCAPE_PLACEHOLDER_BASE + ESCAPED_PUNCTUATION.indexOf(ch)),
   );
 }
@@ -1027,7 +1027,7 @@ function toPlainText(raw: string): string {
   // present in the source (source escapes were protected above and
   // are restored at the end); resolve it the same way so a character
   // is never mistaken for markup by the passes above.
-  text = text.replaceAll(/\\([!"#$%&'()*+,\-./:;<=>?@[\\]^_`{|}~])/g, "$1");
+  text = text.replaceAll(/\\([!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~])/g, "$1");
   // Decode entities only after Markdown cleanup: decoded characters
   // are literal text (an encoded "#" is not a heading marker and an
   // encoded "*" is not emphasis), while an escaped "&lt;sup&gt;" still
